@@ -2007,10 +2007,14 @@ async function removeInc(id){await sb.from('additional_income').delete().eq('id'
 // TRANSACTIONS VIEW
 function renderTxView(){
   var filtered=getByTime(TX,'transaction_date');
+  // DEBUG — visible on screen
+  var dbg='TX total: '+TX.length+' | Filtered: '+filtered.length+' | Period: '+timePeriod;
+  if(TX.length>0){dbg+=' | Latest: '+TX[0].transaction_date+' ('+TX[0].name+')';}
   var jayT=filtered.filter(function(t){return t.decision_maker==='jay';}).reduce(function(s,t){return s+t.amount;},0);
   var chariT=filtered.filter(function(t){return t.decision_maker==='chari';}).reduce(function(s,t){return s+t.amount;},0);
   var jointT=filtered.filter(function(t){return t.decision_maker==='joint';}).reduce(function(s,t){return s+t.amount;},0);
   var html=renderTimeFil();
+  html+='<div style="background:#0f172a;color:#94a3b8;border-radius:8px;padding:8px 12px;font-size:11px;font-family:monospace;margin-bottom:10px;line-height:1.6">'+dbg+'</div>';
   html+='<div class="g3" style="margin-bottom:14px">';
   [{l:"Jay's",v:jayT,c:'var(--primary)'},{l:"Chari's",v:chariT,c:'var(--purple)'},{l:'Joint',v:jointT,c:'var(--green)'}].forEach(function(x){
     html+='<div class="mc" style="text-align:center"><div class="lbl" style="margin-bottom:4px">'+x.l+'</div><div style="font-size:1.1rem;font-weight:800;color:'+x.c+'">'+fmt(x.v)+'</div></div>';
