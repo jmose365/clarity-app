@@ -2046,18 +2046,23 @@ function renderTxView(){
       // Expandable detail
       if(isReceipt||hasItems){
         html+='<div id="'+tid+'" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
-        html+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+        // Meta chips
+        html+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">';
         html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Category</span> <strong>'+t.category+'</strong></div>';
         html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Logged by</span> <strong>'+getUName(t.logged_by)+'</strong></div>';
-        if(t.notes)html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Note</span> <strong>'+t.notes+'</strong></div>';
         html+='</div>';
+        // Receipt image placeholder — filled by toggleTxDetail using localStorage
+        if(isReceipt){
+          html+='<div id="rimg_'+tid+'" data-imgkey="receipt_img_'+t.id+'" style="margin-bottom:12px"></div>';
+        }
+        // Line items
         if(hasItems){
           html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px">Line Items</div>';
           meta.items.forEach(function(item,i){
             var n=item.name||item.description||'Item';
             var p=parseFloat(item.price||item.amount||0)||0;
-            html+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:'+(i<meta.items.length-1?'1px solid var(--bl)':'none')+'">';
-            html+='<span>'+n+'</span><span style="font-weight:600">'+fmt(p)+'</span></div>';
+            html+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:'+(i<meta.items.length-1?'1px solid var(--bl)':'none')+'">';
+            html+='<span style="color:var(--text2)">'+n+'</span><span style="font-weight:700">'+fmt(p)+'</span></div>';
           });
         }
         html+='</div>';
@@ -2077,6 +2082,32 @@ function toggleTxDetail(tid){
   var open=el.style.display==='none';
   el.style.display=open?'block':'none';
   if(arrow)arrow.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+  // Load receipt image from localStorage when first opened
+  if(open){
+    var imgSlot=document.getElementById('rimg_'+tid);
+    if(imgSlot&&!imgSlot.dataset.loaded){
+      imgSlot.dataset.loaded='1';
+      var imgKey=imgSlot.dataset.imgkey;
+      var imgData=null;
+      try{imgData=localStorage.getItem(imgKey);}catch(e){}
+      if(imgData){
+        imgSlot.innerHTML='<div style="margin-bottom:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Receipt Image</div>'
+          +'<img src="'+imgData+'" onclick="showFullReceipt(\''+imgKey+'\')" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid var(--border);cursor:pointer;margin-bottom:12px"/>';
+      }
+    }
+  }
+}
+
+function showFullReceipt(imgKey){
+  var imgData=null;
+  try{imgData=localStorage.getItem(imgKey);}catch(e){}
+  if(!imgData)return;
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:400;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.onclick=function(){ov.remove();};
+  ov.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:12px">Tap anywhere to close</div>'
+    +'<img src="'+imgData+'" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:12px"/>';
+  document.body.appendChild(ov);
 }
 
 function setLV(v){ledgerView=v;renderLedger();}
@@ -2863,7 +2894,9 @@ function showScanProgress(file){
   var reader=new FileReader();
   reader.onload=async function(ev){
     try{
-      var base64=ev.target.result.split(',')[1];
+      // Store receipt image in localStorage for display
+      var imageDataUrl=ev.target.result;
+      window._lastReceiptImageData=imageDataUrl;
       var mediaType=file.type;
       // Normalize media type — Claude only accepts jpeg, png, gif, webp
       if(!mediaType||mediaType==='image/jpg')mediaType='image/jpeg';
@@ -3045,10 +3078,15 @@ async function confirmReceipt(){
   var msg=document.getElementById('rc-msg');
   if(!name||!amt){msg.style.color='var(--red)';msg.textContent='Name and amount required.';return;}
   msg.style.color='var(--muted)';msg.textContent='Logging...';
-  // Gather line items stored on window from scan
   var receiptItems=window._lastReceiptItems||[];
   var metadata=receiptItems.length>0?{items:receiptItems}:{};
   var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan',metadata:metadata}).select('*').single();
+  if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
+  // Save receipt image to localStorage keyed by transaction id
+  if(window._lastReceiptImageData&&r.data&&r.data.id){
+    try{localStorage.setItem('receipt_img_'+r.data.id,window._lastReceiptImageData);}catch(e){}
+    window._lastReceiptImageData=null;
+  }
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
   TX.unshift(r.data);
   var newCash=(SET.cash_on_hand||0)-amt;
@@ -3072,14 +3110,15 @@ function renderTimeFil(){
 }
 function setTP(p){timePeriod=p;var on=document.querySelector('.nb.on');if(on){var ids=['home','flow','ledger','goals','activity','insights'];var t=on.textContent.toLowerCase().trim();var id=ids.find(function(i){return t.indexOf(i)>=0||i.indexOf(t)>=0;});if(id)goTab(id);}}
 function getByTime(arr,field){
-  var now=new Date();var start;
+  var now=new Date();var start,end;
+  end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59); // default end = today
   if(timePeriod==='week'){start=new Date(now);start.setDate(now.getDate()-7);}
-  else if(timePeriod==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);}
-  else if(timePeriod==='last_month'){var s=new Date(now.getFullYear(),now.getMonth()-1,1);var en=new Date(now.getFullYear(),now.getMonth(),0);return arr.filter(function(a){var d=new Date(a[field]);return d>=s&&d<=en;});}
+  else if(timePeriod==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);}
+  else if(timePeriod==='last_month'){start=new Date(now.getFullYear(),now.getMonth()-1,1);end=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);}
   else if(timePeriod==='q'){start=new Date(now);start.setMonth(now.getMonth()-3);}
   else if(timePeriod==='ytd'){start=new Date(now.getFullYear(),0,1);}
   else return arr;
-  return arr.filter(function(a){return new Date(a[field])>=start;});
+  return arr.filter(function(a){var d=new Date(a[field]);return d>=start&&d<=end;});
 }
 
 // EXPORT
