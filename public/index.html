@@ -2854,6 +2854,25 @@ var SCAN_PHRASES={
 };
 function randPhrase(stage){var arr=SCAN_PHRASES[stage];return arr[Math.floor(Math.random()*arr.length)];}
 
+// Compress image to stay under Vercel's 4.5MB body limit
+// Resizes to maxWidth and encodes as JPEG at given quality
+function compressImage(dataUrl,maxWidth,quality){
+  return new Promise(function(resolve){
+    var img=new Image();
+    img.onload=function(){
+      var w=img.width,h=img.height;
+      if(w>maxWidth){h=Math.round(h*(maxWidth/w));w=maxWidth;}
+      var canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      var ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg',quality||0.82));
+    };
+    img.onerror=function(){resolve(dataUrl);}; // fall back to original if compression fails
+    img.src=dataUrl;
+  });
+}
+
 function showScanProgress(file){
   var ov=document.createElement('div');ov.id='scanProgressOv';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px';
@@ -2894,14 +2913,11 @@ function showScanProgress(file){
   var reader=new FileReader();
   reader.onload=async function(ev){
     try{
-      // Store receipt image in localStorage for display
-      var imageDataUrl=ev.target.result;
-      window._lastReceiptImageData=imageDataUrl;
-      var mediaType=file.type;
-      var base64=imageDataUrl.split(',')[1];
-      // Normalize media type — Claude only accepts jpeg, png, gif, webp
-      if(!mediaType||mediaType==='image/jpg')mediaType='image/jpeg';
-      if(['image/jpeg','image/png','image/gif','image/webp'].indexOf(mediaType)<0)mediaType='image/jpeg';
+      // Compress image before sending — phone photos are often 5-10MB which hits Vercel's 4.5MB limit
+      var compressed=await compressImage(ev.target.result,1200,0.82);
+      window._lastReceiptImageData=compressed; // store compressed version for display
+      var base64=compressed.split(',')[1];
+      var mediaType='image/jpeg'; // always jpeg after compression
 
       setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
 
