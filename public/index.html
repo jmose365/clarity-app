@@ -2826,7 +2826,7 @@ function showScanProgress(file){
 
       setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
 
-      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (YYYY-MM-DD), "category" (one of: Food, Clothing, Entertainment, Personal Care, Kids, Transportation, Healthcare, Other — determine this by looking at BOTH the store name AND the line items together. Examples: shoe/apparel store names OR items like sneakers/shirts/jeans = Clothing. Restaurant/fast food names OR items like burgers/coffee/groceries = Food. Gas station names OR items like fuel/oil = Transportation. Movie theater/concert OR tickets/streaming = Entertainment. Salon/gym OR haircut/massage = Personal Care. Pharmacy/clinic OR prescriptions/medical = Healthcare. Toys/baby store OR diapers/toys = Kids. When name and items conflict use the items to decide.), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields.';
+      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (the transaction date printed ON THE RECEIPT in YYYY-MM-DD format — look for a date/time line near the top, this is NOT today\'s date, it is the date the purchase was made), "category" (one of: Food, Clothing, Entertainment, Personal Care, Kids, Transportation, Healthcare, Other — determine by looking at BOTH the store name AND line items together), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields.';
 
       var payload={
         model:'claude-sonnet-4-20250514',
@@ -2909,7 +2909,27 @@ function showReceiptConfirm(data){
     });
   }
   var totalAmt=data.amount||data.total||data.grand_total||data.total_amount||data.total_charged||data.charged||'';
-  var txDate=data.date||data.transaction_date||data.purchase_date||today();
+  // Date — try all possible fields, parse multiple formats, fall back to today only if nothing readable
+  var txDate=null;
+  var rawDate=data.date||data.transaction_date||data.purchase_date||data.trans_date||data.receipt_date||data.datetime||'';
+  if(rawDate){
+    // Already YYYY-MM-DD
+    if(/^\d{4}-\d{2}-\d{2}/.test(rawDate)){txDate=rawDate.substring(0,10);}
+    // MM/DD/YYYY or MM/DD/YY
+    else if(/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(rawDate)){
+      var parts=rawDate.split('/');
+      var yr=parts[2].length===2?'20'+parts[2]:parts[2];
+      txDate=yr+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');
+    }
+    // MM-DD-YYYY
+    else if(/^\d{1,2}-\d{1,2}-\d{4}/.test(rawDate)){
+      var dparts=rawDate.split('-');
+      txDate=dparts[2]+'-'+dparts[0].padStart(2,'0')+'-'+dparts[1].padStart(2,'0');
+    }
+    // Try native Date parse as last resort
+    else{var d=new Date(rawDate);if(!isNaN(d))txDate=d.toISOString().split('T')[0];}
+  }
+  if(!txDate)txDate=today();
   var category=data.category||'Other';
   // Normalize items — handle {name,price}, {description,amount}, {item,cost}, etc.
   var rawItems=data.items||data.line_items||data.lineItems||data.products||data.purchases||[];
