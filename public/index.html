@@ -3113,10 +3113,22 @@ async function confirmReceipt(){
   if(expId){await markPaid(expId);}
   await logAct('receipt_scanned',name+' '+fmt(amt)+' — scanned receipt','transaction',r.data.id,{amount:amt});
   document.getElementById('receiptModal').remove();
+  // Re-fetch all transactions from Supabase to ensure local state matches
+  var freshTX=await sb.from('transactions').select('*').eq('household_id',HID).order('created_at',{ascending:false});
+  if(!freshTX.error)TX=freshTX.data||[];
+
+  // Set time period to match the transaction's actual date so it's visible immediately
+  var txYear=new Date(date+'T12:00:00').getFullYear();
+  var txMonth=new Date(date+'T12:00:00').getMonth();
+  var nowYear=new Date().getFullYear();
+  var nowMonth=new Date().getMonth();
+  if(txYear===nowYear&&txMonth===nowMonth){timePeriod='month';}
+  else if(txYear===nowYear){timePeriod='ytd';}
+  else{timePeriod='ytd';}
+
   // Switch to transactions view so user sees it immediately
   ledgerView='transactions';
   updateTopBar();renderHome();renderLedger();
-  // Navigate to ledger tab if not already there
   goTab('ledger');
 }
 
