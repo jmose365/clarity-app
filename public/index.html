@@ -3118,13 +3118,15 @@ async function confirmReceipt(){
   if(!freshTX.error)TX=freshTX.data||[];
 
   // Set time period to match the transaction's actual date so it's visible immediately
-  var txYear=new Date(date+'T12:00:00').getFullYear();
-  var txMonth=new Date(date+'T12:00:00').getMonth();
-  var nowYear=new Date().getFullYear();
-  var nowMonth=new Date().getMonth();
+  var txDate2=new Date(date+'T12:00:00');
+  var nowDate=new Date();
+  var txYear=txDate2.getFullYear();
+  var txMonth=txDate2.getMonth();
+  var nowYear=nowDate.getFullYear();
+  var nowMonth=nowDate.getMonth();
   if(txYear===nowYear&&txMonth===nowMonth){timePeriod='month';}
   else if(txYear===nowYear){timePeriod='ytd';}
-  else{timePeriod='ytd';}
+  else{timePeriod='all';} // different year — show all
 
   // Switch to transactions view so user sees it immediately
   ledgerView='transactions';
@@ -3134,7 +3136,7 @@ async function confirmReceipt(){
 
 // TIME FILTER
 function renderTimeFil(){
-  var ps=[{id:'week',l:'This Week'},{id:'month',l:'This Month'},{id:'last_month',l:'Last Month'},{id:'q',l:'3 Months'},{id:'ytd',l:'YTD'}];
+  var ps=[{id:'week',l:'This Week'},{id:'month',l:'This Month'},{id:'last_month',l:'Last Month'},{id:'q',l:'3 Months'},{id:'ytd',l:'YTD'},{id:'all',l:'All'}];
   var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
   ps.forEach(function(p){html+='<button onclick="setTP(\''+p.id+'\')" class="tb'+(timePeriod===p.id?' on':'')+'">'+p.l+'</button>';});
   html+='</div>';return html;
@@ -3142,14 +3144,27 @@ function renderTimeFil(){
 function setTP(p){timePeriod=p;var on=document.querySelector('.nb.on');if(on){var ids=['home','flow','ledger','goals','activity','insights'];var t=on.textContent.toLowerCase().trim();var id=ids.find(function(i){return t.indexOf(i)>=0||i.indexOf(t)>=0;});if(id)goTab(id);}}
 function getByTime(arr,field){
   var now=new Date();var start,end;
-  end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59); // default end = today
-  if(timePeriod==='week'){start=new Date(now);start.setDate(now.getDate()-7);}
-  else if(timePeriod==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);}
-  else if(timePeriod==='last_month'){start=new Date(now.getFullYear(),now.getMonth()-1,1);end=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);}
-  else if(timePeriod==='q'){start=new Date(now);start.setMonth(now.getMonth()-3);}
-  else if(timePeriod==='ytd'){start=new Date(now.getFullYear(),0,1);}
-  else return arr;
-  return arr.filter(function(a){var d=new Date(a[field]);return d>=start&&d<=end;});
+  if(timePeriod==='week'){
+    start=new Date(now);start.setDate(now.getDate()-7);
+    end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);
+  } else if(timePeriod==='month'){
+    start=new Date(now.getFullYear(),now.getMonth(),1);
+    end=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
+  } else if(timePeriod==='last_month'){
+    start=new Date(now.getFullYear(),now.getMonth()-1,1);
+    end=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);
+  } else if(timePeriod==='q'){
+    start=new Date(now);start.setMonth(now.getMonth()-3);
+    end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);
+  } else if(timePeriod==='ytd'){
+    // Full current year — Jan 1 through Dec 31
+    start=new Date(now.getFullYear(),0,1);
+    end=new Date(now.getFullYear(),11,31,23,59,59);
+  } else {
+    // 'all' — no filter
+    return arr;
+  }
+  return arr.filter(function(a){var d=new Date(a[field]+'T12:00:00');return d>=start&&d<=end;});
 }
 
 // EXPORT
