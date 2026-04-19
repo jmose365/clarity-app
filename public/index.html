@@ -3113,9 +3113,11 @@ async function confirmReceipt(){
   if(expId){await markPaid(expId);}
   await logAct('receipt_scanned',name+' '+fmt(amt)+' — scanned receipt','transaction',r.data.id,{amount:amt});
   document.getElementById('receiptModal').remove();
-  updateTopBar();renderHome();
-  var msgs=document.getElementById('chatMsgs');
-  if(msgs){var ab=document.createElement('div');ab.className='msg-bubble msg-ai';ab.textContent='Receipt logged! '+name+' — '+fmt(amt)+' deducted from Available. Spendable is now '+fmt(calcSpendable())+'.';msgs.appendChild(ab);msgs.scrollTop=msgs.scrollHeight;}
+  // Switch to transactions view so user sees it immediately
+  ledgerView='transactions';
+  updateTopBar();renderHome();renderLedger();
+  // Navigate to ledger tab if not already there
+  goTab('ledger');
 }
 
 // TIME FILTER
