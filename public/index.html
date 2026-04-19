@@ -2826,16 +2826,16 @@ function showScanProgress(file){
 
       setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
 
-      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (the business or store name printed at the very top of the receipt, e.g. "Finish Line", "Chick-fil-A", "Walmart", "Shell" — this is always the first line or header of the receipt), "amount" (the final total charged as a number after all discounts and tax — what was actually paid, not subtotal), "date" (YYYY-MM-DD), "category" (exactly one of: Food, Clothing, Entertainment, Personal Care, Kids, Transportation, Healthcare, Other — infer from business type), "items" (array of up to 6 objects each with "name" string and "price" number). No markdown, no explanation, just the JSON.';
+      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (YYYY-MM-DD), "category" (one of: Food, Clothing, Entertainment, Personal Care, Kids, Transportation, Healthcare, Other), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields even if some are null.';
 
       var payload={
         model:'claude-sonnet-4-20250514',
-        max_tokens:600,
+        max_tokens:1024,
         messages:[{
           role:'user',
           content:[
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-            {type:'text',text:'Read this receipt. The "name" field must be the business/store name from the top of the receipt. The "amount" must be the final total paid including tax. Return JSON only.'}
+            {type:'text',text:'Read this receipt. Return a complete JSON object with all 5 fields: name, amount, date, category, and items array. The name is the store/business at the top. The amount is the final total paid. Include all line items.'}
           ]
         }]
       };
