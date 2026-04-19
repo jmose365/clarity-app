@@ -2023,15 +2023,60 @@ function renderTxView(){
   html+='</div>';
   if(filtered.length===0){html+='<div style="text-align:center;color:var(--muted);padding:30px 0;font-size:14px">No transactions in this period.</div>';}
   else{
-    html+='<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table class="dt"><thead><tr><th>Date</th><th>Name</th><th>Amount</th><th>Decision</th></tr></thead><tbody>';
+    html+='<div style="display:flex;flex-direction:column;gap:8px" id="txList">';
     filtered.forEach(function(t){
-      var dmCls='dm-'+t.decision_maker;var dmL=t.decision_maker==='jay'?'Jay':t.decision_maker==='chari'?'Chari':'Joint';
-      html+='<tr><td>'+fmtD(t.transaction_date,true)+'</td><td>'+t.name+'</td><td style="font-weight:700;color:var(--red)">-'+fmt(t.amount)+'</td><td><span class="'+dmCls+'">'+dmL+'</span></td></tr>';
+      var dmCls='dm-'+t.decision_maker;
+      var dmL=t.decision_maker==='jay'?'Jay':t.decision_maker==='chari'?'Chari':'Joint';
+      var isReceipt=t.notes&&t.notes.indexOf('Receipt scan')>=0;
+      var meta=null;
+      try{if(t.metadata&&typeof t.metadata==='object')meta=t.metadata;else if(t.metadata)meta=JSON.parse(t.metadata);}catch(e){}
+      var hasItems=meta&&meta.items&&meta.items.length>0;
+      var tid='tx_'+t.id.replace(/-/g,'');
+      html+='<div class="card" style="padding:14px 16px;cursor:'+(isReceipt||hasItems?'pointer':'default')+'" onclick="'+(isReceipt||hasItems?'toggleTxDetail(\''+tid+'\')':'')+'">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center">';
+      html+='<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+      html+='<span style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.name+'</span>';
+      if(isReceipt)html+='<span style="font-size:10px;background:var(--pl);color:var(--primary);border-radius:4px;padding:2px 6px;font-weight:700;flex-shrink:0">📷 Receipt</span>';
+      html+='</div>';
+      html+='<div style="font-size:12px;color:var(--muted)">'+fmtD(t.transaction_date,true)+' · <span class="'+dmCls+'" style="padding:2px 8px">'+dmL+'</span></div></div>';
+      html+='<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">';
+      html+='<span style="font-size:1rem;font-weight:800;color:var(--red)">-'+fmt(t.amount)+'</span>';
+      if(isReceipt||hasItems)html+='<span id="'+tid+'_arrow" style="font-size:12px;color:var(--muted);transition:transform .2s">▼</span>';
+      html+='</div></div>';
+      // Expandable detail
+      if(isReceipt||hasItems){
+        html+='<div id="'+tid+'" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+        html+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+        html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Category</span> <strong>'+t.category+'</strong></div>';
+        html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Logged by</span> <strong>'+getUName(t.logged_by)+'</strong></div>';
+        if(t.notes)html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Note</span> <strong>'+t.notes+'</strong></div>';
+        html+='</div>';
+        if(hasItems){
+          html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px">Line Items</div>';
+          meta.items.forEach(function(item,i){
+            var n=item.name||item.description||'Item';
+            var p=parseFloat(item.price||item.amount||0)||0;
+            html+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:'+(i<meta.items.length-1?'1px solid var(--bl)':'none')+'">';
+            html+='<span>'+n+'</span><span style="font-weight:600">'+fmt(p)+'</span></div>';
+          });
+        }
+        html+='</div>';
+      }
+      html+='</div>';
     });
-    html+='</tbody></table></div></div>';
+    html+='</div>';
     html+='<button onclick="exportCSV(\'transactions\')" class="btn btn-ghost" style="margin-top:10px">Export CSV</button>';
   }
   return html;
+}
+
+function toggleTxDetail(tid){
+  var el=document.getElementById(tid);
+  var arrow=document.getElementById(tid+'_arrow');
+  if(!el)return;
+  var open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.style.transform=open?'rotate(180deg)':'rotate(0deg)';
 }
 
 function setLV(v){ledgerView=v;renderLedger();}
@@ -2986,6 +3031,7 @@ function showReceiptConfirm(data){
   h+='<div id="rc-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._receiptDM='jay';
+  window._lastReceiptItems=items;
 }
 
 function setReceiptDM(val,btn){window._receiptDM=val;btn.parentElement.querySelectorAll('[data-dm]').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');}
@@ -2999,7 +3045,10 @@ async function confirmReceipt(){
   var msg=document.getElementById('rc-msg');
   if(!name||!amt){msg.style.color='var(--red)';msg.textContent='Name and amount required.';return;}
   msg.style.color='var(--muted)';msg.textContent='Logging...';
-  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan'}).select('*').single();
+  // Gather line items stored on window from scan
+  var receiptItems=window._lastReceiptItems||[];
+  var metadata=receiptItems.length>0?{items:receiptItems}:{};
+  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan',metadata:metadata}).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
   TX.unshift(r.data);
   var newCash=(SET.cash_on_hand||0)-amt;
