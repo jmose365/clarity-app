@@ -2898,6 +2898,7 @@ function showScanProgress(file){
       var imageDataUrl=ev.target.result;
       window._lastReceiptImageData=imageDataUrl;
       var mediaType=file.type;
+      var base64=imageDataUrl.split(',')[1];
       // Normalize media type — Claude only accepts jpeg, png, gif, webp
       if(!mediaType||mediaType==='image/jpg')mediaType='image/jpeg';
       if(['image/jpeg','image/png','image/gif','image/webp'].indexOf(mediaType)<0)mediaType='image/jpeg';
