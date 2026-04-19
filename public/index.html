@@ -2760,9 +2760,7 @@ async function finalizeLoggedTx(msgs){
 // RECEIPT SCANNING — from standalone modal
 async function scanReceiptFromModal(input){
   var file=input.files[0];if(!file)return;
-  // Close scan modal
   document.getElementById('receiptScanModal').style.display='none';
-  // Show full-screen progress overlay
   showScanProgress(file);
   input.value='';
 }
@@ -2781,9 +2779,8 @@ var SCAN_PHRASES={
 function randPhrase(stage){var arr=SCAN_PHRASES[stage];return arr[Math.floor(Math.random()*arr.length)];}
 
 function showScanProgress(file){
-  // Create overlay
   var ov=document.createElement('div');ov.id='scanProgressOv';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px';
   ov.innerHTML='<div style="text-align:center;color:#fff;max-width:320px">'
     +'<div style="font-size:48px;margin-bottom:20px" id="scanEmoji">📄</div>'
     +'<div style="font-size:18px;font-weight:800;margin-bottom:10px" id="scanStageLabel">Uploading Receipt</div>'
@@ -2791,6 +2788,9 @@ function showScanProgress(file){
     +'<div style="width:100%;height:6px;background:rgba(255,255,255,0.15);border-radius:99px;overflow:hidden;margin-bottom:24px">'
     +'<div id="scanBar" style="height:100%;width:0%;background:linear-gradient(90deg,#4361ee,#7c3aed);border-radius:99px;transition:width .6s ease"></div></div>'
     +'<div style="font-size:12px;color:rgba(255,255,255,0.4)" id="scanPct">0%</div>'
+    +'<div id="scanError" style="margin-top:16px;display:none">'
+    +'<button onclick="document.getElementById(\'scanProgressOv\').remove();document.getElementById(\'receiptScanModal\').style.display=\'flex\'" style="background:white;color:#0f172a;border:none;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Try Again</button>'
+    +'</div>'
     +'</div>';
   document.body.appendChild(ov);
 
@@ -2801,52 +2801,98 @@ function showScanProgress(file){
     if(b)b.style.width=pct+'%';if(pc)pc.textContent=pct+'%';
   }
 
-  // Run the scan pipeline
+  function showError(msg){
+    setStage('😬',randPhrase('error'),'',0);
+    var errEl=document.getElementById('scanError');
+    if(errEl){
+      errEl.style.display='block';
+      errEl.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:12px">'+msg+'</div>'
+        +'<button onclick="document.getElementById(\'scanProgressOv\').remove();document.getElementById(\'receiptScanModal\').style.display=\'flex\'" style="background:white;color:#0f172a;border:none;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer">Try Again</button>';
+    }
+  }
+
   setTimeout(function(){setStage('📤','Uploading Receipt',randPhrase('upload'),15);},100);
-  setTimeout(function(){setStage('🔍','Processing Image',randPhrase('process'),30);},700);
-  setTimeout(function(){setStage('👁️','Reading the Receipt',randPhrase('ocr'),50);},1400);
+  setTimeout(function(){setStage('🔍','Processing Image',randPhrase('process'),30);},600);
+  setTimeout(function(){setStage('👁️','Reading the Receipt',randPhrase('ocr'),50);},1200);
 
   var reader=new FileReader();
   reader.onload=async function(ev){
-    var base64=ev.target.result.split(',')[1];
-    var mediaType=file.type||'image/jpeg';
-    setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},200);
     try{
-      var sys='You are reading a receipt image. Extract and return ONLY valid JSON with: name (merchant/store name as a clean readable name e.g. "Chick-fil-A" not abbreviations), amount (the final TOTAL as a number — look for "Total:", "Grand Total:", or "Visa:" amount, NOT subtotal), date (YYYY-MM-DD, use today if unclear), category (one of: Food,Clothing,Entertainment,Personal Care,Kids,Transportation,Healthcare,Other), items (array of {name,price} for up to 6 line items using readable names). IMPORTANT: amount must be the final paid total including tax, not subtotal.';
-      var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mediaType,data:base64}},{type:'text',text:'Extract transaction data from this receipt. Return the FINAL TOTAL (after tax), not the subtotal.'}]}]})});
+      var base64=ev.target.result.split(',')[1];
+      var mediaType=file.type;
+      // Normalize media type — Claude only accepts jpeg, png, gif, webp
+      if(!mediaType||mediaType==='image/jpg')mediaType='image/jpeg';
+      if(['image/jpeg','image/png','image/gif','image/webp'].indexOf(mediaType)<0)mediaType='image/jpeg';
+
+      setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
+
+      var sys='You are reading a receipt image. Extract and return ONLY valid JSON — no markdown, no explanation, just the JSON object. Fields: name (merchant name, clean and readable), amount (the final TOTAL paid as a number — the largest amount at the bottom, after tax and discounts, what the card was charged), date (YYYY-MM-DD), category (one of: Food,Clothing,Entertainment,Personal Care,Kids,Transportation,Healthcare,Other), items (array of up to 6 {name,price} objects). amount must be the final total charged, not subtotal.';
+
+      var payload={
+        model:'claude-sonnet-4-20250514',
+        max_tokens:600,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+            {type:'text',text:'Read this receipt and extract the data as JSON. The amount field must be the final total charged to the card, not the subtotal.'}
+          ]
+        }]
+      };
+
+      var res=await fetch(API_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      });
+
+      if(!res.ok){
+        var errText=await res.text();
+        showError('API error '+res.status+'. '+errText.substring(0,80));
+        return;
+      }
+
       var data=await res.json();
+
+      if(data.error){showError('Claude error: '+(data.error.message||JSON.stringify(data.error)).substring(0,80));return;}
+
+      var raw=(data.content&&data.content[0]&&data.content[0].text)||'';
+      if(!raw){showError('No response from Claude. Check API key in Vercel.');return;}
+
       setTimeout(function(){setStage('🧮','Calculating Totals',randPhrase('total'),80);},200);
-      var raw=(data.content&&data.content[0]&&data.content[0].text)||'{}';
-      var clean=raw.replace(/```json|```/g,'').trim();
-      var extracted=JSON.parse(clean);
+
+      var clean=raw.replace(/```json/g,'').replace(/```/g,'').trim();
+      var extracted;
+      try{extracted=JSON.parse(clean);}
+      catch(pe){
+        // Try extracting JSON from within the text
+        var match=clean.match(/\{[\s\S]*\}/);
+        if(match){try{extracted=JSON.parse(match[0]);}catch(e2){showError('Could not parse receipt data. Try a clearer photo.');return;}}
+        else{showError('Could not read receipt data. Try a clearer photo.');return;}
+      }
+
       setTimeout(function(){setStage('🏷️','Categorizing',randPhrase('category'),90);},400);
       setTimeout(function(){
         setStage('✅','Receipt Tamed!',randPhrase('save'),100);
         setTimeout(function(){
           var ov2=document.getElementById('scanProgressOv');if(ov2)ov2.remove();
           showReceiptConfirm(extracted);
-        },600);
+        },700);
       },900);
-    }catch(e){
-      setStage('😬','Hmm...',randPhrase('error'),0);
-      setTimeout(function(){
-        var ov2=document.getElementById('scanProgressOv');if(ov2)ov2.remove();
-        alert('Could not read receipt. Try a clearer photo or better lighting.');
-      },1500);
+
+    }catch(err){
+      showError('Unexpected error: '+err.message.substring(0,80));
     }
   };
-  reader.onerror=function(){
-    setStage('😬','Hmm...',randPhrase('error'),0);
-    setTimeout(function(){var ov2=document.getElementById('scanProgressOv');if(ov2)ov2.remove();},1500);
-  };
+
+  reader.onerror=function(){showError('Could not read the image file. Try again.');};
   reader.readAsDataURL(file);
 }
 
-// RECEIPT SCANNING (legacy path kept for compatibility)
+// RECEIPT SCANNING (legacy)
 async function scanReceipt(input){
-  var file=input.files[0];if(!file)return;
+  var file=input&&input.files&&input.files[0];if(!file)return;
   showScanProgress(file);
-  if(input.value!==undefined)input.value='';
 }
 
 function showReceiptConfirm(data){
