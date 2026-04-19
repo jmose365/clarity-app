@@ -2897,17 +2897,29 @@ async function scanReceipt(input){
 
 function showReceiptConfirm(data){
   // Normalize the data — Claude sometimes returns different field names
-  var merchantName=data.name||data.merchant||data.store||data.retailer||data.business||'';
-  var totalAmt=data.amount||data.total||data.grand_total||data.total_amount||'';
-  var txDate=data.date||data.transaction_date||today();
+  // Try every possible key name for merchant
+  var merchantName=data.name||data.merchant||data.merchant_name||data.store||data.store_name||data.retailer||data.business||data.company||data.vendor||data.restaurant||data.location||'';
+  // Last resort — scan all string-value top-level keys for something that looks like a name
+  if(!merchantName){
+    var skipKeys=['date','category','amount','total','price','tax','subtotal','currency'];
+    Object.keys(data).forEach(function(k){
+      if(!merchantName&&typeof data[k]==='string'&&data[k].length>1&&skipKeys.indexOf(k.toLowerCase())<0){
+        merchantName=data[k];
+      }
+    });
+  }
+  var totalAmt=data.amount||data.total||data.grand_total||data.total_amount||data.total_charged||data.charged||'';
+  var txDate=data.date||data.transaction_date||data.purchase_date||today();
   var category=data.category||'Other';
   // Normalize items — handle {name,price}, {description,amount}, {item,cost}, etc.
-  var rawItems=data.items||data.line_items||data.lineItems||[];
+  var rawItems=data.items||data.line_items||data.lineItems||data.products||data.purchases||[];
   var items=rawItems.map(function(item){
-    var n=item.name||item.description||item.item||item.product||item.title||item.text||'Item';
-    var p=item.price||item.amount||item.cost||item.value||item.total||0;
+    var n=item.name||item.description||item.item||item.product||item.title||item.text||item.label||'';
+    var p=parseFloat(item.price||item.amount||item.cost||item.value||item.total||0)||0;
     return {name:n,price:p};
-  }).filter(function(item){return item.name&&item.name!=='undefined';});
+  }).filter(function(item){return item.name&&item.name!=='undefined'&&item.name!=='null';});
+  // Log raw response to console for debugging
+  console.log('Receipt scan raw data:',JSON.stringify(data));
 
   var m=document.createElement('div');m.className='modal-ov';m.id='receiptModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
@@ -2927,6 +2939,7 @@ function showReceiptConfirm(data){
     h+='</div>';
   }
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmReceipt()">Log Transaction</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'receiptModal\').remove()">Cancel</button></div>';
+  h+='<div style="font-size:10px;color:var(--muted);margin-top:8px;word-break:break-all;line-height:1.4">Keys received: '+Object.keys(data).join(', ')+'</div>';
   h+='<div id="rc-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._receiptDM='jay';
