@@ -1,4 +1,11 @@
-// Node.js runtime — no body size limit (Edge runtime caps at ~4MB which breaks image uploads)
+// Node.js runtime with increased body size limit for receipt image uploads
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
