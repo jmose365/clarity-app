@@ -2918,8 +2918,31 @@ function showReceiptConfirm(data){
     var p=parseFloat(item.price||item.amount||item.cost||item.value||item.total||0)||0;
     return {name:n,price:p};
   }).filter(function(item){return item.name&&item.name!=='undefined'&&item.name!=='null';});
-  // Log raw response to console for debugging
-  console.log('Receipt scan raw data:',JSON.stringify(data));
+  // Client-side category inference — more reliable than Claude's guess
+  // Check items first, then fall back to name matching
+  function inferCategory(name, items){
+    var nameL=(name||'').toLowerCase();
+    var itemsText=items.map(function(i){return (i.name||'').toLowerCase();}).join(' ');
+    var combined=nameL+' '+itemsText;
+    // Clothing signals
+    if(/shoe|sneaker|boot|sandal|jordan|nike|adidas|reebok|new balance|puma|vans|converse|finish line|foot locker|footaction|champs|apparel|shirt|pants|jeans|dress|jacket|coat|sock|underwear|bra|hoodie|sweater|clothing|fashion|h&m|zara|gap|old navy|forever 21|urban outfitter|american eagle|hollister|abercrombie/.test(combined))return 'Clothing';
+    // Transportation
+    if(/gas|fuel|shell|bp|exxon|mobil|chevron|marathon|speedway|meijer gas|uber|lyft|parking|toll|transit|airline|delta|united|southwest|spirit/.test(combined))return 'Transportation';
+    // Entertainment
+    if(/movie|cinema|amc|regal|cinemark|concert|ticket|netflix|hulu|spotify|disney|amazon prime|game|dave.*buster|bowling|escape room|museum|zoo/.test(combined))return 'Entertainment';
+    // Personal Care
+    if(/salon|barber|spa|massage|hair|nail|facial|gym|planet fitness|la fitness|anytime fitness|ulta|sephora|cosmetic/.test(combined))return 'Personal Care';
+    // Healthcare
+    if(/pharmacy|walgreen|cvs|rite aid|hospital|clinic|doctor|dental|vision|prescription|rx|urgent care|med/.test(combined))return 'Healthcare';
+    // Kids
+    if(/toy|baby|child|kid|target.*toy|buy buy baby|carter|gymboree|justice|children/.test(combined))return 'Kids';
+    // Food — broad catch
+    if(/restaurant|food|eat|burger|pizza|taco|sushi|coffee|starbucks|mcdonald|chick.fil|subway|chipotle|wendy|domino|papa john|dunkin|krispy|waffle|diner|cafe|grill|kitchen|bar and grill|grocery|kroger|meijer|walmart|costco|whole food|trader joe|aldi|safeway|publix|fresh market/.test(combined))return 'Food';
+    return null; // Let Claude's value stand if no match
+  }
+
+  var inferredCategory=inferCategory(merchantName,items);
+  if(inferredCategory)category=inferredCategory;
 
   var m=document.createElement('div');m.className='modal-ov';m.id='receiptModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
