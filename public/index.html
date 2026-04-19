@@ -2826,7 +2826,7 @@ function showScanProgress(file){
 
       setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
 
-      var sys='You are reading a receipt image. Extract and return ONLY valid JSON — no markdown, no explanation, just the JSON object. Fields: name (merchant name, clean and readable), amount (the final TOTAL paid as a number — the largest amount at the bottom, after tax and discounts, what the card was charged), date (YYYY-MM-DD), category (one of: Food,Clothing,Entertainment,Personal Care,Kids,Transportation,Healthcare,Other), items (array of up to 6 {name,price} objects). amount must be the final total charged, not subtotal.';
+      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields — "name" (merchant store name as clean readable text e.g. "Finish Line" or "Chick-fil-A"), "amount" (the final total charged as a number after tax and discounts — what the card was charged, not the subtotal), "date" (YYYY-MM-DD), "category" (exactly one of: Food, Clothing, Entertainment, Personal Care, Kids, Transportation, Healthcare, Other — pick based on merchant type: shoe/clothing store = Clothing, restaurant = Food, etc.), "items" (array of objects each with field "name" as string and field "price" as number, max 6 items). Use null for unreadable fields. No markdown, no extra text, just the JSON object.';
 
       var payload={
         model:'claude-sonnet-4-20250514',
@@ -2896,22 +2896,34 @@ async function scanReceipt(input){
 }
 
 function showReceiptConfirm(data){
+  // Normalize the data — Claude sometimes returns different field names
+  var merchantName=data.name||data.merchant||data.store||data.retailer||data.business||'';
+  var totalAmt=data.amount||data.total||data.grand_total||data.total_amount||'';
+  var txDate=data.date||data.transaction_date||today();
+  var category=data.category||'Other';
+  // Normalize items — handle {name,price}, {description,amount}, {item,cost}, etc.
+  var rawItems=data.items||data.line_items||data.lineItems||[];
+  var items=rawItems.map(function(item){
+    var n=item.name||item.description||item.item||item.product||item.title||item.text||'Item';
+    var p=item.price||item.amount||item.cost||item.value||item.total||0;
+    return {name:n,price:p};
+  }).filter(function(item){return item.name&&item.name!=='undefined';});
+
   var m=document.createElement('div');m.className='modal-ov';m.id='receiptModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
   var h='<div class="modal"><div class="modal-handle"></div>';
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Receipt Scanned</div>';
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:20px">Review and confirm details</div>';
   h+='<div style="display:flex;flex-direction:column;gap:12px">';
-  h+='<div><label class="lbl">Name</label><input class="inp" id="rc-name" value="'+(data.name||'')+'"/></div>';
-  h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="rc-amt" value="'+(data.amount||'')+'"/></div>';
-  h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="rc-date" value="'+(data.date||today())+'"/></div>';
-  h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+['Food','Clothing','Entertainment','Personal Care','Kids','Transportation','Healthcare','Other'].map(function(c){return '<option'+(data.category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div><label class="lbl">Name</label><input class="inp" id="rc-name" value="'+merchantName+'" placeholder="Merchant name"/></div>';
+  h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="rc-amt" value="'+totalAmt+'" placeholder="0.00"/></div>';
+  h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="rc-date" value="'+(txDate&&txDate.match(/^\d{4}-\d{2}-\d{2}/)?txDate:today())+'"/></div>';
+  h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+['Food','Clothing','Entertainment','Personal Care','Kids','Transportation','Healthcare','Other'].map(function(c){return '<option'+(category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
   h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn on" data-dm="jay" onclick="setReceiptDM(\'jay\',this)">Jay</button><button class="tog-btn" data-dm="chari" onclick="setReceiptDM(\'chari\',this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\'joint\',this)">Joint</button></div></div>';
-  // Match to expense
   h+='<div><label class="lbl">Match to existing bill? (optional)</label><select class="sel" id="rc-exp"><option value="">— Not a bill payment —</option>'+EX.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+'</select></div>';
-  if(data.items&&data.items.length>0){
-    h+='<div style="background:var(--bg);border-radius:10px;padding:12px"><div class="lbl mb-8">Line Items</div>';
-    data.items.forEach(function(item){h+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span>'+item.name+'</span><span>'+fmt(item.price)+'</span></div>';});
+  if(items.length>0){
+    h+='<div style="background:var(--bg);border-radius:10px;padding:12px"><div class="lbl" style="margin-bottom:8px">Line Items</div>';
+    items.forEach(function(item){h+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span>'+item.name+'</span><span style="font-weight:600">'+fmt(item.price)+'</span></div>';});
     h+='</div>';
   }
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmReceipt()">Log Transaction</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'receiptModal\').remove()">Cancel</button></div>';
