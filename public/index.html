@@ -1266,16 +1266,57 @@ function renderHome(){
   html+='<button onclick="openLogPaycheckManual()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--shadow)">Log Paycheck</button>';
   html+='</div>';
 
-  // Recent activity
-  if(ACT.length>0){
-    html+='<div class="sec-t">Recent Activity</div><div class="card" style="padding:0">';
-    ACT.slice(0,4).forEach(function(a,i){
-      var col=getUColor(a.user_id);
-      html+='<div style="display:flex;gap:12px;padding:11px 16px;border-bottom:'+(i<3?'1px solid var(--border)':'none')+'">';
-      html+='<div style="width:30px;height:30px;border-radius:50%;background:'+col+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;margin-top:2px">'+((a.user_name||'?').charAt(0))+'</div>';
-      html+='<div style="flex:1"><div style="font-size:13px;font-weight:500">'+a.description+'</div><div style="font-size:11px;color:var(--muted);margin-top:2px">'+a.user_name+' · '+fmtTS(a.created_at)+'</div></div></div>';
+  // UPCOMING BILLS — next 7 days
+  var today7=addDays(td,7);
+  var upcomingBills=[];
+  EX.forEach(function(exp){
+    if(!exp.is_recurring)return;
+    // Check if due day falls within next 7 days
+    for(var d=0;d<=7;d++){
+      var checkDate=addDays(td,d);
+      var dom=new Date(checkDate+'T12:00:00').getDate();
+      if(exp.due_day===dom){
+        var alreadyPaid=isPaidThisCycle(exp);
+        upcomingBills.push({exp:exp,date:checkDate,daysAway:d,paid:alreadyPaid});
+        break;
+      }
+      if(exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom){
+        var alreadyPaid2=isPaidThisCycle(exp);
+        upcomingBills.push({exp:exp,date:checkDate,daysAway:d,paid:alreadyPaid2});
+        break;
+      }
+    }
+  });
+  // Sort by days away, exclude already paid
+  upcomingBills=upcomingBills.filter(function(b){return !b.paid;}).sort(function(a,b){return a.daysAway-b.daysAway;});
+
+  if(upcomingBills.length>0){
+    html+='<div class="sec-t">Due This Week</div>';
+    upcomingBills.slice(0,5).forEach(function(b){
+      var exp=b.exp;
+      var isToday=b.daysAway===0;
+      var isTomorrow=b.daysAway===1;
+      var isUrgent=b.daysAway<=2||exp.is_past_due;
+      var dueLbl=exp.is_past_due?'Past Due':isToday?'Due Today':isTomorrow?'Due Tomorrow':'Due '+fmtD(b.date,true);
+      var urgentColor=exp.is_past_due?'var(--red)':isUrgent?'var(--amber)':'var(--muted)';
+      var cardBg=exp.is_past_due?'rgba(220,38,38,0.04)':isUrgent?'rgba(217,119,6,0.04)':'var(--surface)';
+      var borderColor=exp.is_past_due?'rgba(220,38,38,0.25)':isUrgent?'rgba(217,119,6,0.2)':'var(--glass-border)';
+      html+='<div style="background:'+cardBg+';border:1px solid '+borderColor+';border-radius:16px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">';
+      // Left: urgency dot
+      html+='<div style="width:8px;height:8px;border-radius:50%;background:'+urgentColor+';flex-shrink:0;margin-top:2px"></div>';
+      // Middle: name + due label
+      html+='<div style="flex:1;min-width:0">';
+      html+='<div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+exp.name+'</div>';
+      html+='<div style="font-size:11px;font-weight:600;color:'+urgentColor+';margin-top:2px">'+dueLbl+'</div></div>';
+      // Right: amount + pay button
+      html+='<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
+      html+='<div style="text-align:right"><div style="font-size:14px;font-weight:800;color:var(--text)">'+fmt(exp.amount)+'</div></div>';
+      html+='<button onclick="openMarkPaid(\''+exp.id+'\')" style="background:var(--gp);border:none;border-radius:10px;padding:6px 12px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(67,97,238,0.25)">Pay</button>';
+      html+='</div></div>';
     });
-    html+='</div>';
+    if(upcomingBills.length>5){
+      html+='<div style="font-size:12px;color:var(--muted);text-align:center;padding:4px 0">+'+(upcomingBills.length-5)+' more due this week — <span style="color:var(--primary);cursor:pointer;font-weight:600" onclick="showTab(\'ledger\')">see all</span></div>';
+    }
   }
 
   document.getElementById('tab-home').innerHTML=html;
