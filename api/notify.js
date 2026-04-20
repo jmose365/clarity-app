@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   // Routing logic
   // Critical events (household-level) → both people
   // Everything else → cross-notify only (the other person)
-  const criticalEvents = ['expense_paid', 'expense_paid_full', 'past_due_paid', 'paycheck_logged', 'goal_contribution'];
+  const criticalEvents = ['expense_paid', 'expense_paid_full', 'past_due_paid', 'paycheck_logged', 'goal_contribution', 'goal_created', 'goal_milestone'];
   const isCritical = criticalEvents.includes(event_type);
   const actorIsJay = actor_id === jay_id;
 
