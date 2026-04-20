@@ -166,7 +166,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.3)}
 
 /* CHART */
 .chart-wrap{position:relative;background:var(--surface);border-radius:16px;padding:20px;border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
-.chart-tip{position:absolute;background:#0f172a;color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;pointer-events:none;display:none;z-index:10;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,0.2)}
+.chart-tip{position:fixed;background:#0f172a;color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;pointer-events:none;display:none;z-index:500;min-width:140px;max-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.3)}
 
 /* INSIGHTS */
 .ins-num{width:28px;height:28px;border-radius:8px;background:var(--gp);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0}
@@ -591,6 +591,8 @@ async function loadApp(){
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
   document.getElementById('uMenuName').textContent=UP.first_name+(UP.last_name?' '+UP.last_name:'');
+  // Set default decision maker to logged-in user
+  selectedDM=UP.first_name.toLowerCase();
   // Init chat
   chatHist=[{role:'assistant',content:"I have your complete household picture — every bill, your income, earmarks, and goals.\n\nAsk me anything or say **\"Log a transaction\"** and I'll walk you through it step by step."}];
   renderAll();
@@ -652,6 +654,25 @@ function updateTopBar(){
 async function logAct(type,desc,eType,eId,meta){
   var r=await sb.from('activity_log').insert({household_id:HID,user_id:CU.id,user_name:UP.first_name,action_type:type,description:desc,entity_type:eType||null,entity_id:eId||null,metadata:meta||{}});
   if(!r.error){var nl=await sb.from('activity_log').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(100);ACT=nl.data||[];}
+}
+
+// PUSH NOTIFICATIONS via Pushover
+async function sendNotification(eventType,description,amount){
+  try{
+    fetch('/api/notify',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        event_type:eventType,
+        actor_id:CU.id,
+        actor_name:UP.first_name,
+        jay_id:'5c8b0ba1-6ff6-4762-af06-942dd0342769',
+        description:description||'',
+        amount:amount||null
+      })
+    });
+    // fire and forget — never await, never block UI
+  }catch(e){}
 }
 
 // CHECK BADGE MILESTONES
@@ -759,6 +780,7 @@ async function logPaycheck(){
   // Activate any pending earmarks
   await activatePendingEarmarks();
   await logAct('paycheck_logged','Paycheck logged — '+fmt(amt)+(pcEarly?' (arrived early)':''),'profile',null,{amount:amt,scheduled:scheduled,actual:date});
+  sendNotification('paycheck_logged','Paycheck — '+fmt(amt),amt);
   document.getElementById('paycheckModal').style.display='none';
   updateTopBar();renderHome();
   // Check if more pending paychecks
@@ -1157,6 +1179,7 @@ async function markPaidFull(expId,totalAmt){
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
   await logAct('expense_paid_full',exp.name+' paid in full — '+fmt(totalAmt)+' (incl. past due + late charges)','expense',expId,{amount:totalAmt});
+  sendNotification('expense_paid_full',exp.name+' — '+fmt(totalAmt),totalAmt);
   updateTopBar();renderLedger();renderHome();
   checkProactiveClarityBanner();
 }
@@ -1178,6 +1201,7 @@ async function markPaidPastDue(expId){
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
   await logAct('past_due_paid',exp.name+' past due paid — '+fmt(paidAmt),'expense',expId,{amount:paidAmt});
+  sendNotification('past_due_paid',exp.name+' — '+fmt(paidAmt),paidAmt);
   updateTopBar();renderLedger();renderHome();
   checkProactiveClarityBanner();
 }
@@ -1284,6 +1308,7 @@ async function markPaid(expId,isHalf,halfNum){
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
   await logAct('expense_paid',exp.name+(isBiweekly?' occurrence '+cycleNum:isHalf?' half '+halfNum:'')+' paid — '+fmt(fullAmt)+(prealloc>0?' ('+fmt(prealloc)+' was pre-allocated)':''),'expense',expId,{amount:fullAmt,deducted:deductAmt});
+  sendNotification('expense_paid',exp.name+' — '+fmt(fullAmt),fullAmt);
   var newBadges=await checkBadges('payment',{streak:1});
   updateTopBar();renderLedger();renderHome();
   if(newBadges.length>0)showBadgeToast(newBadges[0]);
@@ -1328,6 +1353,7 @@ async function toggleEarmark(expId){
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
   await logAct(newState?'expense_earmarked':'expense_unearlmarked',exp.name+(newState?' earmarked':' earmark removed'),'expense',expId,{});
+  if(newState)sendNotification('expense_earmarked',exp.name+' — '+fmt(exp.amount));
   updateTopBar();renderLedger();
 }
 
@@ -1614,7 +1640,7 @@ function renderFlow(){
   function xP(i){return pL+(i/(nP-1||1))*plW;}
   function yP(v){return pT+plH-(((v-yStart2)/(yEnd2-yStart2||1))*plH);}
 
-  var svg='<svg width="100%" viewBox="0 0 '+cW+' '+cH+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible"><defs><linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4361ee" stop-opacity="0.18"/><stop offset="100%" stop-color="#4361ee" stop-opacity="0.01"/></linearGradient></defs>';
+  var svg='<svg width="100%" viewBox="0 0 '+cW+' '+cH+'" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4361ee" stop-opacity="0.18"/><stop offset="100%" stop-color="#4361ee" stop-opacity="0.01"/></linearGradient></defs>';
 
   // Grid
   for(var yi=yStart2;yi<=yEnd2;yi+=yStep){
@@ -1688,7 +1714,7 @@ function renderFlow(){
   });
   svg+='</svg>';
 
-  html+='<div class="chart-wrap" style="margin-bottom:6px;padding:16px 10px 10px">'+svg;
+  html+='<div class="chart-wrap" style="margin-bottom:6px;padding:16px 10px 10px;overflow:hidden">'+svg;
   html+='<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
   [{c:'#4361ee',l:'Available',line:true,solid:true},{c:'#22c55e',l:'Spendable',line:true,solid:false},{c:'#4361ee',l:'Payday',dot:true},{c:'#f59e0b',l:'Bill Day',dot:true,col:'#f59e0b'}].forEach(function(x){
     html+='<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">';
@@ -1785,12 +1811,16 @@ function showFlowTip(e,raw){
   var inner='<div style="font-size:10px;opacity:.6;margin-bottom:4px">'+parts[0]+'</div>';
   parts.slice(1).forEach(function(p){inner+='<div style="font-size:12px;font-weight:600;margin-bottom:2px">'+p+'</div>';});
   tip.innerHTML=inner;
-  var wrap=e.target.closest('.chart-wrap');if(!wrap)return;
-  var rect=wrap.getBoundingClientRect();
+  tip.style.position='fixed';
   var ex=e.touches?e.touches[0].clientX:e.clientX;
   var ey=e.touches?e.touches[0].clientY:e.clientY;
-  tip.style.left=Math.min(Math.max(0,ex-rect.left-70),rect.width-160)+'px';
-  tip.style.top=Math.max(4,ey-rect.top-90)+'px';
+  var tw=160;var th=80;
+  var left=ex-tw/2;var top=ey-th-12;
+  if(left<8)left=8;
+  if(left+tw>window.innerWidth-8)left=window.innerWidth-tw-8;
+  if(top<8)top=ey+16;
+  tip.style.left=left+'px';
+  tip.style.top=top+'px';
   tip.style.display='block';
 }
 
@@ -1800,9 +1830,15 @@ function showCalTip(e,raw){
   var inner='<div style="font-size:10px;opacity:.6;margin-bottom:4px">'+parts[0]+'</div>';
   parts.slice(1).forEach(function(p){inner+='<div style="font-size:12px;font-weight:600;margin-bottom:2px">'+p+'</div>';});
   tip.innerHTML=inner;
-  var bRect=document.body.getBoundingClientRect();
-  tip.style.left=(e.clientX-bRect.left-80)+'px';
-  tip.style.top=(e.clientY-bRect.top-70)+'px';
+  tip.style.position='fixed';
+  var ex=e.touches?e.touches[0].clientX:e.clientX;
+  var ey=e.touches?e.touches[0].clientY:e.clientY;
+  var tw=160;
+  var left=ex-tw/2;
+  if(left<8)left=8;
+  if(left+tw>window.innerWidth-8)left=window.innerWidth-tw-8;
+  tip.style.left=left+'px';
+  tip.style.top=Math.max(8,ey-70)+'px';
   tip.style.display='block';
   setTimeout(hideTip,2500);
 }
@@ -2250,7 +2286,7 @@ function openEditTx(id){
   h+='<div id="et-msg" style="font-size:13px;font-weight:500"></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
-  window._etDM=t.decision_maker||'joint';
+  window._etDM=t.decision_maker||selectedDM||'joint';
 }
 
 function etDM(val,btn){
@@ -2491,6 +2527,7 @@ async function logContrib(goalId){
   await sb.from('goal_contributions').insert({goal_id:goalId,household_id:HID,contributed_by:CU.id,amount:amt,contribution_date:date,notes:notes||null});
   g.current_amount=newAmt;
   await logAct('goal_contribution',g.name+' — '+fmt(amt)+' contributed','goal',goalId,{amount:amt});
+  sendNotification('goal_contribution',g.name+' — '+fmt(amt),amt);
   await checkGoalMilestones(g,prevAmt);
   var newBadges=await checkBadges('contribution',{});
   document.getElementById('contribModal').remove();
@@ -3061,6 +3098,7 @@ async function finalizeLoggedTx(msgs){
   SET.cash_on_hand=newCash;
   var dmL={jay:'Jay',chari:'Chari',joint:'Joint'}[d.dm]||'Joint';
   await logAct('transaction_logged',d.name+' '+fmt(d.amount)+' — Decision: '+dmL,'transaction',r.data.id,{amount:d.amount,dm:d.dm});
+  sendNotification('transaction_logged',d.name+' — '+fmt(d.amount)+' ('+dmL+')',d.amount);
   txState={active:false,data:{},step:null};
   var ab=document.createElement('div');ab.className='msg-bubble msg-ai';
   var reply='Done! **'+d.name+'** — **'+fmt(d.amount)+'** logged and deducted from your Available balance. Your Spendable is now **'+fmt(calcSpendable())+'**. Anything else?';
@@ -3337,7 +3375,8 @@ function showReceiptConfirm(data){
   h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="rc-amt" value="'+totalAmt+'" placeholder="0.00"/></div>';
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="rc-date" value="'+(txDate&&txDate.match(/^\d{4}-\d{2}-\d{2}/)?txDate:today())+'"/></div>';
   h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+CATS.map(function(c){return '<option'+(category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
-  h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn on" data-dm="jay" onclick="setReceiptDM(\'jay\',this)">Jay</button><button class="tog-btn" data-dm="chari" onclick="setReceiptDM(\'chari\',this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\'joint\',this)">Joint</button></div></div>';
+  var defaultDM=CU&&UP?UP.first_name.toLowerCase():'jay';
+  h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn'+(defaultDM==='jay'?' on':'')+'" data-dm="jay" onclick="setReceiptDM(\'jay\',this)">Jay</button><button class="tog-btn'+(defaultDM==='chari'?' on':'')+'" data-dm="chari" onclick="setReceiptDM(\'chari\',this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\'joint\',this)">Joint</button></div></div>';
   h+='<div><label class="lbl">Match to existing bill? (optional)</label><select class="sel" id="rc-exp"><option value="">— Not a bill payment —</option>'+EX.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+'</select></div>';
   if(items.length>0){
     h+='<div style="background:var(--bg);border-radius:10px;padding:12px"><div class="lbl" style="margin-bottom:8px">Line Items</div>';
@@ -3347,7 +3386,7 @@ function showReceiptConfirm(data){
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmReceipt()">Log Transaction</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'receiptModal\').remove()">Cancel</button></div>';
   h+='<div id="rc-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
-  window._receiptDM='jay';
+  window._receiptDM=CU&&UP?UP.first_name.toLowerCase():'jay';
   window._lastReceiptItems=items;
 }
 
@@ -3364,7 +3403,7 @@ async function confirmReceipt(){
   msg.style.color='var(--muted)';msg.textContent='Logging...';
   var receiptItems=window._lastReceiptItems||[];
   var metadata=receiptItems.length>0?{items:receiptItems}:{};
-  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan',metadata:metadata}).select('*').single();
+  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||selectedDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan',metadata:metadata}).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
   // Save receipt image to localStorage keyed by transaction id
   if(window._lastReceiptImageData&&r.data&&r.data.id){
@@ -3379,6 +3418,7 @@ async function confirmReceipt(){
   // Mark bill as paid if matched
   if(expId){await markPaid(expId);}
   await logAct('receipt_scanned',name+' '+fmt(amt)+' — scanned receipt','transaction',r.data.id,{amount:amt});
+  sendNotification('receipt_scanned',name+' — '+fmt(amt),amt);
   document.getElementById('receiptModal').remove();
   // Re-fetch all transactions from Supabase to ensure local state matches
   var freshTX=await sb.from('transactions').select('*').eq('household_id',HID).order('created_at',{ascending:false});
