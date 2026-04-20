@@ -1912,7 +1912,7 @@ function renderFlow(){
 
       // Net result pill
       html+='<div style="background:'+netBg+';border:1px solid '+netBorder+';border-radius:12px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">';
-      html+='<span style="font-size:12px;font-weight:600;color:'+netColor+'">'+(net>=0?'After bills, you keep':'After bills, you're short')+'</span>';
+      html+='<span style="font-size:12px;font-weight:600;color:'+netColor+'">'+(net>=0?'After bills, you keep':'After bills, you are short')+'</span>';
       html+='<span style="font-size:1rem;font-weight:800;color:'+netColor+'">'+(net>=0?'+':'')+fmt(net)+'</span></div>';
 
       html+='</div></div>'; // close padding div + card
