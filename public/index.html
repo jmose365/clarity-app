@@ -402,7 +402,7 @@ var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BAD
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
-var CATS=['Housing','Utilities','Food','Transportation','Insurance','Financial','Kids','Subscriptions','Personal Care','Healthcare','Other'];
+var CATS=['Housing','Utilities','Food & Drinks','Transportation','Healthcare','Entertainment','Subscriptions','Personal Care','Clothing','Education & Childcare','Household Supplies','Debt & Retirement','Gifts & Donations','Travel','Pets','Miscellaneous'];
 var CYCLES=['monthly','biweekly','weekly','one-time'];
 var CONS=['eviction','repossession','disconnection','collections','late_fee','credit_hit','other'];
 var GOAL_TYPES=['Vacation','Emergency Fund','New Car','Home Down Payment','Debt Payoff','Kids Education','Investment Seed','Holiday Fund','Birthday / Gift','Home Improvement','Other'];
@@ -2507,8 +2507,8 @@ function renderInsights(){
 
   // INSIGHT 7 — 50/30/20 Budget Analysis
   var takeHome=(UP.paycheck_amount||0)*2; // $8,600 baseline
-  var needsCats=['Housing','Utilities','Food','Transportation','Insurance','Financial','Healthcare'];
-  var wantsCats=['Entertainment','Clothing','Personal Care','Kids','Subscriptions','Other'];
+  var needsCats=['Housing','Utilities','Food & Drinks','Transportation','Healthcare','Education & Childcare','Household Supplies','Debt & Retirement'];
+  var wantsCats=['Entertainment','Subscriptions','Personal Care','Clothing','Gifts & Donations','Travel','Pets','Miscellaneous'];
   var needsTotal=EX.filter(function(e){return needsCats.indexOf(e.category)>=0;}).reduce(function(s,e){return s+e.amount;},0);
   var wantsTotal=EX.filter(function(e){return wantsCats.indexOf(e.category)>=0;}).reduce(function(s,e){return s+e.amount;},0);
   var recentTxWants=getByTime(TX,'transaction_date').filter(function(t){return wantsCats.indexOf(t.category)>=0;}).reduce(function(s,t){return s+t.amount;},0);
@@ -2716,7 +2716,7 @@ var TX_STEPS=['name','amount','category','dm','date','confirm'];
 var TX_QUESTIONS={
   name:"What was it for? (e.g. Dinner at Olive Garden)",
   amount:"How much was it?",
-  category:"What category? Food · Clothing · Entertainment · Personal Care · Kids · Transportation · Healthcare · Other",
+  category:"What category? Food & Drinks · Clothing · Entertainment · Subscriptions · Personal Care · Transportation · Healthcare · Housing · Utilities · Household Supplies · Education & Childcare · Gifts & Donations · Travel · Pets · Debt & Retirement · Miscellaneous",
   dm:"Whose decision was this — Jay, Chari, or Joint?",
   date:"What date? (Say 'today' or give a date)",
   confirm:null
@@ -2867,9 +2867,28 @@ async function handleTxFlow(text,msgs){
     else{var d=new Date(text);val=isNaN(d)?today():d.toISOString().split('T')[0];}
   }
   else if(txState.step==='category'){
-    var cats=['Food','Clothing','Entertainment','Personal Care','Kids','Transportation','Healthcare'];
-    var match=cats.find(function(c){return text.toLowerCase().indexOf(c.toLowerCase())>=0;});
-    val=match||'Other';
+    var cats=['Food & Drinks','Clothing','Entertainment','Subscriptions','Personal Care','Transportation','Healthcare','Housing','Utilities','Household Supplies','Education & Childcare','Gifts & Donations','Travel','Pets','Debt & Retirement','Miscellaneous'];
+    var lower2=text.toLowerCase();
+    var match=cats.find(function(c){return lower2.indexOf(c.toLowerCase())>=0;});
+    // Also handle shorthand
+    if(!match){
+      if(/food|drink|eat|restaurant|grocery/.test(lower2))match='Food & Drinks';
+      else if(/cloth|shoe|apparel/.test(lower2))match='Clothing';
+      else if(/entertain|movie|concert/.test(lower2))match='Entertainment';
+      else if(/sub|stream|netflix/.test(lower2))match='Subscriptions';
+      else if(/personal|hair|salon|gym|spa/.test(lower2))match='Personal Care';
+      else if(/transport|gas|uber|car/.test(lower2))match='Transportation';
+      else if(/health|doctor|pharmacy|medical/.test(lower2))match='Healthcare';
+      else if(/hous|rent|mortgage/.test(lower2))match='Housing';
+      else if(/util|electric|water|internet|phone/.test(lower2))match='Utilities';
+      else if(/house|supply|clean|paper/.test(lower2))match='Household Supplies';
+      else if(/edu|school|tuition|daycare|child/.test(lower2))match='Education & Childcare';
+      else if(/gift|donat|charity/.test(lower2))match='Gifts & Donations';
+      else if(/travel|hotel|airline|flight/.test(lower2))match='Travel';
+      else if(/pet|dog|cat|vet/.test(lower2))match='Pets';
+      else if(/debt|loan|credit|retirement/.test(lower2))match='Debt & Retirement';
+    }
+    val=match||'Miscellaneous';
   }
   txState.data[txState.step]=val;
   askNextTxQuestion(msgs);
@@ -2992,7 +3011,7 @@ function showScanProgress(file){
 
       setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
 
-      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (the transaction date printed ON THE RECEIPT in YYYY-MM-DD format — look for a date/time line near the top, this is NOT today\'s date, it is the date the purchase was made), "category" (one of: Food, Clothing, Entertainment, Personal Care, Kids, Transportation, Healthcare, Other — determine by looking at BOTH the store name AND line items together), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields.';
+      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (the transaction date printed ON THE RECEIPT in YYYY-MM-DD format — look for a date/time line near the top, this is NOT today\'s date, it is the date the purchase was made), "category" (one of: Housing, Utilities, Food & Drinks, Transportation, Healthcare, Entertainment, Subscriptions, Personal Care, Clothing, Education & Childcare, Household Supplies, Debt & Retirement, Gifts & Donations, Travel, Pets, Miscellaneous — determine by looking at BOTH the store name AND line items together), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields.';
 
       var payload={
         model:'claude-sonnet-4-20250514',
@@ -3104,27 +3123,58 @@ function showReceiptConfirm(data){
     var p=parseFloat(item.price||item.amount||item.cost||item.value||item.total||0)||0;
     return {name:n,price:p};
   }).filter(function(item){return item.name&&item.name!=='undefined'&&item.name!=='null';});
-  // Client-side category inference — more reliable than Claude's guess
-  // Check items first, then fall back to name matching
-  function inferCategory(name, items){
+  // Client-side category inference using comprehensive keyword map
+  function inferCategory(name,items){
     var nameL=(name||'').toLowerCase();
-    var itemsText=items.map(function(i){return (i.name||'').toLowerCase();}).join(' ');
+    var itemsText=items.map(function(i){return(i.name||'').toLowerCase();}).join(' ');
     var combined=nameL+' '+itemsText;
-    // Clothing signals
-    if(/shoe|sneaker|boot|sandal|jordan|nike|adidas|reebok|new balance|puma|vans|converse|finish line|foot locker|footaction|champs|apparel|shirt|pants|jeans|dress|jacket|coat|sock|underwear|bra|hoodie|sweater|clothing|fashion|h&m|zara|gap|old navy|forever 21|urban outfitter|american eagle|hollister|abercrombie/.test(combined))return 'Clothing';
+
+    // Housing
+    if(/rent|mortgage|hoa|homeowner|association dues|home insurance|property tax|maintenance|repair|landlord/.test(combined))return 'Housing';
+
+    // Utilities
+    if(/consumers energy|dte|electric|gas bill|water bill|utility|utilities|internet|wifi|comcast|xfinity|att|verizon|tmobile|t-mobile|sprint|cell phone|phone bill|cable bill/.test(combined))return 'Utilities';
+
+    // Food & Drinks
+    if(/restaurant|chick.fil|mcdonald|wendy|burger|taco|pizza|sushi|chipotle|subway|starbucks|dunkin|coffee|grocery|kroger|meijer|walmart|costco|whole food|trader joe|aldi|safeway|publix|fresh market|dining|takeout|drive.thru|doordash|grubhub|ubereats|instacart|food|drink|bar |brewery|winery|alcohol|liquor|deli|bakery|cafe|grill|kitchen|waffle|ihop|denny|applebee|olive garden|panera|panda|wing|bbq|seafood|chinese|mexican|italian|thai|buffet/.test(combined))return 'Food & Drinks';
+
     // Transportation
-    if(/gas|fuel|shell|bp|exxon|mobil|chevron|marathon|speedway|meijer gas|uber|lyft|parking|toll|transit|airline|delta|united|southwest|spirit/.test(combined))return 'Transportation';
-    // Entertainment
-    if(/movie|cinema|amc|regal|cinemark|concert|ticket|netflix|hulu|spotify|disney|amazon prime|game|dave.*buster|bowling|escape room|museum|zoo/.test(combined))return 'Entertainment';
-    // Personal Care
-    if(/salon|barber|spa|massage|hair|nail|facial|gym|planet fitness|la fitness|anytime fitness|ulta|sephora|cosmetic/.test(combined))return 'Personal Care';
+    if(/shell|bp|exxon|mobil|chevron|marathon|speedway|sunoco|fuel|gasoline|gas station|car payment|auto loan|car insurance|auto repair|oil change|mechanic|tire|jiffy lube|midas|firestone|parking|toll|uber|lyft|taxi|bus pass|transit|train|registration|dmv|aaa/.test(combined))return 'Transportation';
+
     // Healthcare
-    if(/pharmacy|walgreen|cvs|rite aid|hospital|clinic|doctor|dental|vision|prescription|rx|urgent care|med/.test(combined))return 'Healthcare';
-    // Kids
-    if(/toy|baby|child|kid|target.*toy|buy buy baby|carter|gymboree|justice|children/.test(combined))return 'Kids';
-    // Food — broad catch
-    if(/restaurant|food|eat|burger|pizza|taco|sushi|coffee|starbucks|mcdonald|chick.fil|subway|chipotle|wendy|domino|papa john|dunkin|krispy|waffle|diner|cafe|grill|kitchen|bar and grill|grocery|kroger|meijer|walmart|costco|whole food|trader joe|aldi|safeway|publix|fresh market/.test(combined))return 'Food';
-    return null; // Let Claude's value stand if no match
+    if(/pharmacy|walgreen|cvs|rite aid|hospital|clinic|doctor|dental|dentist|vision|optometrist|glasses|contacts|prescription|rx|urgent care|medical|health insurance|copay|lab|radiology|therapy|counseling|chiropractor|physical therapy/.test(combined))return 'Healthcare';
+
+    // Entertainment
+    if(/movie|cinema|amc|regal|cinemark|imax|concert|ticket|event|show|theater|dave.*buster|bowling|escape room|museum|zoo|amusement|arcade|golf|mini golf|laser tag|paintball|comedy|sports game|stadium/.test(combined))return 'Entertainment';
+
+    // Subscriptions
+    if(/netflix|hulu|disney\+|hbo|peacock|paramount|apple tv|amazon prime|spotify|apple music|youtube premium|pandora|tidal|magazine|newspaper|subscription|membership fee|annual fee|adobe|microsoft 365|dropbox|icloud|google one/.test(combined))return 'Subscriptions';
+
+    // Personal Care
+    if(/salon|barber|hair|nail|spa|massage|facial|wax|makeup|beauty|ulta|sephora|cosmetic|perfume|cologne|razor|skincare|lotion|shampoo|conditioner|deodorant|toothpaste|gym|planet fitness|la fitness|anytime fitness|ymca|workout|personal trainer/.test(combined))return 'Personal Care';
+
+    // Clothing
+    if(/finish line|foot locker|footaction|champs|nike|adidas|jordan|reebok|new balance|puma|vans|converse|under armour|lululemon|h&m|zara|gap|old navy|forever 21|urban outfitter|american eagle|hollister|abercrombie|express|banana republic|j\.crew|nordstrom|macy|bloomingdale|tj maxx|marshalls|ross|burlington|target.*cloth|shoe|sneaker|boot|sandal|apparel|clothing|shirt|pants|jeans|dress|jacket|coat|sock|underwear|bra|hoodie|sweater|suit|tie|accessories|backpack|purse|handbag/.test(combined))return 'Clothing';
+
+    // Education & Childcare
+    if(/tuition|school|college|university|daycare|childcare|babysitter|tutoring|camp|after school|before school|books|textbook|school supplies|capella|coursera|udemy|skillshare|student loan/.test(combined))return 'Education & Childcare';
+
+    // Household Supplies
+    if(/cleaning|paper towel|toilet paper|kleenex|tissue|detergent|dish soap|lysol|windex|trash bag|home decor|candle|appliance|furniture|ikea|home depot|lowes|ace hardware|bed bath|target.*home|walmart.*home/.test(combined))return 'Household Supplies';
+
+    // Debt & Retirement
+    if(/credit card payment|loan payment|student loan|personal loan|401k|403b|ira|roth|retirement|installment|debt payment/.test(combined))return 'Debt & Retirement';
+
+    // Gifts & Donations
+    if(/gift|donation|charity|nonprofit|church|tithe|offering|birthday.*gift|holiday.*gift|wedding.*gift|baby shower|gofundme|red cross|salvation army|goodwill/.test(combined))return 'Gifts & Donations';
+
+    // Travel
+    if(/airline|delta|united|southwest|spirit|american airlines|frontier|airport|airfare|baggage|hotel|motel|airbnb|vrbo|car rental|hertz|enterprise|avis|budget.*car|vacation|resort|cruise|expedia|booking\.com|hotels\.com|priceline|travelocity/.test(combined))return 'Travel';
+
+    // Pets
+    if(/pet|veterinarian|vet|petsmart|petco|pet food|dog food|cat food|pet supply|flea|heartworm|pet insurance|grooming.*pet|animal hospital/.test(combined))return 'Pets';
+
+    return null; // Let Claude's value stand
   }
 
   var inferredCategory=inferCategory(merchantName,items);
@@ -3139,7 +3189,7 @@ function showReceiptConfirm(data){
   h+='<div><label class="lbl">Name</label><input class="inp" id="rc-name" value="'+merchantName+'" placeholder="Merchant name"/></div>';
   h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="rc-amt" value="'+totalAmt+'" placeholder="0.00"/></div>';
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="rc-date" value="'+(txDate&&txDate.match(/^\d{4}-\d{2}-\d{2}/)?txDate:today())+'"/></div>';
-  h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+['Food','Clothing','Entertainment','Personal Care','Kids','Transportation','Healthcare','Other'].map(function(c){return '<option'+(category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+CATS.map(function(c){return '<option'+(category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
   h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn on" data-dm="jay" onclick="setReceiptDM(\'jay\',this)">Jay</button><button class="tog-btn" data-dm="chari" onclick="setReceiptDM(\'chari\',this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\'joint\',this)">Joint</button></div></div>';
   h+='<div><label class="lbl">Match to existing bill? (optional)</label><select class="sel" id="rc-exp"><option value="">— Not a bill payment —</option>'+EX.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+'</select></div>';
   if(items.length>0){
