@@ -1815,160 +1815,110 @@ function renderFlow(){
   var nextPaydays=paydays.slice(0,4);
   var el=document.getElementById('tab-flow');
 
-  var html='<div class="ph"><div class="ph-eye">Cash Flow</div><div class="ph-title">Your Money, <span style="color:var(--primary)">Day by Day</span></div><div class="ph-sub">See exactly when money moves, where it goes, and when you are at risk.</div></div>';
-  html+='<div style="display:flex;gap:6px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:16px">';
+  var html='<div class="ph"><div class="ph-eye">Cash Flow</div><div class="ph-title">Paycheck <span style="color:var(--primary)">Breakdown</span></div><div class="ph-sub">Every upcoming check — what comes in, what's spoken for, what's left.</div></div>';
+
+  // WINDOW TOGGLE
+  html+='<div style="display:flex;gap:6px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:16px">';
   [{v:30,l:'30 Days'},{v:60,l:'60 Days'},{v:90,l:'90 Days'}].forEach(function(d){
-    html+='<button onclick="setFD('+d.v+')" style="flex:1;padding:9px 0;border-radius:8px;font-size:13px;font-weight:600;border:none;background:'+(flowDays===d.v?'var(--surface)':'transparent')+';color:'+(flowDays===d.v?'var(--primary)':'var(--muted)')+';box-shadow:'+(flowDays===d.v?'var(--shadow)':'none')+';cursor:pointer">'+d.l+'</button>';
+    html+='<button onclick="setFD('+d.v+')" style="flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;border:none;background:'+(flowDays===d.v?'var(--surface-solid)':'transparent')+';color:'+(flowDays===d.v?'var(--primary)':'var(--muted)')+';box-shadow:'+(flowDays===d.v?'var(--shadow)':'none')+';cursor:pointer">'+d.l+'</button>';
   });
   html+='</div>';
 
-  var totalIn=paydays.reduce(function(s,d){return s+d.inflow;},0);
-  var totalOut=cf.reduce(function(s,d){return s+d.outflow;},0);
-  html+='<div class="g3" style="margin-bottom:16px">';
-  [{l:'Cash In',v:fmt(totalIn),c:'var(--green)',sub:paydays.length+' paychecks'},
-   {l:'Bills Out',v:fmt(totalOut),c:'var(--red)',sub:'projected'},
-   {l:'Floor',v:fmt(minBal),c:minBal<0?'var(--red)':'var(--primary)',sub:'lowest point'}
-  ].forEach(function(t){
-    html+='<div class="mc" style="text-align:center"><div class="lbl" style="margin-bottom:4px">'+t.l+'</div>';
-    html+='<div style="font-size:1.1rem;font-weight:800;color:'+t.c+'">'+t.v+'</div>';
-    html+='<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.sub+'</div></div>';
-  });
-  html+='</div>';
-
-  // SVG Chart — taller, richer
-  var cW=480,cH=240,pL=54,pR=14,pT=18,pB=32;var plW=cW-pL-pR,plH=cH-pT-pB;var nP=cf.length;
-  var yPad=(maxBal-minBal)*0.1||300;
-  var yMin=minBal-yPad;var yMax=maxBal+yPad;
-  var yStep=Math.ceil((yMax-yMin)/5/500)*500||500;
-  var yStart2=Math.floor(yMin/yStep)*yStep;var yEnd2=Math.ceil(yMax/yStep)*yStep;
-  function xP(i){return pL+(i/(nP-1||1))*plW;}
-  function yP(v){return pT+plH-(((v-yStart2)/(yEnd2-yStart2||1))*plH);}
-
-  var svg='<svg width="100%" viewBox="0 0 '+cW+' '+cH+'" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4361ee" stop-opacity="0.18"/><stop offset="100%" stop-color="#4361ee" stop-opacity="0.01"/></linearGradient></defs>';
-
-  // Grid
-  for(var yi=yStart2;yi<=yEnd2;yi+=yStep){
-    var yyp=yP(yi);if(yyp<pT-5||yyp>pT+plH+5)continue;
-    svg+='<line x1="'+pL+'" y1="'+yyp+'" x2="'+(cW-pR)+'" y2="'+yyp+'" stroke="'+(yi===0?'rgba(0,0,0,0.1)':'rgba(0,0,0,0.04)')+'" stroke-width="'+(yi===0?1.5:1)+'"/>';
-    var lbl4=yi>=1000?'$'+(yi/1000).toFixed(0)+'k':yi<=-1000?'-$'+Math.abs(yi/1000).toFixed(0)+'k':'$'+yi;
-    svg+='<text x="'+(pL-4)+'" y="'+(yyp+4)+'" text-anchor="end" font-size="9" fill="#94a3b8" font-family="-apple-system,sans-serif">'+lbl4+'</text>';
-  }
-
-  // Zero line
-  if(minBal<0&&maxBal>0){var zp=yP(0);svg+='<line x1="'+pL+'" y1="'+zp+'" x2="'+(cW-pR)+'" y2="'+zp+'" stroke="rgba(239,68,68,0.5)" stroke-width="1.5" stroke-dasharray="5,3"/>';}
-
-  // Danger zone fill
-  if(minBal<0){
-    var z2=Math.min(yP(0),pT+plH);
-    var dp='M '+xP(0)+' '+z2;
-    cf.forEach(function(d,i){dp+=' L '+xP(i)+' '+yP(Math.min(d.balAvail,0));});
-    dp+=' L '+xP(cf.length-1)+' '+z2+' Z';
-    svg+='<path d="'+dp+'" fill="rgba(239,68,68,0.1)" stroke="none"/>';
-  }
-
-  // Available area
-  var areaA='M '+xP(0)+' '+(pT+plH);
-  cf.forEach(function(d,i){areaA+=' L '+xP(i)+' '+yP(Math.max(d.balAvail,yStart2));});
-  areaA+=' L '+xP(cf.length-1)+' '+(pT+plH)+' Z';
-  svg+='<path d="'+areaA+'" fill="url(#ag2)" stroke="none"/>';
-
-  // Spendable area
-  var spendA='M '+xP(0)+' '+(pT+plH);
-  cf.forEach(function(d,i){spendA+=' L '+xP(i)+' '+yP(Math.max(d.balSpend,yStart2));});
-  spendA+=' L '+xP(cf.length-1)+' '+(pT+plH)+' Z';
-  svg+='<path d="'+spendA+'" fill="rgba(34,197,94,0.07)" stroke="none"/>';
-
-  // Available line
-  var lineA='M';cf.forEach(function(d,i){lineA+=(i===0?'':' L')+' '+xP(i)+' '+yP(d.balAvail);});
-  svg+='<path d="'+lineA+'" fill="none" stroke="#4361ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
-
-  // Spendable line
-  var lineS='M';cf.forEach(function(d,i){lineS+=(i===0?'':' L')+' '+xP(i)+' '+yP(d.balSpend);});
-  svg+='<path d="'+lineS+'" fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5,4"/>';
-
-  // Payday markers
-  cf.forEach(function(d,i){
-    if(d.inflow>0){
-      svg+='<line x1="'+xP(i)+'" y1="'+pT+'" x2="'+xP(i)+'" y2="'+(pT+plH)+'" stroke="rgba(67,97,238,0.12)" stroke-width="1"/>';
-      svg+='<circle cx="'+xP(i)+'" cy="'+yP(d.balAvail)+'" r="5" fill="#4361ee" stroke="white" stroke-width="2"/>';
-      svg+='<text x="'+xP(i)+'" y="'+(pT-4)+'" text-anchor="middle" font-size="8" fill="#4361ee" font-weight="700" font-family="-apple-system,sans-serif">Pay</text>';
-    }
-  });
-
-  // Bill spike dots
-  cf.forEach(function(d,i){
-    if(d.outflow>400&&d.inflow===0){
-      svg+='<circle cx="'+xP(i)+'" cy="'+yP(d.balAvail)+'" r="3.5" fill="'+(d.balAvail<0?'#ef4444':'#f59e0b')+'" stroke="white" stroke-width="1.5"/>';
-    }
-  });
-
-  // X labels
-  var lEvery=Math.ceil(cf.length/5);
-  cf.forEach(function(d,i){
-    if(i===0||i%lEvery===0||i===cf.length-1){
-      svg+='<text x="'+xP(i)+'" y="'+(pT+plH+13)+'" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="-apple-system,sans-serif">'+fmtD(d.date,true)+'</text>';
-    }
-  });
-
-  // Hover targets
-  cf.forEach(function(d,i){
-    var bills=d.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(', ');
-    var tip=fmtD(d.date,true)+'|Avail: '+fmt(d.balAvail)+'|Spendable: '+fmt(d.balSpend)+(d.inflow>0?'|\ud83d\udcb0 '+fmt(d.inflow)+' paycheck':'')+(d.outflow>0?'|\ud83d\udce4 '+fmt(d.outflow)+' bills':'')+(bills?'|'+bills:'');
-    svg+='<rect x="'+(xP(i)-6)+'" y="'+pT+'" width="12" height="'+plH+'" fill="transparent" onmouseenter="showFlowTip(event,\''+tip+'\')" onmouseleave="hideTip()" ontouchstart="showFlowTip(event,\''+tip+'\')" ontouchend="hideTip()"/>';
-  });
-  svg+='</svg>';
-
-  html+='<div class="chart-wrap" style="margin-bottom:6px;padding:16px 10px 10px;overflow:hidden">'+svg;
-  html+='<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
-  [{c:'#4361ee',l:'Available',line:true,solid:true},{c:'#22c55e',l:'Spendable',line:true,solid:false},{c:'#4361ee',l:'Payday',dot:true},{c:'#f59e0b',l:'Bill Day',dot:true,col:'#f59e0b'}].forEach(function(x){
-    html+='<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">';
-    if(x.dot)html+='<div style="width:8px;height:8px;border-radius:50%;background:'+(x.col||x.c)+'"></div>';
-    else if(x.solid)html+='<div style="width:14px;height:2.5px;background:'+x.c+';border-radius:99px"></div>';
-    else html+='<div style="width:14px;height:0;border-top:2.5px dashed '+x.c+'"></div>';
-    html+=x.l+'</div>';
-  });
-  html+='</div></div>';
-
-  // FLOW SIGNALS
+  // FLOW SIGNALS — lead with the insight
   if(signals.length>0){
-    html+='<div class="sec-t" style="margin-top:4px">Flow Signals</div>';
-    signals.slice(0,4).forEach(function(s){
+    signals.slice(0,3).forEach(function(s){
       var bg=s.type==='danger'?'var(--rl)':s.type==='amber'?'var(--al)':s.type==='green'?'var(--gl)':'var(--pl)';
-      var bc=s.type==='danger'?'rgba(239,68,68,0.2)':s.type==='amber'?'rgba(245,158,11,0.2)':s.type==='green'?'rgba(34,197,94,0.2)':'var(--pm)';
+      var bc=s.type==='danger'?'rgba(220,38,38,0.2)':s.type==='amber'?'rgba(217,119,6,0.2)':s.type==='green'?'rgba(22,163,74,0.2)':'var(--pm)';
       var tc=s.type==='danger'?'var(--red)':s.type==='amber'?'var(--amber)':s.type==='green'?'var(--green)':'var(--primary)';
-      html+='<div style="background:'+bg+';border:1px solid '+bc+';border-radius:12px;padding:11px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">';
-      html+='<span style="font-size:16px;flex-shrink:0">'+s.icon+'</span>';
+      html+='<div style="background:'+bg+';border:1px solid '+bc+';border-radius:14px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">';
+      html+='<span style="font-size:18px;flex-shrink:0;margin-top:1px">'+s.icon+'</span>';
       html+='<div style="font-size:13px;color:'+tc+';line-height:1.55;font-weight:500">'+s.msg+'</div></div>';
     });
   }
 
-  // PAYCHECK BREAKDOWN
+  // PAYCHECK TIMELINE — the main event
   if(nextPaydays.length>0){
-    html+='<div class="sec-t">Paycheck Breakdown</div>';
-    html+='<div style="display:flex;flex-direction:column;gap:8px">';
+    html+='<div class="sec-t" style="margin-top:4px">Upcoming Paychecks</div>';
     nextPaydays.forEach(function(pd,idx){
       var nextPd=nextPaydays[idx+1];
-      var billsThisCycle=cf.filter(function(d){
-        return d.date>=pd.date&&(!nextPd||d.date<nextPd.date)&&d.outflow>0;
+      // Bills due between this check and next
+      var billsThisCycle=[];
+      cf.forEach(function(d){
+        if(d.date>=pd.date&&(!nextPd||d.date<nextPd.date)&&d.outflow>0){
+          d.events.filter(function(e){return e.type==='expense';}).forEach(function(e){
+            billsThisCycle.push({label:e.label,amount:e.amount,date:d.date,pd:e.pd,em:e.em});
+          });
+        }
       });
-      var totalBills=billsThisCycle.reduce(function(s,d){return s+d.outflow;},0);
+      var totalBills=billsThisCycle.reduce(function(s,b){return s+b.amount;},0);
       var net=paycheck-totalBills;
       var billPct=paycheck>0?Math.min((totalBills/paycheck)*100,100):0;
-      html+='<div class="card" style="padding:14px 16px">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
-      html+='<div><div style="font-size:13px;font-weight:700;color:var(--primary)">'+fmtD(pd.date,true)+'</div><div style="font-size:11px;color:var(--muted)">Paycheck '+(idx+1)+'</div></div>';
-      html+='<div style="text-align:right"><div style="font-size:1rem;font-weight:800;color:var(--green)">+'+fmt(paycheck)+'</div><div style="font-size:11px;color:var(--muted)">income</div></div></div>';
-      html+='<div style="display:flex;flex-direction:column;gap:6px">';
-      html+='<div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:var(--muted);width:48px">In</div><div style="flex:1;height:6px;background:var(--bg);border-radius:99px;overflow:hidden"><div style="height:100%;width:100%;background:var(--green);border-radius:99px"></div></div><div style="font-size:12px;font-weight:700;color:var(--green);width:52px;text-align:right">'+fmt(paycheck)+'</div></div>';
-      html+='<div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:var(--muted);width:48px">Bills</div><div style="flex:1;height:6px;background:var(--bg);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+billPct+'%;background:'+(billPct>80?'var(--red)':billPct>60?'var(--amber)':'var(--primary)')+';border-radius:99px"></div></div><div style="font-size:12px;font-weight:700;color:'+(billPct>80?'var(--red)':'var(--text2)')+';width:52px;text-align:right">'+fmt(totalBills)+'</div></div>';
-      html+='<div style="display:flex;justify-content:space-between;padding:8px 0 0;border-top:1px solid var(--bl);margin-top:2px">';
-      html+='<div style="display:flex;gap:4px;flex-wrap:wrap">';
-      billsThisCycle.slice(0,3).forEach(function(d){d.events.filter(function(e){return e.type==='expense';}).slice(0,1).forEach(function(e){html+='<span style="font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--muted)">'+e.label+'</span>';});});
-      if(billsThisCycle.length>3)html+='<span style="font-size:10px;color:var(--muted)">+'+(billsThisCycle.length-3)+' more</span>';
-      html+='</div><div style="font-size:13px;font-weight:800;color:'+(net>=0?'var(--green)':'var(--red)')+';flex-shrink:0;margin-left:8px">'+(net>=0?'+':'')+fmt(net)+' net</div></div>';
-      html+='</div></div>';
+      var netColor=net>=0?'var(--green)':'var(--red)';
+      var netBg=net>=0?'var(--gl)':'var(--rl)';
+      var netBorder=net>=0?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)';
+      // Check if balance goes negative before this paycheck arrives
+      var preDanger=cf.filter(function(d){return d.date<pd.date&&d.balAvail<0;});
+      var daysToCheck=Math.round((new Date(pd.date+'T12:00:00')-new Date())/86400000);
+
+      html+='<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden">';
+
+      // Header bar — gradient accent based on status
+      var headerBg=net<0?'linear-gradient(135deg,#dc2626,#b91c1c)':billPct>75?'linear-gradient(135deg,#d97706,#b45309)':'linear-gradient(135deg,#4361ee,#7c3aed)';
+      html+='<div style="background:'+headerBg+';padding:14px 16px;display:flex;justify-content:space-between;align-items:center">';
+      html+='<div><div style="font-size:15px;font-weight:800;color:white">'+fmtD(pd.date,true)+'</div>';
+      html+='<div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:2px">'+(daysToCheck===0?'Today':daysToCheck===1?'Tomorrow':'in '+daysToCheck+' days')+'</div></div>';
+      html+='<div style="text-align:right"><div style="font-size:1.1rem;font-weight:800;color:white">+'+fmt(paycheck)+'</div>';
+      html+='<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:1px">paycheck</div></div></div>';
+
+      // Danger before check banner
+      if(preDanger.length>0){
+        html+='<div style="background:rgba(220,38,38,0.08);border-bottom:1px solid rgba(220,38,38,0.15);padding:8px 16px;display:flex;align-items:center;gap:8px">';
+        html+='<span style="font-size:14px">⚠️</span><div style="font-size:12px;color:var(--red);font-weight:600">Balance goes negative '+preDanger.length+' day'+(preDanger.length===1?'':'s')+' before this check arrives</div></div>';
+      }
+
+      html+='<div style="padding:14px 16px">';
+
+      // Spending bar
+      html+='<div style="margin-bottom:14px">';
+      html+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+      html+='<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Spoken for</span>';
+      html+='<span style="font-size:12px;font-weight:700;color:'+(billPct>80?'var(--red)':billPct>60?'var(--amber)':'var(--text2)')+'">'+fmt(totalBills)+' of '+fmt(paycheck)+'</span></div>';
+      html+='<div style="height:10px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden">';
+      var barColor=billPct>80?'var(--red)':billPct>60?'var(--amber)':'var(--primary)';
+      html+='<div style="height:100%;width:'+billPct+'%;background:'+barColor+';border-radius:99px;transition:width .6s ease"></div></div>';
+      html+='<div style="display:flex;justify-content:space-between;margin-top:5px">';
+      html+='<span style="font-size:11px;color:var(--muted)">'+Math.round(billPct)+'% going to bills</span>';
+      html+='<span style="font-size:11px;font-weight:700;color:'+netColor+'">'+(net>=0?'+':'')+fmt(net)+' left</span></div></div>';
+
+      // Bill list
+      if(billsThisCycle.length>0){
+        html+='<div style="margin-bottom:12px">';
+        html+='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bills this cycle</div>';
+        billsThisCycle.sort(function(a,b){return b.amount-a.amount;}).forEach(function(b){
+          var isPd=b.pd;var isEm=b.em;
+          html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(200,210,240,0.25)">';
+          html+='<div style="display:flex;align-items:center;gap:7px">';
+          html+='<div style="width:6px;height:6px;border-radius:50%;background:'+(isPd?'var(--red)':isEm?'var(--amber)':'rgba(200,210,240,0.6)')+'"></div>';
+          html+='<span style="font-size:13px;color:var(--text);font-weight:500">'+b.label+'</span>';
+          if(isPd)html+='<span style="font-size:9px;font-weight:700;background:var(--red);color:#fff;border-radius:4px;padding:1px 5px">PAST DUE</span>';
+          if(isEm&&!isPd)html+='<span style="font-size:9px;font-weight:700;background:var(--al);color:var(--amber);border-radius:4px;padding:1px 5px">EARMARKED</span>';
+          html+='</div>';
+          html+='<span style="font-size:13px;font-weight:700;color:var(--text2)">'+fmt(b.amount)+'</span></div>';
+        });
+        html+='</div>';
+      } else {
+        html+='<div style="font-size:13px;color:var(--muted);padding:8px 0 4px">No bills due this cycle.</div>';
+      }
+
+      // Net result pill
+      html+='<div style="background:'+netBg+';border:1px solid '+netBorder+';border-radius:12px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">';
+      html+='<span style="font-size:12px;font-weight:600;color:'+netColor+'">'+(net>=0?'After bills, you keep':'After bills, you're short')+'</span>';
+      html+='<span style="font-size:1rem;font-weight:800;color:'+netColor+'">'+(net>=0?'+':'')+fmt(net)+'</span></div>';
+
+      html+='</div></div>'; // close padding div + card
     });
-    html+='</div>';
+  } else {
+    html+='<div class="card" style="text-align:center;padding:32px;color:var(--muted)">No upcoming paychecks found.<br>Add your pay dates in Settings.</div>';
   }
 
   // PRESSURE CALENDAR
