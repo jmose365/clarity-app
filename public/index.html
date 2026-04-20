@@ -1267,7 +1267,7 @@ function renderHome(){
   html+='</div>';
 
   // UPCOMING BILLS — next 7 days
-  var today7=addDays(td,7);
+  var td=today();
   var upcomingBills=[];
   EX.forEach(function(exp){
     if(!exp.is_recurring)return;
