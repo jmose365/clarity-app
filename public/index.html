@@ -595,14 +595,14 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
 var CATS=['Housing','Utilities','Food & Drinks','Transportation','Healthcare','Entertainment','Subscriptions','Personal Care','Clothing','Education & Childcare','Household Supplies','Debt & Retirement','Gifts & Donations','Travel','Pets','Miscellaneous'];
 var CYCLES=['monthly','biweekly','weekly','one-time'];
 var CONS=['eviction','repossession','disconnection','collections','late_fee','credit_hit','other'];
-var GOAL_TYPES=['Vacation','Emergency Fund','New Car','Home Down Payment','Debt Payoff','Kids Education','Investment Seed','Holiday Fund','Birthday / Gift','Home Improvement','Other'];
+var GOAL_TYPES=['Nest Egg','Vacation','Emergency Fund','New Car','Home Down Payment','Debt Payoff','Kids Education','Investment Seed','Holiday Fund','Birthday / Gift','Home Improvement','Other'];
 
 // HELPERS
 function fmt(n){return '$'+Math.abs(n||0).toLocaleString('en-US',{maximumFractionDigits:0});}
@@ -779,11 +779,12 @@ async function loadApp(){
     sb.from('goals').select('*').eq('household_id',HID).order('created_at',{ascending:false}),
     sb.from('badges').select('*').eq('household_id',HID).order('earned_at',{ascending:false}),
     sb.from('paycheck_log').select('*').eq('household_id',HID).order('logged_at',{ascending:false}),
-    sb.from('acknowledged_notifications').select('*').eq('user_id',CU.id)
+    sb.from('acknowledged_notifications').select('*').eq('user_id',CU.id),
+    sb.from('goal_contributions').select('*').eq('household_id',HID).order('contribution_date',{ascending:true})
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
-  BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];
+  BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -1265,6 +1266,80 @@ function renderHome(){
   html+='<button onclick="openAdvisor()" style="background:var(--gp);border:none;border-radius:14px;padding:14px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(67,97,238,0.25)">Ask Clarity</button>';
   html+='<button onclick="openLogPaycheckManual()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--shadow)">Log Paycheck</button>';
   html+='</div>';
+
+  // SPENDING PATTERNS — current month transactions
+  var monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);
+  var monthTX=TX.filter(function(t){
+    var d=t.transaction_date?new Date(t.transaction_date+'T12:00:00'):new Date(t.created_at);
+    return d>=monthStart;
+  });
+
+  if(monthTX.length>0){
+    // Roll up by category
+    var catTotals={};
+    monthTX.forEach(function(t){
+      var cat=t.category||'Miscellaneous';
+      catTotals[cat]=(catTotals[cat]||0)+t.amount;
+    });
+    var catArr=Object.entries(catTotals).sort(function(a,b){return b[1]-a[1];});
+    var totalSpent=monthTX.reduce(function(s,t){return s+t.amount;},0);
+    var topCat=catArr[0];
+    // Jay vs Chari split
+    var jaySpent=monthTX.filter(function(t){return t.decision_maker==='jay';}).reduce(function(s,t){return s+t.amount;},0);
+    var chariSpent=monthTX.filter(function(t){return t.decision_maker==='chari';}).reduce(function(s,t){return s+t.amount;},0);
+    var jointSpent=monthTX.filter(function(t){return t.decision_maker==='joint';}).reduce(function(s,t){return s+t.amount;},0);
+
+    html+='<div class="sec-t">Spending This Month</div>';
+    html+='<div class="card" style="padding:16px">';
+
+    // Total + transaction count
+    html+='<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px">';
+    html+='<div><div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-.03em">'+fmt(totalSpent)+'</div>';
+    html+='<div style="font-size:12px;color:var(--muted);margin-top:2px">'+monthTX.length+' transaction'+(monthTX.length===1?'':'s')+' logged</div></div>';
+    if(topCat)html+='<div style="text-align:right"><div style="font-size:11px;color:var(--muted)">Top category</div><div style="font-size:13px;font-weight:700;color:var(--primary)">'+topCat[0]+'</div><div style="font-size:12px;color:var(--muted)">'+fmt(topCat[1])+'</div></div>';
+    html+='</div>';
+
+    // Category bars — top 4
+    html+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">';
+    catArr.slice(0,4).forEach(function(entry){
+      var cat=entry[0];var amt=entry[1];
+      var pct=totalSpent>0?Math.round((amt/totalSpent)*100):0;
+      var barColor='#4361ee';
+      // Category color mapping
+      var catColors={'Food & Drinks':'#16a34a','Transportation':'#d97706','Entertainment':'#7c3aed','Healthcare':'#0ea5e9','Housing':'#dc2626','Subscriptions':'#6366f1','Personal Care':'#ec4899','Clothing':'#f59e0b'};
+      if(catColors[cat])barColor=catColors[cat];
+      html+='<div>';
+      html+='<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
+      html+='<span style="font-size:12px;font-weight:600;color:var(--text)">'+cat+'</span>';
+      html+='<div style="display:flex;gap:8px;align-items:center">';
+      html+='<span style="font-size:11px;color:var(--muted)">'+pct+'%</span>';
+      html+='<span style="font-size:12px;font-weight:700;color:var(--text2)">'+fmt(amt)+'</span></div></div>';
+      html+='<div style="height:6px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden">';
+      html+='<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:99px;transition:width .6s ease"></div></div>';
+      html+='</div>';
+    });
+    if(catArr.length>4)html+='<div style="font-size:11px;color:var(--muted);text-align:center;padding-top:2px">+'+(catArr.length-4)+' more categories</div>';
+    html+='</div>';
+
+    // Decision maker split
+    if(jaySpent>0||chariSpent>0||jointSpent>0){
+      html+='<div style="border-top:1px solid var(--bl);padding-top:12px">';
+      html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Who Spent What</div>';
+      html+='<div style="display:flex;gap:4px;height:8px;border-radius:99px;overflow:hidden;margin-bottom:8px">';
+      if(jaySpent>0)html+='<div style="flex:'+jaySpent+';background:#4361ee"></div>';
+      if(chariSpent>0)html+='<div style="flex:'+chariSpent+';background:#7c3aed"></div>';
+      if(jointSpent>0)html+='<div style="flex:'+jointSpent+';background:#22c55e"></div>';
+      html+='</div>';
+      html+='<div style="display:flex;gap:14px;flex-wrap:wrap">';
+      if(jaySpent>0)html+='<div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#4361ee"></div><span style="font-size:11px;color:var(--text2)">Jay '+fmt(jaySpent)+'</span></div>';
+      if(chariSpent>0)html+='<div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#7c3aed"></div><span style="font-size:11px;color:var(--text2)">Chari '+fmt(chariSpent)+'</span></div>';
+      if(jointSpent>0)html+='<div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#22c55e"></div><span style="font-size:11px;color:var(--text2)">Joint '+fmt(jointSpent)+'</span></div>';
+      html+='</div></div>';
+    }
+
+    html+='<button onclick="goTab(\'ledger\');setLV(\'transactions\')" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">View All Transactions →</button>';
+    html+='</div>';
+  }
 
   // UPCOMING BILLS — next 7 days
   var td=today();
@@ -2663,14 +2738,106 @@ function renderGoals(){
   var complete=GOALS.filter(function(g){return g.is_complete;});
   var userBadges=BADGES.filter(function(b){return b.user_id===CU.id;});
 
-  var html='<div class="ph"><div class="ph-eye">Goals</div><div class="ph-title">Your Financial Goals</div><div class="ph-sub">Track progress, earn badges, build momentum.</div></div>';
+  // Savings totals
+  var totalSaved=GOALS.reduce(function(s,g){return s+g.current_amount;},0);
+  var totalTarget=GOALS.filter(function(g){return !g.is_complete&&g.target_amount;}).reduce(function(s,g){return s+g.target_amount;},0);
+  var nestEgg=GOALS.find(function(g){return g.goal_type==='Nest Egg'&&!g.is_complete;});
+  var nestEggAmt=nestEgg?nestEgg.current_amount:0;
+  var goalsSaved=totalSaved-nestEggAmt;
+
+  // Contribution history — build monthly totals for sparkline (last 6 months)
+  var now=new Date();
+  var months=[];
+  for(var mi=5;mi>=0;mi--){
+    var d=new Date(now.getFullYear(),now.getMonth()-mi,1);
+    months.push({label:d.toLocaleString('default',{month:'short'}),year:d.getFullYear(),month:d.getMonth(),total:0});
+  }
+  GC.forEach(function(c){
+    var cd=new Date(c.contribution_date+'T12:00:00');
+    var m=months.find(function(x){return x.year===cd.getFullYear()&&x.month===cd.getMonth();});
+    if(m)m.total+=c.amount;
+  });
+  var maxMonth=Math.max.apply(null,months.map(function(m){return m.total;}));
+
+  var html='<div class="ph"><div class="ph-eye">Goals & Savings</div><div class="ph-title">Your <span style="color:var(--primary)">Savings</span> Picture</div><div class="ph-sub">All goals combined, contribution history, and your nest egg.</div></div>';
+
+  // SAVINGS HERO CARD
+  html+='<div class="card" style="margin-bottom:14px;padding:20px">';
+
+  // Total saved number
+  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">';
+  html+='<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px">Total Saved</div>';
+  html+='<div style="font-size:2rem;font-weight:900;color:var(--primary);letter-spacing:-.03em">'+fmt(totalSaved)+'</div>';
+  if(totalTarget>0){
+    var overallPct=Math.min(Math.round((totalSaved/totalTarget)*100),100);
+    html+='<div style="font-size:12px;color:var(--muted);margin-top:3px">'+overallPct+'% of '+fmt(totalTarget)+' total target</div>';
+  }
+  html+='</div>';
+  if(nestEgg){
+    html+='<div style="text-align:right"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px">Nest Egg</div>';
+    html+='<div style="font-size:1.1rem;font-weight:800;color:var(--green)">'+fmt(nestEggAmt)+'</div></div>';
+  }
+  html+='</div>';
+
+  // Goal breakdown — stacked bar
+  if(active.length>0){
+    var colors=['#4361ee','#7c3aed','#06b6d4','#16a34a','#d97706','#dc2626','#ec4899'];
+    html+='<div style="margin-bottom:14px">';
+    html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saved by Goal</div>';
+    // Stacked bar
+    html+='<div style="height:14px;border-radius:99px;overflow:hidden;display:flex;background:rgba(200,210,240,0.25);margin-bottom:10px">';
+    if(totalSaved>0){
+      active.forEach(function(g,i){
+        var pct=(g.current_amount/totalSaved)*100;
+        if(pct>0)html+='<div style="width:'+pct+'%;background:'+colors[i%colors.length]+';transition:width .6s ease" title="'+g.name+'"></div>';
+      });
+    } else {
+      html+='<div style="width:100%;background:rgba(200,210,240,0.3)"></div>';
+    }
+    html+='</div>';
+    // Legend
+    html+='<div style="display:flex;flex-wrap:wrap;gap:8px">';
+    active.forEach(function(g,i){
+      html+='<div style="display:flex;align-items:center;gap:5px">';
+      html+='<div style="width:8px;height:8px;border-radius:2px;background:'+colors[i%colors.length]+';flex-shrink:0"></div>';
+      html+='<span style="font-size:11px;color:var(--text2);font-weight:500">'+g.name+' '+fmt(g.current_amount)+'</span></div>';
+    });
+    html+='</div></div>';
+  }
+
+  // Contribution sparkline — last 6 months
+  if(GC.length>0&&maxMonth>0){
+    html+='<div style="margin-bottom:4px">';
+    html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Monthly Contributions</div>';
+    html+='<div style="display:flex;align-items:flex-end;gap:6px;height:52px">';
+    months.forEach(function(m){
+      var barH=maxMonth>0?Math.max(4,Math.round((m.total/maxMonth)*44)):4;
+      var isCurrentMonth=m.year===now.getFullYear()&&m.month===now.getMonth();
+      html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">';
+      html+='<div style="font-size:9px;color:var(--muted);font-weight:600">'+(m.total>0?'$'+(m.total>=1000?(m.total/1000).toFixed(1)+'k':m.total):'')+'</div>';
+      html+='<div style="width:100%;height:'+barH+'px;background:'+(isCurrentMonth?'var(--primary)':'rgba(67,97,238,0.3)')+';border-radius:4px 4px 0 0;transition:height .6s ease"></div>';
+      html+='<div style="font-size:9px;color:'+(isCurrentMonth?'var(--primary)':'var(--muted)')+';font-weight:'+(isCurrentMonth?'700':'500')+'">'+m.label+'</div>';
+      html+='</div>';
+    });
+    html+='</div></div>';
+  } else {
+    html+='<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0">Log a contribution to start tracking your savings history.</div>';
+  }
+  html+='</div>'; // close savings card
+
+  // NEST EGG QUICK-ADD if no nest egg exists
+  if(!nestEgg){
+    html+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.2);border-radius:16px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">';
+    html+='<span style="font-size:24px">🥚</span>';
+    html+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--green)">Start a Nest Egg</div>';
+    html+='<div style="font-size:12px;color:var(--text2);margin-top:2px">A general savings bucket with no target — just money building over time.</div></div>';
+    html+='<button onclick="showAddGoal(true)" style="background:var(--green);border:none;border-radius:10px;padding:8px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Start</button></div>';
+  }
 
   // Badges shelf
   if(userBadges.length>0){
     html+='<div class="card" style="margin-bottom:14px"><div class="sec-t">Badges Earned</div><div style="display:flex;flex-wrap:wrap;gap:4px">';
-    userBadges.forEach(function(b){
-      html+='<div class="badge-chip" title="'+b.badge_description+'"><span>'+b.badge_icon+'</span>'+b.badge_name+'</div>';
-    });
+    userBadges.forEach(function(b){html+='<div class="badge-chip" title="'+b.badge_description+'"><span>'+b.badge_icon+'</span>'+b.badge_name+'</div>';});
     html+='</div></div>';
   }
 
@@ -2689,8 +2856,7 @@ function renderGoals(){
   if(complete.length>0){
     html+='<div class="sec-t">Completed</div>';
     complete.forEach(function(g){
-      var imp={need:'var(--primary)',want:'var(--amber)',dream:'var(--purple)'}[g.importance]||'var(--primary)';
-      html+='<div class="card" style="opacity:.6"><div style="display:flex;justify-content:space-between;align-items:center">';
+      html+='<div class="card" style="opacity:.65"><div style="display:flex;justify-content:space-between;align-items:center">';
       html+='<div><div style="font-size:14px;font-weight:600">✓ '+g.name+'</div><div style="font-size:12px;color:var(--muted)">'+fmt(g.target_amount)+' · Completed '+(g.completed_at?fmtD(g.completed_at.split('T')[0],true):'')+'</div></div>';
       html+='<span style="font-size:24px">🎉</span></div></div>';
     });
@@ -2713,9 +2879,10 @@ function renderGoalCard(g){
   var nextMilestone=milestones.find(function(m){return pct<m;});
 
   var html='<div class="goal-card '+g.importance+'">';
+  var isNestEgg=g.goal_type==='Nest Egg';
   html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">';
-  html+='<div><div style="font-size:15px;font-weight:700">'+g.name+'</div>';
-  html+='<div style="font-size:12px;color:var(--muted);margin-top:3px"><span style="color:'+imp+';font-weight:600">'+impLabel+'</span>'+(g.target_date?' · Target: '+fmtD(g.target_date,true):'')+'</div></div>';
+  html+='<div><div style="display:flex;align-items:center;gap:6px"><span style="font-size:15px">'+(isNestEgg?'🥚':'🎯')+'</span><span style="font-size:15px;font-weight:700">'+g.name+'</span></div>';
+  html+='<div style="font-size:12px;color:var(--muted);margin-top:3px"><span style="color:'+imp+';font-weight:600">'+impLabel+'</span>'+(g.target_date?' · Target: '+fmtD(g.target_date,true):'')+(isNestEgg?' · Ongoing':'')+'</div></div>';
   html+='<div style="text-align:right"><div style="font-size:1.1rem;font-weight:800;color:'+imp+'">'+pct+'%</div><div style="font-size:11px;color:var(--muted)">'+fmt(g.current_amount)+' / '+fmt(g.target_amount)+'</div></div></div>';
   html+='<div class="goal-progress"><div class="goal-progress-fill" style="width:'+pct+'%;background:'+imp+'"></div></div>';
 
@@ -2728,6 +2895,19 @@ function renderGoalCard(g){
 
   if(nextMilestone)html+='<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Next milestone: '+nextMilestone+'% — '+fmt(Math.ceil(g.target_amount*nextMilestone/100)-g.current_amount)+' away</div>';
 
+  // Recent contributions for this goal
+  var goalContribs=GC.filter(function(c){return c.goal_id===g.id;}).slice(-4).reverse();
+  if(goalContribs.length>0){
+    html+='<div style="margin-bottom:12px;border-top:1px solid var(--bl);padding-top:10px">';
+    html+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Recent Contributions</div>';
+    goalContribs.forEach(function(c){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(200,210,240,0.2)">';
+      html+='<div style="font-size:12px;color:var(--text2)">'+fmtD(c.contribution_date,true)+(c.notes?' · <span style="color:var(--muted)">'+c.notes+'</span>':'')+'</div>';
+      html+='<div style="font-size:12px;font-weight:700;color:var(--green)">+'+fmt(c.amount)+'</div></div>';
+    });
+    html+='</div>';
+  }
+
   // Actions
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
   html+='<button onclick="openLogContrib(\''+g.id+'\')" style="background:'+imp+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Log Contribution</button>';
@@ -2736,12 +2916,13 @@ function renderGoalCard(g){
   return html;
 }
 
-function showAddGoal(){
+function showAddGoal(nestEgg){
   var el=document.getElementById('addGoalForm');if(!el)return;
+  var preType=nestEgg?'Nest Egg':'Vacation';
   el.innerHTML='<div class="card" style="margin-top:10px"><div style="font-size:15px;font-weight:800;margin-bottom:16px">New Goal</div><div style="display:flex;flex-direction:column;gap:12px">'
-    +'<div><label class="lbl">Goal Type</label><select class="sel" id="ng-type" onchange="toggleGoalOther()">'+GOAL_TYPES.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'
+    +'<div><label class="lbl">Goal Type</label><select class="sel" id="ng-type" onchange="toggleGoalOther()">'+GOAL_TYPES.map(function(t){return '<option'+(t===preType?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'
     +'<div id="ng-other-wrap" style="display:none"><label class="lbl">Describe your goal</label><input class="inp" id="ng-other" placeholder="e.g. Pay off credit card"/></div>'
-    +'<div><label class="lbl">Goal Name</label><input class="inp" id="ng-name" placeholder="e.g. Disney Trip 2027" oninput="debounceFeasibility()"/></div>'
+    +'<div><label class="lbl">Goal Name</label><input class="inp" id="ng-name" placeholder="e.g. Disney Trip 2027" value="'+(nestEgg?'Nest Egg':'')+'" oninput="debounceFeasibility()"/></div>'
     +'<div style="display:flex;gap:8px"><div style="flex:1"><label class="lbl">Target Amount</label><input class="inp" type="number" id="ng-amt" placeholder="$0" oninput="debounceFeasibility()"/></div><div style="flex:1"><label class="lbl">Target Date</label><input class="inp" type="date" id="ng-date" onchange="debounceFeasibility()"/></div></div>'
     +'<div><label class="lbl">Importance</label><div class="tog-wrap"><button class="tog-btn on" data-imp="need" onclick="setImp(\'need\',this)">Need</button><button class="tog-btn" data-imp="want" onclick="setImp(\'want\',this)">Want</button><button class="tog-btn" data-imp="dream" onclick="setImp(\'dream\',this)">Dream</button></div></div>'
     +'<div><label class="lbl">Starting Amount Already Saved</label><input class="inp" type="number" id="ng-saved" placeholder="$0" value="0" oninput="debounceFeasibility()"/></div>'
@@ -2817,6 +2998,9 @@ async function logContrib(goalId){
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error.';return;}
   await sb.from('goal_contributions').insert({goal_id:goalId,household_id:HID,contributed_by:CU.id,amount:amt,contribution_date:date,notes:notes||null});
   g.current_amount=newAmt;
+  // Refresh GC
+  var gcRes=await sb.from('goal_contributions').select('*').eq('household_id',HID).order('contribution_date',{ascending:true});
+  if(!gcRes.error)GC=gcRes.data||[];
   await logAct('goal_contribution',g.name+' — '+fmt(amt)+' contributed','goal',goalId,{amount:amt});
   sendNotification('goal_contribution',g.name+' — '+fmt(amt),amt);
   await checkGoalMilestones(g,prevAmt);
