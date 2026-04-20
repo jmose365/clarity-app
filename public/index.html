@@ -1722,6 +1722,9 @@ async function checkGoalFeasibility(name,amount,saved,date,imp){
   el.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:8px"><div class="spinner"></div> Checking feasibility...</div>';
   var spendable=calcSpendable();var paycheck=UP.paycheck_amount||0;
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
+  // Use net per paycheck (income minus bills per period) for forward-looking feasibility
+  // NOT current spendable balance which is negative when Behind
+  var netPerCheck=Math.max(0,paycheck-(monthly/2));
   var activeGoals=GOALS.filter(function(g){return !g.is_complete;});
   var existingGoalLoad=activeGoals.reduce(function(s,g){return s+(g.contribution_per_paycheck||0);},0);
   var daysLeft=date?daysUntil(date):null;
@@ -1732,11 +1735,12 @@ async function checkGoalFeasibility(name,amount,saved,date,imp){
     +'Target date: '+(date?fmtD(date,true):'None set')+' | Days left: '+(daysLeft||'N/A')+' | Paychecks left: '+checksLeft+'\n'
     +'Importance: '+imp+'\n'
     +'Paycheck: '+fmt(paycheck)+' biweekly\n'
-    +'Current Spendable per check (after bills): ~'+fmt(spendable)+'\n'
+    +'Monthly bills total: '+fmt(monthly)+' | Bills per paycheck: '+fmt(monthly/2)+'\n'
+    +'Net per paycheck after bills: '+fmt(netPerCheck)+'\n'
     +'Existing goal contributions per check: '+fmt(existingGoalLoad)+'\n'
-    +'True available for new goals per check: ~'+fmt(Math.max(0,spendable-existingGoalLoad))+'\n'
+    +'True available for new goals per check: ~'+fmt(Math.max(0,netPerCheck-existingGoalLoad))+'\n'
     +'Required per check to hit target date: '+fmt(checksLeft>0?Math.ceil(remaining/checksLeft):remaining)+'\n\n'
-    +'Is this goal feasible? What should they contribute per check? If the date is unrealistic, what is a realistic date?';
+    +'Note: household may currently be Behind (past due bills) but evaluate this goal based on forward-looking net income capacity, not current balance. Is this goal feasible? What should they contribute per check?';
   try{
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:sys,messages:[{role:'user',content:prompt}]})});
     var data=await res.json();
