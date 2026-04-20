@@ -1271,19 +1271,31 @@ function renderHome(){
   var upcomingBills=[];
   EX.forEach(function(exp){
     if(!exp.is_recurring)return;
-    // Check if due day falls within next 7 days
+    var arrActive=exp.arrangement_active&&(!exp.arrangement_expires||exp.arrangement_expires>=td);
     for(var d=0;d<=7;d++){
       var checkDate=addDays(td,d);
       var dom=new Date(checkDate+'T12:00:00').getDate();
-      if(exp.due_day===dom){
-        var alreadyPaid=isPaidThisCycle(exp);
-        upcomingBills.push({exp:exp,date:checkDate,daysAway:d,paid:alreadyPaid});
-        break;
-      }
-      if(exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom){
-        var alreadyPaid2=isPaidThisCycle(exp);
-        upcomingBills.push({exp:exp,date:checkDate,daysAway:d,paid:alreadyPaid2});
-        break;
+      if(arrActive){
+        // Show arrangement payments instead of original due day
+        if(exp.arrangement_due_1&&exp.arrangement_due_1===dom){
+          upcomingBills.push({exp:Object.assign({},exp,{name:exp.name+' (Arrangement)',amount:exp.arrangement_amount_1||exp.amount}),date:checkDate,daysAway:d,paid:false});
+          break;
+        }
+        if(exp.arrangement_due_2&&exp.arrangement_due_2===dom&&d!==0){
+          upcomingBills.push({exp:Object.assign({},exp,{name:exp.name+' (Arrangement 2)',amount:exp.arrangement_amount_2||0}),date:checkDate,daysAway:d,paid:false});
+          break;
+        }
+      } else {
+        if(exp.due_day===dom){
+          var alreadyPaid=isPaidThisCycle(exp);
+          upcomingBills.push({exp:exp,date:checkDate,daysAway:d,paid:alreadyPaid});
+          break;
+        }
+        if(exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom){
+          var alreadyPaid2=isPaidThisCycle(exp);
+          upcomingBills.push({exp:exp,date:checkDate,daysAway:d,paid:alreadyPaid2});
+          break;
+        }
       }
     }
   });
@@ -1670,39 +1682,63 @@ async function confirmAllocateThirdCheck(){
 // 1. FINANCIAL HEALTH SCORE — Claude explains it
 async function loadHealthExplanation(elId){
   var el=document.getElementById(elId);if(!el)return;
-  if(el.dataset.loaded==='true')return; // Already loaded, toggle visibility
+  if(el.dataset.loaded==='true')return;
   el.dataset.loaded='true';
-  el.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><div class="spinner"></div> Clarity is analyzing your score...</div>';
+  el.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><div class="spinner"></div> Analyzing your score...</div>';
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
   var pd=EX.filter(function(e){return e.is_past_due;});
   var available=calcAvailable();var earmarked=calcEarmarked();var spendable=calcSpendable();
   var activeGoals=GOALS.filter(function(g){return !g.is_complete;});
   var paycheck=UP.paycheck_amount||0;
-  var sys='You are Clarity, a financial coach. Analyze this household\'s financial health score and explain it clearly and specifically. Return your response in this exact format:\n\nSCORE: [number 0-100]\n\nFACTORS:\n[emoji] [factor name]: [1 sentence explanation of impact on score]\n[repeat for each factor, 4-6 total]\n\nTO IMPROVE:\n• [specific action that would raise the score, with estimated point gain]\n• [repeat, 2-3 actions max]\n\nKeep it under 150 words total. Be direct and specific to their actual numbers.';
-  var prompt='Household data:\n'
+  var sys='You are Clarity, a financial coach. Analyze this household\'s finances and return ONLY this exact format:\n\nSCORE: [0-100]\n\nWORKING:\n[emoji] [specific thing working in their favor — 1 sentence, reference actual numbers]\n[repeat 2-3 items]\n\nHURTING:\n[emoji] [specific thing dragging the score — 1 sentence, reference actual numbers]\n[repeat 2-3 items]\n\nMOVE:\n• [single most impactful action right now, specific dollar amount, estimated score gain]\n• [second action, optional]\n\nMax 140 words. Be direct. No generic advice. Reference their real bills and numbers.';
+  var prompt='Household finances:\n'
     +'- Available: '+fmt(available)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
     +'- Monthly bills: '+fmt(monthly)+' | Paycheck: '+fmt(paycheck)+' biweekly\n'
-    +'- Past due bills: '+(pd.length>0?pd.map(function(b){return b.name+' '+fmt(b.amount);}).join(', '):'None')+'\n'
+    +'- Past due: '+(pd.length>0?pd.map(function(b){return b.name+' '+fmt(b.past_due_amount||b.amount);}).join(', '):'None')+'\n'
     +'- Active goals: '+activeGoals.length+'\n'
-    +'- Position: '+calcPos().toUpperCase()+'\n\n'
-    +'Give a financial health score 0-100 and explain exactly what is helping and hurting it, and the 2-3 most impactful actions they can take right now.';
+    +'- Position: '+calcPos().toUpperCase();
   try{
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:sys,messages:[{role:'user',content:prompt}]})});
     var data=await res.json();
-    var text=(data.content&&data.content[0]&&data.content[0].text)||'Could not load explanation.';
-    // Format the response nicely
+    var text=(data.content&&data.content[0]&&data.content[0].text)||'';
     var lines=text.split('\n').filter(function(l){return l.trim();});
     var formatted='';
-    var inFactors=false,inImprove=false;
+    var section='';
     lines.forEach(function(line){
-      if(line.startsWith('SCORE:'))return; // Already showing score
-      if(line==='FACTORS:'){inFactors=true;inImprove=false;formatted+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:10px 0 6px">What\'s affecting your score</div>';return;}
-      if(line==='TO IMPROVE:'){inFactors=false;inImprove=true;formatted+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--primary);margin:10px 0 6px">What would move it up</div>';return;}
-      if(inFactors){formatted+='<div style="font-size:12px;line-height:1.5;margin-bottom:4px">'+line+'</div>';}
-      else if(inImprove){formatted+='<div style="font-size:12px;line-height:1.5;margin-bottom:4px;color:var(--primary)">'+line+'</div>';}
+      if(line.startsWith('SCORE:'))return;
+      if(line==='WORKING:'){
+        section='working';
+        formatted+='<div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">';
+        formatted+='<div style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></div>';
+        formatted+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--green)">Working for you</div></div>';
+        return;
+      }
+      if(line==='HURTING:'){
+        section='hurting';
+        formatted+='<div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">';
+        formatted+='<div style="width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0"></div>';
+        formatted+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--red)">Hurting your score</div></div>';
+        return;
+      }
+      if(line==='MOVE:'){
+        section='move';
+        formatted+='<div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">';
+        formatted+='<div style="width:8px;height:8px;border-radius:50%;background:var(--primary);flex-shrink:0"></div>';
+        formatted+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--primary)">Your next move</div></div>';
+        return;
+      }
+      if(section==='working'){
+        formatted+='<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 10px;background:var(--gl);border-radius:10px;margin-bottom:5px;border:1px solid rgba(22,163,74,0.15)">';
+        formatted+='<div style="font-size:13px;line-height:1.5;color:var(--text)">'+line+'</div></div>';
+      } else if(section==='hurting'){
+        formatted+='<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 10px;background:var(--rl);border-radius:10px;margin-bottom:5px;border:1px solid rgba(220,38,38,0.15)">';
+        formatted+='<div style="font-size:13px;line-height:1.5;color:var(--text)">'+line+'</div></div>';
+      } else if(section==='move'){
+        formatted+='<div style="font-size:13px;line-height:1.5;color:var(--primary);margin-bottom:4px;padding-left:4px">'+line+'</div>';
+      }
     });
     el.innerHTML=formatted||text;
-  }catch(e){el.innerHTML='Could not load explanation. Tap Clarity for a full analysis.';}
+  }catch(e){el.innerHTML='Could not load. Tap Clarity for a full analysis.';}
 }
 
 // 2. TIME TO AHEAD — Claude reasons through it with real variables
@@ -1824,9 +1860,24 @@ function renderFlow(){
     var inflow=0,outflow=0,evts=[];
     if(payDates.indexOf(date)>=0){inflow+=paycheck;evts.push({label:'Paycheck',amount:paycheck,type:'income'});}
     EX.forEach(function(exp){
-      if(exp.is_recurring&&exp.due_day===dom){outflow+=exp.amount;evts.push({label:exp.name,amount:exp.amount,type:'expense',pd:exp.is_past_due,em:exp.is_earmarked});}
-      if(exp.is_recurring&&exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom&&exp.due_day!==dom){
-        outflow+=exp.amount;evts.push({label:exp.name+' (2nd)',amount:exp.amount,type:'expense'});
+      // Check if arrangement is active and not expired
+      var arrActive=exp.arrangement_active&&(!exp.arrangement_expires||exp.arrangement_expires>=date);
+      if(arrActive){
+        // Use arrangement payment dates instead of original due day
+        if(exp.arrangement_due_1&&exp.arrangement_due_1===dom){
+          var amt1=exp.arrangement_amount_1||exp.amount;
+          outflow+=amt1;evts.push({label:exp.name+' (Arrangement 1)',amount:amt1,type:'expense'});
+        }
+        if(exp.arrangement_due_2&&exp.arrangement_due_2===dom){
+          var amt2=exp.arrangement_amount_2||0;
+          if(amt2>0){outflow+=amt2;evts.push({label:exp.name+' (Arrangement 2)',amount:amt2,type:'expense'});}
+        }
+      } else {
+        // Normal billing
+        if(exp.is_recurring&&exp.due_day===dom){outflow+=exp.amount;evts.push({label:exp.name,amount:exp.amount,type:'expense',pd:exp.is_past_due,em:exp.is_earmarked});}
+        if(exp.is_recurring&&exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom&&exp.due_day!==dom){
+          outflow+=exp.amount;evts.push({label:exp.name+' (2nd)',amount:exp.amount,type:'expense'});
+        }
       }
     });
     balAvail+=inflow-outflow;
@@ -2099,6 +2150,7 @@ function renderExpRow(exp){
   html+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">';
   html+='<span style="font-size:14px;font-weight:600">'+exp.name+'</span>';
   if(exp.is_past_due)html+='<span class="tag tag-pd">PAST DUE</span>';
+  if(exp.arrangement_active)html+='<span class="tag" style="background:rgba(124,58,237,0.12);color:var(--purple)">ARRANGEMENT</span>';
   if(hasLateCharge)html+='<span class="tag" style="background:var(--al);color:var(--amber)">+ Late Fee</span>';
   if(paidThisCycle)html+='<span class="tag tag-paid">Paid</span>';
   if(isEM&&emState==='active')html+='<span class="tag tag-em">Earmarked</span>';
@@ -2111,6 +2163,12 @@ function renderExpRow(exp){
   html+=' · <span style="color:'+(exp.is_recurring?'var(--green)':'var(--muted)')+';font-weight:600">'+(exp.is_recurring?'Recurring':'One-time')+'</span>';
   if(exp.due_day){var o=exp.due_day===1?'st':exp.due_day===2?'nd':exp.due_day===3?'rd':'th';html+=' · Due '+exp.due_day+o;}
   if(exp.pay_cycle)html+=' · '+exp.pay_cycle;
+  if(exp.arrangement_active){
+    var arrExp=exp.arrangement_expires?(' until '+fmtD(exp.arrangement_expires,true)):'';
+    html+=' · <span style="color:var(--purple);font-weight:600">Arrangement'+arrExp+'</span>';
+    if(exp.arrangement_due_1)html+=' · Pmt 1: '+fmt(exp.arrangement_amount_1||0)+' on '+exp.arrangement_due_1+(exp.arrangement_due_1===1?'st':exp.arrangement_due_1===2?'nd':exp.arrangement_due_1===3?'rd':'th');
+    if(exp.arrangement_due_2)html+=' · Pmt 2: '+fmt(exp.arrangement_amount_2||0)+' on '+exp.arrangement_due_2+(exp.arrangement_due_2===1?'st':exp.arrangement_due_2===2?'nd':exp.arrangement_due_2===3?'rd':'th');
+  }
   if(conseqLabel&&conseqSev>=2)html+=' · <span style="color:'+(conseqSev>=4?'var(--red)':conseqSev>=3?'var(--amber)':'var(--muted)')+';font-weight:600">'+conseqLabel+'</span>';
   html+='</div></div>';
   html+='<div style="text-align:right">';
@@ -2271,11 +2329,40 @@ function openEditExp(id){
   h+='<div class="tog-wrap"><button class="tog-btn'+(rfpOn?'':' on')+'" onclick="eeRFP(false,this)">Partial OK</button><button class="tog-btn'+(rfpOn?' on':'')+'" onclick="eeRFP(true,this)">Full Only</button></div></div>';
   h+='<div id="ee-min-wrap" style="display:'+((!rfpOn&&partOn)?'block':'none')+'"><label class="lbl">Minimum Partial Amount</label><input class="inp" type="number" id="ee-min" value="'+(exp.minimum_partial||0)+'"/></div>';
   h+='</div>';
+  // PAYMENT ARRANGEMENT SECTION
+  var arrOn=exp.arrangement_active||false;
+  h+='<div style="border-top:1px solid var(--bl);padding-top:14px;margin-top:4px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  h+='<div><div style="font-size:13px;font-weight:700">Payment Arrangement</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-top:1px">Deferred or split payment agreed with provider</div></div>';
+  h+='<div id="ee-arr-toggle" onclick="eeToggleArr(this)" style="width:40px;height:22px;border-radius:99px;background:'+(arrOn?'var(--primary)':'rgba(200,210,240,0.5)')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">';
+  h+='<div style="position:absolute;top:3px;left:'+(arrOn?'21px':'3px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div></div></div>';
+  h+='<div id="ee-arr-fields" style="display:'+(arrOn?'flex':'none')+';flex-direction:column;gap:10px">';
+  h+='<div><label class="lbl">Note <span style="font-weight:400;color:var(--muted)">(e.g. T-Mobile confirmed via chat)</span></label>';
+  h+='<input class="inp" id="ee-arr-note" value="'+(exp.arrangement_note||'')+'" placeholder="Optional note"/></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<div style="flex:1"><label class="lbl">Payment 1 Day</label><input class="inp" type="number" id="ee-arr-due1" value="'+(exp.arrangement_due_1||'')+'" placeholder="Day of month"/></div>';
+  h+='<div style="flex:1"><label class="lbl">Payment 1 Amount</label><input class="inp" type="number" id="ee-arr-amt1" value="'+(exp.arrangement_amount_1||'')+'" placeholder="$"/></div></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<div style="flex:1"><label class="lbl">Payment 2 Day <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input class="inp" type="number" id="ee-arr-due2" value="'+(exp.arrangement_due_2||'')+'" placeholder="Day of month"/></div>';
+  h+='<div style="flex:1"><label class="lbl">Payment 2 Amount <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input class="inp" type="number" id="ee-arr-amt2" value="'+(exp.arrangement_amount_2||'')+'" placeholder="$"/></div></div>';
+  h+='<div><label class="lbl">Expires</label><div class="hint">When normal billing resumes</div>';
+  h+='<input class="inp" type="date" id="ee-arr-exp" value="'+(exp.arrangement_expires?exp.arrangement_expires.split('T')[0]:'')+'"/></div>';
+  h+='</div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveExpEdit(\''+id+'\')">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'editExpModal\').remove()">Cancel</button></div>';
   h+='<button class="btn btn-red" onclick="removeExp(\''+id+'\')">Remove Expense</button>';
   h+='<div id="ee-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._eeState={pd:pdOn,partial:partOn,strategy:strategy,rfp:exp.requires_full_payment||false};
+}
+function eeToggleArr(el){
+  var on=el.style.background.indexOf('var(--primary)')>=0||el.style.background.indexOf('#4361ee')>=0||el.style.background.indexOf('67,97,238')>=0;
+  var nowOn=!on;
+  el.style.background=nowOn?'var(--primary)':'rgba(200,210,240,0.5)';
+  el.querySelector('div').style.left=nowOn?'21px':'3px';
+  var fields=document.getElementById('ee-arr-fields');
+  if(fields)fields.style.display=nowOn?'flex':'none';
+  window._eeArrOn=nowOn;
 }
 function toggleDue2(val){var w=document.getElementById('ee-due2-wrap');if(w)w.style.display=val==='biweekly'?'block':'none';}
 function eeStrat(val,btn){window._eeState.strategy=val;btn.parentElement.querySelectorAll('.tog-btn').forEach(function(b){b.classList.remove('on');});btn.classList.add('on');document.getElementById('ee-split-wrap').style.display=val==='split'?'flex':'none';}
@@ -2305,7 +2392,14 @@ async function saveExpEdit(id){
     late_charge_amount:window._eeState.pd&&lcEl?(parseFloat(lcEl.value)||0):0,
     requires_full_payment:window._eeState.rfp||false,
     partial_ok:window._eeState.partial,
-    minimum_partial:window._eeState.partial?(parseFloat(document.getElementById('ee-min').value)||0):0
+    minimum_partial:window._eeState.partial?(parseFloat(document.getElementById('ee-min').value)||0):0,
+    arrangement_active:window._eeArrOn!=null?window._eeArrOn:(document.getElementById('ee-arr-fields')&&document.getElementById('ee-arr-fields').style.display!=='none'),
+    arrangement_note:(document.getElementById('ee-arr-note')||{}).value||null,
+    arrangement_due_1:parseInt((document.getElementById('ee-arr-due1')||{}).value)||null,
+    arrangement_amount_1:parseFloat((document.getElementById('ee-arr-amt1')||{}).value)||null,
+    arrangement_due_2:parseInt((document.getElementById('ee-arr-due2')||{}).value)||null,
+    arrangement_amount_2:parseFloat((document.getElementById('ee-arr-amt2')||{}).value)||null,
+    arrangement_expires:(document.getElementById('ee-arr-exp')||{}).value||null
   };
   var r=await sb.from('expenses').update(updates).eq('id',id);
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
