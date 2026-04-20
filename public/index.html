@@ -2036,30 +2036,33 @@ function renderTxView(){
       try{if(t.metadata&&typeof t.metadata==='object')meta=t.metadata;else if(t.metadata)meta=JSON.parse(t.metadata);}catch(e){}
       var hasItems=meta&&meta.items&&meta.items.length>0;
       var tid='tx_'+t.id.replace(/-/g,'');
-      html+='<div class="card" style="padding:14px 16px;cursor:'+(isReceipt||hasItems?'pointer':'default')+'" onclick="'+(isReceipt||hasItems?'toggleTxDetail(\''+tid+'\')':'')+'">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center">';
-      html+='<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+      html+='<div class="card" style="padding:14px 16px">';
+      // Top row — name, badge, amount, edit/delete
+      html+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+      html+='<div style="flex:1;min-width:0;cursor:'+(isReceipt||hasItems?'pointer':'default')+'" onclick="'+(isReceipt||hasItems?'toggleTxDetail(\''+tid+'\')':'')+'">';
+      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
       html+='<span style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.name+'</span>';
       if(isReceipt)html+='<span style="font-size:10px;background:var(--pl);color:var(--primary);border-radius:4px;padding:2px 6px;font-weight:700;flex-shrink:0">📷 Receipt</span>';
       html+='</div>';
-      html+='<div style="font-size:12px;color:var(--muted)">'+fmtD(t.transaction_date,true)+' · <span class="'+dmCls+'" style="padding:2px 8px">'+dmL+'</span></div></div>';
+      html+='<div style="font-size:12px;color:var(--muted)">'+fmtD(t.transaction_date,true)+' · <span class="'+dmCls+'" style="padding:2px 8px">'+dmL+'</span></div>';
+      html+='</div>';
+      // Right side — amount + actions
       html+='<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">';
       html+='<span style="font-size:1rem;font-weight:800;color:var(--red)">-'+fmt(t.amount)+'</span>';
-      if(isReceipt||hasItems)html+='<span id="'+tid+'_arrow" style="font-size:12px;color:var(--muted);transition:transform .2s">▼</span>';
+      if(isReceipt||hasItems)html+='<span id="'+tid+'_arrow" style="font-size:12px;color:var(--muted);transition:transform .2s;cursor:pointer" onclick="toggleTxDetail(\''+tid+'\')">▼</span>';
+      html+='<button onclick="openEditTx(\''+t.id+'\')" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text2)">Edit</button>';
+      html+='<button onclick="deleteTx(\''+t.id+'\','+t.amount+')" style="background:var(--rl);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;color:var(--red)">Delete</button>';
       html+='</div></div>';
       // Expandable detail
       if(isReceipt||hasItems){
         html+='<div id="'+tid+'" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
-        // Meta chips
         html+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">';
         html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Category</span> <strong>'+t.category+'</strong></div>';
         html+='<div style="background:var(--bg);border-radius:8px;padding:6px 12px;font-size:12px"><span style="color:var(--muted)">Logged by</span> <strong>'+getUName(t.logged_by)+'</strong></div>';
         html+='</div>';
-        // Receipt image placeholder — filled by toggleTxDetail using localStorage
         if(isReceipt){
           html+='<div id="rimg_'+tid+'" data-imgkey="receipt_img_'+t.id+'" style="margin-bottom:12px"></div>';
         }
-        // Line items
         if(hasItems){
           html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px">Line Items</div>';
           meta.items.forEach(function(item,i){
@@ -2077,6 +2080,70 @@ function renderTxView(){
     html+='<button onclick="exportCSV(\'transactions\')" class="btn btn-ghost" style="margin-top:10px">Export CSV</button>';
   }
   return html;
+}
+
+function openEditTx(id){
+  var t=TX.find(function(x){return x.id===id;});if(!t)return;
+  var m=document.createElement('div');m.className='modal-ov';m.id='editTxModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:20px">Edit Transaction</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Name</label><input class="inp" id="et-name" value="'+t.name+'"/></div>';
+  h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="et-amt" value="'+t.amount+'"/></div>';
+  h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="et-date" value="'+(t.transaction_date||today())+'"/></div>';
+  h+='<div><label class="lbl">Category</label><select class="sel" id="et-cat">'+CATS.map(function(c){return '<option'+(t.category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap">';
+  ['jay','chari','joint'].forEach(function(dm){
+    h+='<button class="tog-btn'+(t.decision_maker===dm?' on':'')+'" onclick="etDM(\''+dm+'\',this)">'+dm.charAt(0).toUpperCase()+dm.slice(1)+'</button>';
+  });
+  h+='</div></div>';
+  h+='<div><label class="lbl">Notes</label><input class="inp" id="et-notes" value="'+(t.notes||'')+'"/></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveEditTx(\''+id+'\')">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'editTxModal\').remove()">Cancel</button></div>';
+  h+='<div id="et-msg" style="font-size:13px;font-weight:500"></div>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._etDM=t.decision_maker||'joint';
+}
+
+function etDM(val,btn){
+  window._etDM=val;
+  btn.parentElement.querySelectorAll('.tog-btn').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+}
+
+async function saveEditTx(id){
+  var msg=document.getElementById('et-msg');
+  var name=document.getElementById('et-name').value.trim();
+  var amt=parseFloat(document.getElementById('et-amt').value)||0;
+  var date=document.getElementById('et-date').value||today();
+  var cat=document.getElementById('et-cat').value;
+  var notes=document.getElementById('et-notes').value;
+  var dm=window._etDM||'joint';
+  if(!name||!amt){msg.style.color='var(--red)';msg.textContent='Name and amount required.';return;}
+  msg.style.color='var(--muted)';msg.textContent='Saving...';
+  var updates={name:name,amount:amt,transaction_date:date,category:cat,decision_maker:dm,notes:notes};
+  var r=await sb.from('transactions').update(updates).eq('id',id);
+  if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
+  TX=TX.map(function(t){return t.id===id?Object.assign({},t,updates):t;});
+  await logAct('transaction_updated',name+' — '+fmt(amt)+' updated','transaction',id,updates);
+  document.getElementById('editTxModal').remove();
+  renderLedger();
+}
+
+async function deleteTx(id,amt){
+  if(!confirm('Delete this transaction? This will add '+fmt(amt)+' back to your Available balance.'))return;
+  var r=await sb.from('transactions').delete().eq('id',id);
+  if(r.error){alert('Error deleting transaction.');return;}
+  // Add amount back to cash
+  var newCash=(SET.cash_on_hand||0)+amt;
+  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
+  SET.cash_on_hand=newCash;
+  TX=TX.filter(function(t){return t.id!==id;});
+  // Remove receipt image from localStorage if exists
+  try{localStorage.removeItem('receipt_img_'+id);}catch(e){}
+  await logAct('transaction_deleted','Transaction deleted — '+fmt(amt)+' returned to Available','transaction',id,{amount:amt});
+  updateTopBar();renderHome();renderLedger();
 }
 
 function toggleTxDetail(tid){
