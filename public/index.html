@@ -908,6 +908,7 @@ async function checkGoalMilestones(goal,prevAmt){
     if(pct>=m&&prevPct<m){
       var msgs={10:"You started. That's the hardest part.",25:"Quarter of the way there.",50:"Halfway. Momentum is real.",75:"Almost there. Don't stop now.",90:"One push left.",100:"Goal achieved!"};
       await logAct('goal_milestone',goal.name+' hit '+m+'% — "'+msgs[m]+'"','goal',goal.id,{milestone:m});
+      sendNotification('goal_created',goal.name+' — '+msgs[m]);
       if(m===100){
         await sb.from('goals').update({is_complete:true,completed_at:new Date().toISOString()}).eq('id',goal.id);
         goal.is_complete=true;
@@ -1291,6 +1292,7 @@ async function updateCash(amt){
   await sb.from('household_settings').update({cash_on_hand:amt}).eq('household_id',HID);
   SET.cash_on_hand=amt;
   await logAct('cash_updated','Cash updated from '+fmt(old)+' to '+fmt(amt),'profile',null,{old:old,new:amt});
+  sendNotification('cash_updated','Available updated to '+fmt(amt));
   updateTopBar();renderHome();
 }
 
@@ -1614,6 +1616,7 @@ async function confirmAllocateThirdCheck(){
   await sb.from('goal_contributions').insert({goal_id:goalId,household_id:HID,contributed_by:CU.id,amount:amt,contribution_date:today(),notes:notes||'3rd paycheck allocation'});
   g.current_amount=newAmt;
   await logAct('third_check_allocated','3rd check — '+fmt(amt)+' allocated to '+g.name,'goal',goalId,{amount:amt});
+  sendNotification('goal_contribution','3rd check — '+fmt(amt)+' → '+g.name,amt);
   await checkGoalMilestones(g,prevAmt);
   var newBadges=await checkBadges('contribution',{});
   document.getElementById('allocTCModal').remove();
@@ -2523,6 +2526,7 @@ async function deleteTx(id,amt){
   // Remove receipt image from localStorage if exists
   try{localStorage.removeItem('receipt_img_'+id);}catch(e){}
   await logAct('transaction_deleted','Transaction deleted — '+fmt(amt)+' returned to Available','transaction',id,{amount:amt});
+  sendNotification('transaction_deleted',name+' — '+fmt(amt)+' returned',amt);
   updateTopBar();renderHome();renderLedger();
 }
 
@@ -2689,6 +2693,7 @@ async function addGoal(){
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error creating goal.';return;}
   GOALS.unshift(r.data);
   await logAct('goal_created',name+' goal created — target '+fmt(amt),'goal',r.data.id,{});
+  sendNotification('goal_created',name+' — target '+fmt(amt),amt);
   var newBadges=await checkBadges('goal',{});
   document.getElementById('addGoalForm').innerHTML='';
   renderGoals();
