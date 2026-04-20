@@ -1,7 +1,7 @@
 {
-  "outputDirectory": "public",
   "rewrites": [
     { "source": "/api/claude", "destination": "/api/claude.js" },
+    { "source": "/api/notify", "destination": "/api/notify.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
