@@ -1545,117 +1545,268 @@ async function checkGoalFeasibility(name,amount,saved,date,imp){
 function renderFlow(){
   var payDates=getArr(UP.pay_dates);
   var cash=calcAvailable();var paycheck=UP.paycheck_amount||0;var td=today();
-  var cf=[];var balAvail=cash;var balSpend=cash;
-  var earmarkedPerCycle=EX.filter(function(e){return e.is_earmarked;}).reduce(function(s,e){return s+e.amount;},0);
+  var earmarked=calcEarmarked();
+
+  var cf=[];var balAvail=cash;
   for(var i=0;i<flowDays;i++){
     var date=addDays(td,i);var dom=new Date(date+'T12:00:00').getDate();
     var inflow=0,outflow=0,evts=[];
     if(payDates.indexOf(date)>=0){inflow+=paycheck;evts.push({label:'Paycheck',amount:paycheck,type:'income'});}
     EX.forEach(function(exp){
-      if(exp.is_recurring&&exp.due_day===dom){outflow+=exp.amount;evts.push({label:exp.name,amount:exp.amount,type:'expense'});}
-      // Biweekly second occurrence
+      if(exp.is_recurring&&exp.due_day===dom){outflow+=exp.amount;evts.push({label:exp.name,amount:exp.amount,type:'expense',pd:exp.is_past_due,em:exp.is_earmarked});}
       if(exp.is_recurring&&exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom&&exp.due_day!==dom){
         outflow+=exp.amount;evts.push({label:exp.name+' (2nd)',amount:exp.amount,type:'expense'});
       }
     });
     balAvail+=inflow-outflow;
-    balSpend=balAvail-(earmarkedPerCycle>0?(inflow>0?earmarkedPerCycle:0):0);
-    cf.push({date:date,balAvail:balAvail,balSpend:Math.max(0,balAvail-calcEarmarked()),inflow:inflow,outflow:outflow,events:evts});
+    cf.push({date:date,balAvail:balAvail,balSpend:Math.max(0,balAvail-earmarked),inflow:inflow,outflow:outflow,events:evts,dom:dom});
   }
-  var allVals=cf.map(function(d){return d.balAvail;}).concat(cf.map(function(d){return d.balSpend;}));
-  var minBal=Math.min.apply(null,allVals);var maxBal=Math.max.apply(null,allVals);var range=Math.max(maxBal-minBal,1);
-  var danger=cf.filter(function(d){return d.balAvail<0;});var paydays=cf.filter(function(d){return d.inflow>0;});
 
+  var allVals=cf.map(function(d){return d.balAvail;}).concat([0]);
+  var minBal=Math.min.apply(null,allVals);var maxBal=Math.max.apply(null,allVals);
+  var danger=cf.filter(function(d){return d.balAvail<0;});
+  var paydays=cf.filter(function(d){return d.inflow>0;});
+
+  // Flow Signals
+  var signals=[];
+  if(danger.length>0){
+    var fd=danger[0];var daysAway=Math.round((new Date(fd.date+'T12:00:00')-new Date())/86400000);
+    var fdBills=fd.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(' + ');
+    signals.push({type:'danger',icon:'\u26a0\ufe0f',msg:'Balance goes negative in '+daysAway+' day'+(daysAway===1?'':'s')+' ('+fmtD(fd.date,true)+')'+(fdBills?' — '+fdBills+' hits that day':'')+'.'});
+  }
+  var billDays={};cf.forEach(function(d){if(d.outflow>0){var k=d.dom;billDays[k]=(billDays[k]||0)+d.outflow;}});
+  var biggestDay=Object.entries(billDays).sort(function(a,b){return b[1]-a[1];})[0];
+  if(biggestDay){var ord=parseInt(biggestDay[0])===1?'st':parseInt(biggestDay[0])===2?'nd':parseInt(biggestDay[0])===3?'rd':'th';signals.push({type:'info',icon:'\ud83d\udcc5',msg:'The '+biggestDay[0]+ord+' is your heaviest bill day — '+fmt(biggestDay[1])+' goes out. Earmark before that date.'});}
+  var netPerCheck=paycheck-(EX.reduce(function(s,e){return s+e.amount;},0)/2);
+  if(netPerCheck>0){signals.push({type:'info',icon:'\ud83d\udcc8',msg:'Net '+fmt(netPerCheck)+' per paycheck after bills. Protect it — that is your recovery engine.'});}
+  else{signals.push({type:'danger',icon:'\ud83d\udcc9',msg:'Bills exceed income by '+fmt(Math.abs(netPerCheck))+' per period. One category cut flips this.'});}
+  if(danger.length===0&&minBal>0){signals.push({type:'green',icon:'\u2705',msg:'No negative balance days in the next '+flowDays+' days. You are projected to stay above water the whole window.'});}
+
+  var nextPaydays=paydays.slice(0,4);
   var el=document.getElementById('tab-flow');
-  var html='<div class="ph"><div class="ph-eye">Cash Flow</div><div class="ph-title">Available vs Spendable</div><div class="ph-sub">Solid line = Available. Dashed = Spendable after earmarks.</div></div>';
-  html+='<div style="display:flex;gap:8px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:16px">';
-  [30,60,90].forEach(function(d){html+='<button onclick="setFD('+d+')" style="flex:1;padding:9px 0;border-radius:8px;font-size:13px;font-weight:600;border:none;background:'+(flowDays===d?'var(--surface)':'transparent')+';color:'+(flowDays===d?'var(--primary)':'var(--muted)')+';box-shadow:'+(flowDays===d?'var(--shadow)':'none')+';cursor:pointer">'+d+'d</button>';});
-  html+='</div>';
-  html+='<div class="g2" style="margin-bottom:16px">';
-  [{l:'Danger Days',v:danger.length,c:danger.length>0?'var(--red)':'var(--green)'},
-   {l:'Paychecks',v:paydays.length,c:'var(--primary)'},
-   {l:'Lowest Available',v:fmt(minBal),c:minBal<0?'var(--red)':'var(--green)'},
-   {l:'Cash In',v:fmt(paydays.reduce(function(s,d){return s+d.inflow;},0)),c:'var(--green)'}
-  ].forEach(function(t){html+='<div class="mc"><div class="lbl" style="margin-bottom:4px">'+t.l+'</div><div style="font-size:1.2rem;font-weight:800;color:'+t.c+'">'+t.v+'</div></div>';});
+
+  var html='<div class="ph"><div class="ph-eye">Cash Flow</div><div class="ph-title">Your Money, <span style="color:var(--primary)">Day by Day</span></div><div class="ph-sub">See exactly when money moves, where it goes, and when you are at risk.</div></div>';
+  html+='<div style="display:flex;gap:6px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:16px">';
+  [{v:30,l:'30 Days'},{v:60,l:'60 Days'},{v:90,l:'90 Days'}].forEach(function(d){
+    html+='<button onclick="setFD('+d.v+')" style="flex:1;padding:9px 0;border-radius:8px;font-size:13px;font-weight:600;border:none;background:'+(flowDays===d.v?'var(--surface)':'transparent')+';color:'+(flowDays===d.v?'var(--primary)':'var(--muted)')+';box-shadow:'+(flowDays===d.v?'var(--shadow)':'none')+';cursor:pointer">'+d.l+'</button>';
+  });
   html+='</div>';
 
-  // SVG Chart
-  var cW=480,cH=200,pL=60,pR=20,pT=20,pB=40;var plW=cW-pL-pR,plH=cH-pT-pB;var nP=cf.length;
-  var yTicks=5;var yStep=Math.ceil((maxBal-minBal)/yTicks/500)*500||500;var yStart=Math.floor(minBal/yStep)*yStep;var yEnd=Math.ceil(maxBal/yStep)*yStep;
+  var totalIn=paydays.reduce(function(s,d){return s+d.inflow;},0);
+  var totalOut=cf.reduce(function(s,d){return s+d.outflow;},0);
+  html+='<div class="g3" style="margin-bottom:16px">';
+  [{l:'Cash In',v:fmt(totalIn),c:'var(--green)',sub:paydays.length+' paychecks'},
+   {l:'Bills Out',v:fmt(totalOut),c:'var(--red)',sub:'projected'},
+   {l:'Floor',v:fmt(minBal),c:minBal<0?'var(--red)':'var(--primary)',sub:'lowest point'}
+  ].forEach(function(t){
+    html+='<div class="mc" style="text-align:center"><div class="lbl" style="margin-bottom:4px">'+t.l+'</div>';
+    html+='<div style="font-size:1.1rem;font-weight:800;color:'+t.c+'">'+t.v+'</div>';
+    html+='<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.sub+'</div></div>';
+  });
+  html+='</div>';
+
+  // SVG Chart — taller, richer
+  var cW=480,cH=240,pL=54,pR=14,pT=18,pB=32;var plW=cW-pL-pR,plH=cH-pT-pB;var nP=cf.length;
+  var yPad=(maxBal-minBal)*0.1||300;
+  var yMin=minBal-yPad;var yMax=maxBal+yPad;
+  var yStep=Math.ceil((yMax-yMin)/5/500)*500||500;
+  var yStart2=Math.floor(yMin/yStep)*yStep;var yEnd2=Math.ceil(yMax/yStep)*yStep;
   function xP(i){return pL+(i/(nP-1||1))*plW;}
-  function yP(v){return pT+plH-(((v-yStart)/(yEnd-yStart||1))*plH);}
+  function yP(v){return pT+plH-(((v-yStart2)/(yEnd2-yStart2||1))*plH);}
 
-  var svg='<svg width="100%" viewBox="0 0 '+cW+' '+cH+'" xmlns="http://www.w3.org/2000/svg">';
+  var svg='<svg width="100%" viewBox="0 0 '+cW+' '+cH+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible"><defs><linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4361ee" stop-opacity="0.18"/><stop offset="100%" stop-color="#4361ee" stop-opacity="0.01"/></linearGradient></defs>';
+
   // Grid
-  for(var yi=yStart;yi<=yEnd;yi+=yStep){
+  for(var yi=yStart2;yi<=yEnd2;yi+=yStep){
     var yyp=yP(yi);if(yyp<pT-5||yyp>pT+plH+5)continue;
-    svg+='<line x1="'+pL+'" y1="'+yyp+'" x2="'+(cW-pR)+'" y2="'+yyp+'" stroke="'+(yi===0?'rgba(0,0,0,0.12)':'rgba(0,0,0,0.04)')+'" stroke-width="'+(yi===0?1.5:1)+'"/>';
-    var lbl=Math.abs(yi)>=1000?(yi<0?'-':'')+fmt(Math.abs(yi)).replace('$','$').replace(',000','k'):fmt(yi);
-    svg+='<text x="'+(pL-6)+'" y="'+(yyp+4)+'" text-anchor="end" font-size="10" fill="#94a3b8" font-family="-apple-system,sans-serif">'+lbl+'</text>';
+    svg+='<line x1="'+pL+'" y1="'+yyp+'" x2="'+(cW-pR)+'" y2="'+yyp+'" stroke="'+(yi===0?'rgba(0,0,0,0.1)':'rgba(0,0,0,0.04)')+'" stroke-width="'+(yi===0?1.5:1)+'"/>';
+    var lbl4=yi>=1000?'$'+(yi/1000).toFixed(0)+'k':yi<=-1000?'-$'+Math.abs(yi/1000).toFixed(0)+'k':'$'+yi;
+    svg+='<text x="'+(pL-4)+'" y="'+(yyp+4)+'" text-anchor="end" font-size="9" fill="#94a3b8" font-family="-apple-system,sans-serif">'+lbl4+'</text>';
   }
+
   // Zero line
-  if(minBal<0&&maxBal>0){var zp=yP(0);svg+='<line x1="'+pL+'" y1="'+zp+'" x2="'+(cW-pR)+'" y2="'+zp+'" stroke="rgba(239,68,68,0.35)" stroke-width="1.5" stroke-dasharray="4,3"/>';}
-  // Area fills
-  var areaA='M '+xP(0)+' '+(pT+plH);cf.forEach(function(d,i){areaA+=' L '+xP(i)+' '+yP(d.balAvail);});areaA+=' L '+xP(cf.length-1)+' '+(pT+plH)+' Z';
-  svg+='<path d="'+areaA+'" fill="rgba(67,97,238,0.06)" stroke="none"/>';
-  // Available line (solid)
+  if(minBal<0&&maxBal>0){var zp=yP(0);svg+='<line x1="'+pL+'" y1="'+zp+'" x2="'+(cW-pR)+'" y2="'+zp+'" stroke="rgba(239,68,68,0.5)" stroke-width="1.5" stroke-dasharray="5,3"/>';}
+
+  // Danger zone fill
+  if(minBal<0){
+    var z2=Math.min(yP(0),pT+plH);
+    var dp='M '+xP(0)+' '+z2;
+    cf.forEach(function(d,i){dp+=' L '+xP(i)+' '+yP(Math.min(d.balAvail,0));});
+    dp+=' L '+xP(cf.length-1)+' '+z2+' Z';
+    svg+='<path d="'+dp+'" fill="rgba(239,68,68,0.1)" stroke="none"/>';
+  }
+
+  // Available area
+  var areaA='M '+xP(0)+' '+(pT+plH);
+  cf.forEach(function(d,i){areaA+=' L '+xP(i)+' '+yP(Math.max(d.balAvail,yStart2));});
+  areaA+=' L '+xP(cf.length-1)+' '+(pT+plH)+' Z';
+  svg+='<path d="'+areaA+'" fill="url(#ag2)" stroke="none"/>';
+
+  // Spendable area
+  var spendA='M '+xP(0)+' '+(pT+plH);
+  cf.forEach(function(d,i){spendA+=' L '+xP(i)+' '+yP(Math.max(d.balSpend,yStart2));});
+  spendA+=' L '+xP(cf.length-1)+' '+(pT+plH)+' Z';
+  svg+='<path d="'+spendA+'" fill="rgba(34,197,94,0.07)" stroke="none"/>';
+
+  // Available line
   var lineA='M';cf.forEach(function(d,i){lineA+=(i===0?'':' L')+' '+xP(i)+' '+yP(d.balAvail);});
   svg+='<path d="'+lineA+'" fill="none" stroke="#4361ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
-  // Spendable line (dashed)
+
+  // Spendable line
   var lineS='M';cf.forEach(function(d,i){lineS+=(i===0?'':' L')+' '+xP(i)+' '+yP(d.balSpend);});
-  svg+='<path d="'+lineS+'" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6,4"/>';
-  // Payday dots
-  cf.forEach(function(d,i){if(d.inflow>0)svg+='<circle cx="'+xP(i)+'" cy="'+yP(d.balAvail)+'" r="4" fill="#4361ee" stroke="white" stroke-width="1.5"/>';});
+  svg+='<path d="'+lineS+'" fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5,4"/>';
+
+  // Payday markers
+  cf.forEach(function(d,i){
+    if(d.inflow>0){
+      svg+='<line x1="'+xP(i)+'" y1="'+pT+'" x2="'+xP(i)+'" y2="'+(pT+plH)+'" stroke="rgba(67,97,238,0.12)" stroke-width="1"/>';
+      svg+='<circle cx="'+xP(i)+'" cy="'+yP(d.balAvail)+'" r="5" fill="#4361ee" stroke="white" stroke-width="2"/>';
+      svg+='<text x="'+xP(i)+'" y="'+(pT-4)+'" text-anchor="middle" font-size="8" fill="#4361ee" font-weight="700" font-family="-apple-system,sans-serif">Pay</text>';
+    }
+  });
+
+  // Bill spike dots
+  cf.forEach(function(d,i){
+    if(d.outflow>400&&d.inflow===0){
+      svg+='<circle cx="'+xP(i)+'" cy="'+yP(d.balAvail)+'" r="3.5" fill="'+(d.balAvail<0?'#ef4444':'#f59e0b')+'" stroke="white" stroke-width="1.5"/>';
+    }
+  });
+
   // X labels
-  var lEvery=Math.ceil(cf.length/4);
-  cf.forEach(function(d,i){if(i%lEvery===0||i===cf.length-1)svg+='<text x="'+xP(i)+'" y="'+(pT+plH+16)+'" text-anchor="middle" font-size="9.5" fill="#94a3b8" font-family="-apple-system,sans-serif">'+fmtD(d.date,true)+'</text>';});
+  var lEvery=Math.ceil(cf.length/5);
+  cf.forEach(function(d,i){
+    if(i===0||i%lEvery===0||i===cf.length-1){
+      svg+='<text x="'+xP(i)+'" y="'+(pT+plH+13)+'" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="-apple-system,sans-serif">'+fmtD(d.date,true)+'</text>';
+    }
+  });
+
   // Hover targets
   cf.forEach(function(d,i){
-    var av=fmt(d.balAvail),sp=fmt(d.balSpend),dt=fmtD(d.date,true);
-    svg+='<rect x="'+(xP(i)-6)+'" y="'+pT+'" width="12" height="'+plH+'" fill="transparent" onmouseenter="showTip(event,\''+dt+'\',\'Available: '+av+'\\nSpendable: '+sp+'\',\'\')" onmouseleave="hideTip()" ontouchstart="showTip(event,\''+dt+'\',\'Available: '+av+'\\nSpendable: '+sp+'\',\'\')"/>';
+    var bills=d.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(', ');
+    var tip=fmtD(d.date,true)+'|Avail: '+fmt(d.balAvail)+'|Spendable: '+fmt(d.balSpend)+(d.inflow>0?'|\ud83d\udcb0 '+fmt(d.inflow)+' paycheck':'')+(d.outflow>0?'|\ud83d\udce4 '+fmt(d.outflow)+' bills':'')+(bills?'|'+bills:'');
+    svg+='<rect x="'+(xP(i)-6)+'" y="'+pT+'" width="12" height="'+plH+'" fill="transparent" onmouseenter="showFlowTip(event,\''+tip+'\')" onmouseleave="hideTip()" ontouchstart="showFlowTip(event,\''+tip+'\')" ontouchend="hideTip()"/>';
   });
   svg+='</svg>';
 
-  html+='<div class="chart-wrap" style="margin-bottom:14px">'+svg;
-  html+='<div style="display:flex;gap:20px;margin-top:12px;justify-content:center">';
-  [{c:'#4361ee',l:'Available',solid:true},{c:'#22c55e',l:'Spendable',solid:false}].forEach(function(x){
-    html+='<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);font-weight:500">';
-    if(x.solid)html+='<div style="width:16px;height:2.5px;background:'+x.c+';border-radius:99px"></div>';
-    else html+='<div style="width:16px;height:0;border-top:2.5px dashed '+x.c+'"></div>';
+  html+='<div class="chart-wrap" style="margin-bottom:6px;padding:16px 10px 10px">'+svg;
+  html+='<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
+  [{c:'#4361ee',l:'Available',line:true,solid:true},{c:'#22c55e',l:'Spendable',line:true,solid:false},{c:'#4361ee',l:'Payday',dot:true},{c:'#f59e0b',l:'Bill Day',dot:true,col:'#f59e0b'}].forEach(function(x){
+    html+='<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">';
+    if(x.dot)html+='<div style="width:8px;height:8px;border-radius:50%;background:'+(x.col||x.c)+'"></div>';
+    else if(x.solid)html+='<div style="width:14px;height:2.5px;background:'+x.c+';border-radius:99px"></div>';
+    else html+='<div style="width:14px;height:0;border-top:2.5px dashed '+x.c+'"></div>';
     html+=x.l+'</div>';
+  });
+  html+='</div></div>';
+
+  // FLOW SIGNALS
+  if(signals.length>0){
+    html+='<div class="sec-t" style="margin-top:4px">Flow Signals</div>';
+    signals.slice(0,4).forEach(function(s){
+      var bg=s.type==='danger'?'var(--rl)':s.type==='amber'?'var(--al)':s.type==='green'?'var(--gl)':'var(--pl)';
+      var bc=s.type==='danger'?'rgba(239,68,68,0.2)':s.type==='amber'?'rgba(245,158,11,0.2)':s.type==='green'?'rgba(34,197,94,0.2)':'var(--pm)';
+      var tc=s.type==='danger'?'var(--red)':s.type==='amber'?'var(--amber)':s.type==='green'?'var(--green)':'var(--primary)';
+      html+='<div style="background:'+bg+';border:1px solid '+bc+';border-radius:12px;padding:11px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">';
+      html+='<span style="font-size:16px;flex-shrink:0">'+s.icon+'</span>';
+      html+='<div style="font-size:13px;color:'+tc+';line-height:1.55;font-weight:500">'+s.msg+'</div></div>';
+    });
+  }
+
+  // PAYCHECK BREAKDOWN
+  if(nextPaydays.length>0){
+    html+='<div class="sec-t">Paycheck Breakdown</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:8px">';
+    nextPaydays.forEach(function(pd,idx){
+      var nextPd=nextPaydays[idx+1];
+      var billsThisCycle=cf.filter(function(d){
+        return d.date>=pd.date&&(!nextPd||d.date<nextPd.date)&&d.outflow>0;
+      });
+      var totalBills=billsThisCycle.reduce(function(s,d){return s+d.outflow;},0);
+      var net=paycheck-totalBills;
+      var billPct=paycheck>0?Math.min((totalBills/paycheck)*100,100):0;
+      html+='<div class="card" style="padding:14px 16px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+      html+='<div><div style="font-size:13px;font-weight:700;color:var(--primary)">'+fmtD(pd.date,true)+'</div><div style="font-size:11px;color:var(--muted)">Paycheck '+(idx+1)+'</div></div>';
+      html+='<div style="text-align:right"><div style="font-size:1rem;font-weight:800;color:var(--green)">+'+fmt(paycheck)+'</div><div style="font-size:11px;color:var(--muted)">income</div></div></div>';
+      html+='<div style="display:flex;flex-direction:column;gap:6px">';
+      html+='<div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:var(--muted);width:48px">In</div><div style="flex:1;height:6px;background:var(--bg);border-radius:99px;overflow:hidden"><div style="height:100%;width:100%;background:var(--green);border-radius:99px"></div></div><div style="font-size:12px;font-weight:700;color:var(--green);width:52px;text-align:right">'+fmt(paycheck)+'</div></div>';
+      html+='<div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:var(--muted);width:48px">Bills</div><div style="flex:1;height:6px;background:var(--bg);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+billPct+'%;background:'+(billPct>80?'var(--red)':billPct>60?'var(--amber)':'var(--primary)')+';border-radius:99px"></div></div><div style="font-size:12px;font-weight:700;color:'+(billPct>80?'var(--red)':'var(--text2)')+';width:52px;text-align:right">'+fmt(totalBills)+'</div></div>';
+      html+='<div style="display:flex;justify-content:space-between;padding:8px 0 0;border-top:1px solid var(--bl);margin-top:2px">';
+      html+='<div style="display:flex;gap:4px;flex-wrap:wrap">';
+      billsThisCycle.slice(0,3).forEach(function(d){d.events.filter(function(e){return e.type==='expense';}).slice(0,1).forEach(function(e){html+='<span style="font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--muted)">'+e.label+'</span>';});});
+      if(billsThisCycle.length>3)html+='<span style="font-size:10px;color:var(--muted)">+'+(billsThisCycle.length-3)+' more</span>';
+      html+='</div><div style="font-size:13px;font-weight:800;color:'+(net>=0?'var(--green)':'var(--red)')+';flex-shrink:0;margin-left:8px">'+(net>=0?'+':'')+fmt(net)+' net</div></div>';
+      html+='</div></div>';
+    });
+    html+='</div>';
+  }
+
+  // PRESSURE CALENDAR
+  html+='<div class="sec-t" style="margin-top:8px">Bill Pressure — Next 30 Days</div>';
+  html+='<div class="card" style="padding:14px">';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+  cf.slice(0,30).forEach(function(d){
+    var pressure=d.outflow>800?'high':d.outflow>300?'med':d.outflow>0?'low':'none';
+    var isPay=d.inflow>0;
+    var bg=isPay?'#4361ee':pressure==='high'?'#ef4444':pressure==='med'?'#f59e0b':pressure==='low'?'rgba(67,97,238,0.2)':'var(--bg)';
+    var fc=isPay||pressure==='high'?'#fff':pressure==='med'?'#fff':'var(--text2)';
+    var dom=new Date(d.date+'T12:00:00').getDate();
+    var bills=d.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(', ');
+    var tip=fmtD(d.date,true)+(d.outflow>0?'|'+fmt(d.outflow)+' out'+(bills?' - '+bills:''):'')+(d.inflow>0?'|+'+fmt(d.inflow)+' pay':'');
+    html+='<div onclick="showCalTip(event,\''+tip+'\')" style="width:36px;height:36px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(isPay||pressure==='high'?'800':'600')+';color:'+fc+';cursor:'+(d.outflow>0||d.inflow>0?'pointer':'default')+';flex-shrink:0">'+dom+'</div>';
+  });
+  html+='</div>';
+  html+='<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">';
+  [{c:'#4361ee',l:'Payday'},{c:'#ef4444',l:'Heavy ($800+)'},{c:'#f59e0b',l:'Moderate'},{c:'rgba(67,97,238,0.2)',l:'Light'}].forEach(function(x){
+    html+='<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><div style="width:10px;height:10px;border-radius:3px;background:'+x.c+'"></div>'+x.l+'</div>';
   });
   html+='</div></div>';
 
   if(danger.length>0){
     html+='<div class="sec-t">Negative Balance Days</div><div class="card" style="padding:0">';
     danger.slice(0,5).forEach(function(d,i){
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:'+(i<danger.slice(0,5).length-1?'1px solid var(--border)':'none')+'">';
-      html+='<div><div style="font-size:14px;font-weight:500">'+fmtD(d.date,true)+'</div><div style="font-size:12px;color:var(--muted);margin-top:2px">'+d.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(', ')+'</div></div>';
-      html+='<div style="font-size:1rem;font-weight:700;color:var(--red)">'+fmt(d.balAvail)+'</div></div>';
+      var bills=d.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(', ');
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:'+(i<Math.min(danger.length,5)-1?'1px solid var(--border)':'none')+'">';
+      html+='<div><div style="font-size:14px;font-weight:600;color:var(--red)">'+fmtD(d.date,true)+'</div>';
+      if(bills)html+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+bills+'</div>';
+      html+='</div><div style="font-size:1rem;font-weight:800;color:var(--red)">'+fmt(d.balAvail)+'</div></div>';
     });
     html+='</div>';
   }
-  html+='<div class="sec-t">Upcoming Paydates</div><div class="card" style="padding:0">';
-  paydays.slice(0,6).forEach(function(d,i){
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:'+(i<paydays.slice(0,6).length-1?'1px solid var(--border)':'none')+'">';
-    html+='<div style="font-size:14px;font-weight:500">'+fmtD(d.date)+'</div><div style="font-size:1rem;font-weight:700;color:var(--green)">'+fmt(d.inflow)+'</div></div>';
-  });
-  html+='</div>';
+
   el.innerHTML=html;
 }
 
 function setFD(d){flowDays=d;renderFlow();}
-function showTip(e,date,bal,note){
+
+function showFlowTip(e,raw){
+  var parts=raw.split('|');
   var tip=document.getElementById('chartTip');
-  tip.innerHTML='<div style="font-size:11px;opacity:.7;margin-bottom:3px">'+date+'</div>'+bal.split('\n').map(function(l){return '<div style="font-size:13px;font-weight:700">'+l+'</div>';}).join('')+(note?'<div style="font-size:11px;margin-top:2px;color:#a5b4fc">'+note+'</div>':'');
+  var inner='<div style="font-size:10px;opacity:.6;margin-bottom:4px">'+parts[0]+'</div>';
+  parts.slice(1).forEach(function(p){inner+='<div style="font-size:12px;font-weight:600;margin-bottom:2px">'+p+'</div>';});
+  tip.innerHTML=inner;
   var wrap=e.target.closest('.chart-wrap');if(!wrap)return;
   var rect=wrap.getBoundingClientRect();
   var ex=e.touches?e.touches[0].clientX:e.clientX;
   var ey=e.touches?e.touches[0].clientY:e.clientY;
-  tip.style.left=Math.min(ex-rect.left,rect.width-160)+'px';
-  tip.style.top=Math.max(0,ey-rect.top-80)+'px';
+  tip.style.left=Math.min(Math.max(0,ex-rect.left-70),rect.width-160)+'px';
+  tip.style.top=Math.max(4,ey-rect.top-90)+'px';
   tip.style.display='block';
 }
+
+function showCalTip(e,raw){
+  var parts=raw.split('|');
+  var tip=document.getElementById('chartTip');
+  var inner='<div style="font-size:10px;opacity:.6;margin-bottom:4px">'+parts[0]+'</div>';
+  parts.slice(1).forEach(function(p){inner+='<div style="font-size:12px;font-weight:600;margin-bottom:2px">'+p+'</div>';});
+  tip.innerHTML=inner;
+  var bRect=document.body.getBoundingClientRect();
+  tip.style.left=(e.clientX-bRect.left-80)+'px';
+  tip.style.top=(e.clientY-bRect.top-70)+'px';
+  tip.style.display='block';
+  setTimeout(hideTip,2500);
+}
+
 function hideTip(){document.getElementById('chartTip').style.display='none';}
 
 // LEDGER
@@ -3273,14 +3424,18 @@ function getByTime(arr,field){
     start=new Date(now);start.setMonth(now.getMonth()-3);
     end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);
   } else if(timePeriod==='ytd'){
-    // Full current year — Jan 1 through Dec 31
     start=new Date(now.getFullYear(),0,1);
     end=new Date(now.getFullYear(),11,31,23,59,59);
   } else {
-    // 'all' — no filter
-    return arr;
+    return arr; // 'all'
   }
-  return arr.filter(function(a){var d=new Date(a[field]+'T12:00:00');return d>=start&&d<=end;});
+  return arr.filter(function(a){
+    var v=a[field];if(!v)return false;
+    // If value already has a time component (contains T or space), parse directly
+    // If it's date-only (YYYY-MM-DD), add T12:00:00 to avoid timezone shifting
+    var d=v.indexOf('T')>=0||v.indexOf(' ')>=0?new Date(v):new Date(v+'T12:00:00');
+    return d>=start&&d<=end;
+  });
 }
 
 // EXPORT
