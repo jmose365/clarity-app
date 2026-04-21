@@ -1453,10 +1453,29 @@ function renderHome(){
 }
 
 function openCashModal(){
-  var v=prompt('Update cash on hand (current: '+fmt(SET.cash_on_hand||0)+'):',SET.cash_on_hand||0);
-  if(v===null)return;
-  var num=parseFloat(v)||0;
-  updateCash(num);
+  var m=document.createElement('div');m.className='modal-ov';m.id='cashModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:6px">Update Available Balance</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5">Enter what your bank account actually shows right now.</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:14px">';
+  h+='<div><label class="lbl">Current Balance</label>';
+  h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
+  h+='<input class="inp" type="number" id="cash-inp" value="'+(SET.cash_on_hand||0)+'" style="font-size:1.1rem;font-weight:700" autofocus/></div></div>';
+  h+='<div style="background:rgba(67,97,238,0.06);border-radius:12px;padding:12px;font-size:12px;color:var(--text2);line-height:1.5">';
+  h+='Previous: <strong>'+fmt(SET.cash_on_hand||0)+'</strong> — update this whenever you check your bank to keep Clarity accurate.</div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveCashModal()">Update</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'cashModal\').remove()">Cancel</button></div>';
+  h+='<div id="cash-msg" style="font-size:13px;font-weight:500"></div>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  setTimeout(function(){var el=document.getElementById('cash-inp');if(el){el.focus();el.select();}},100);
+}
+async function saveCashModal(){
+  var val=parseFloat(document.getElementById('cash-inp').value);
+  if(isNaN(val)){document.getElementById('cash-msg').style.color='var(--red)';document.getElementById('cash-msg').textContent='Enter a valid number.';return;}
+  await updateCash(val);
+  var modal=document.getElementById('cashModal');if(modal)modal.remove();
 }
 async function updateCash(amt){
   var old=SET.cash_on_hand||0;
