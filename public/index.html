@@ -468,11 +468,11 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
     <button class="nb" onclick="goTab('goals',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Goals
     </button>
-    <button class="nb" onclick="goTab('activity',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><polyline points="10 17 10 11 8 13"/></svg>Activity
-    </button>
     <button class="nb" onclick="goTab('insights',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Insights
+    </button>
+    <button class="nb" onclick="goTab('activity',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><polyline points="10 17 10 11 8 13"/></svg>Activity
     </button>
   </nav>
 
@@ -921,7 +921,7 @@ function goTab(id,btn){
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('on');});
   var panel=document.getElementById('tab-'+id);if(panel)panel.classList.add('on');
   if(btn)btn.classList.add('on');
-  else{var ids=['home','ledger','goals','activity','insights'];var idx=ids.indexOf(id);var btns=document.querySelectorAll('.nb');if(idx>=0&&btns[idx])btns[idx].classList.add('on');}
+  else{var ids=['home','ledger','goals','insights','activity'];var idx=ids.indexOf(id);var btns=document.querySelectorAll('.nb');if(idx>=0&&btns[idx])btns[idx].classList.add('on');}
   if(id==='home')renderHome();
     else if(id==='ledger')renderLedger();
   else if(id==='goals')renderGoals();
@@ -1163,6 +1163,53 @@ function renderHome(){
   }[p];
   html+='<div style="margin-top:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.5">'+posCtx+'</div>';
   html+='</div>';
+
+  // HOUSEHOLD PRESENCE — show both members, last activity, earmarks
+  var chari=HM.find(function(m){return m.id!==CU.id;});
+  if(chari){
+    var chariLastAct=ACT.filter(function(a){return a.user_id===chari.id;}).sort(function(a,b){return new Date(b.created_at)-new Date(a.created_at);})[0];
+    var chariEarmarks=EX.filter(function(e){return e.is_earmarked&&e.earmark_state==='active'&&e.earmarked_by===chari.id;});
+    var chariTxToday=TX.filter(function(t){var d=(t.transaction_date||t.created_at.split('T')[0]);return d===today()&&t.logged_by===chari.id;});
+    var jayLastAct=ACT.filter(function(a){return a.user_id===CU.id;}).sort(function(a,b){return new Date(b.created_at)-new Date(a.created_at);})[0];
+
+    html+='<div class="card" style="padding:14px 16px;margin-bottom:12px">';
+    html+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px">Household</div>';
+    html+='<div style="display:flex;gap:12px">';
+
+    // Jay
+    html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px;background:rgba(67,97,238,0.05);border-radius:14px;border:1px solid rgba(67,97,238,0.1)">';
+    html+='<div style="width:36px;height:36px;border-radius:50%;background:'+(UP.avatar_color||'#4361ee')+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">'+UP.first_name.charAt(0)+'</div>';
+    html+='<div style="font-size:13px;font-weight:700;color:var(--text)">'+UP.first_name+'</div>';
+    if(jayLastAct){
+      html+='<div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.4">'+fmtTS(jayLastAct.created_at)+'<br><span style="color:var(--text2)">'+jayLastAct.description.substring(0,28)+(jayLastAct.description.length>28?'…':'')+'</span></div>';
+    } else {
+      html+='<div style="font-size:10px;color:var(--muted)">No activity yet</div>';
+    }
+    html+='</div>';
+
+    // Chari
+    var chariOnline=chariLastAct&&(new Date()-new Date(chariLastAct.created_at))<3600000; // active in last hour
+    html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px;background:rgba(124,58,237,0.05);border-radius:14px;border:1px solid rgba(124,58,237,0.1)">';
+    html+='<div style="position:relative;display:inline-block">';
+    html+='<div style="width:36px;height:36px;border-radius:50%;background:'+(chari.avatar_color||'#7c3aed')+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">'+chari.first_name.charAt(0)+'</div>';
+    if(chariOnline)html+='<div style="position:absolute;bottom:1px;right:1px;width:9px;height:9px;border-radius:50%;background:#22c55e;border:2px solid white"></div>';
+    html+='</div>';
+    html+='<div style="font-size:13px;font-weight:700;color:var(--text)">'+chari.first_name+'</div>';
+    if(chariLastAct){
+      html+='<div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.4">'+fmtTS(chariLastAct.created_at)+'<br><span style="color:var(--text2)">'+chariLastAct.description.substring(0,28)+(chariLastAct.description.length>28?'…':'')+'</span></div>';
+    } else {
+      html+='<div style="font-size:10px;color:var(--muted)">No activity yet</div>';
+    }
+    // Chari earmarks badge
+    if(chariEarmarks.length>0){
+      html+='<div style="font-size:10px;font-weight:700;background:rgba(217,119,6,0.1);color:var(--amber);border-radius:6px;padding:2px 8px">'+chariEarmarks.length+' earmarked</div>';
+    }
+    // Chari logged today
+    if(chariTxToday.length>0){
+      html+='<div style="font-size:10px;font-weight:700;background:rgba(67,97,238,0.1);color:var(--primary);border-radius:6px;padding:2px 8px">'+chariTxToday.length+' tx today</div>';
+    }
+    html+='</div></div></div>';
+  }
 
   // Health score — tappable, Claude-powered
   var healthExplId='healthExpl_'+Date.now();
@@ -4160,7 +4207,7 @@ function renderTimeFil(){
   ps.forEach(function(p){html+='<button onclick="setTP(\''+p.id+'\')" class="tb'+(timePeriod===p.id?' on':'')+'">'+p.l+'</button>';});
   html+='</div>';return html;
 }
-function setTP(p){timePeriod=p;var on=document.querySelector('.nb.on');if(on){var ids=['home','ledger','goals','activity','insights'];var t=on.textContent.toLowerCase().trim();var id=ids.find(function(i){return t.indexOf(i)>=0||i.indexOf(t)>=0;});if(id)goTab(id);}}
+function setTP(p){timePeriod=p;var on=document.querySelector('.nb.on');if(on){var ids=['home','ledger','goals','insights','activity'];var t=on.textContent.toLowerCase().trim();var id=ids.find(function(i){return t.indexOf(i)>=0||i.indexOf(t)>=0;});if(id)goTab(id);}}
 function getByTime(arr,field){
   var now=new Date();var start,end;
   if(timePeriod==='week'){
