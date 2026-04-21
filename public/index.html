@@ -3101,12 +3101,6 @@ function renderInsights(){
     +'<div style="font-size:12px;color:var(--text2);line-height:1.5;padding:10px 14px;background:var(--bg);border-radius:10px">'+(erosionPct>50?'More than half your check is gone before you see it — this creates the feeling money evaporates immediately.':'Low erosion means most of your check is available when it lands. Protect this.')+'</div>'
   );
 
-  html+=iCard(2,'Dead Money — Subscriptions',
-    '<div style="margin-bottom:14px"><div style="font-size:2.5rem;font-weight:800;color:var(--amber);line-height:1;letter-spacing:-.02em">'+fmt(subTotal)+'</div><div style="font-size:13px;color:var(--text2);margin-top:4px">/month · '+fmt(subTotal*12)+'/year</div></div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+subs.map(function(s){return '<span style="font-size:12px;font-weight:500;background:var(--al);color:var(--amber);border-radius:6px;padding:3px 10px">'+s.name+' '+fmt(s.amount)+'</span>';}).join('')+'</div>'
-    +'<div style="font-size:12px;color:var(--text2);line-height:1.5;padding:10px 14px;background:var(--bg);border-radius:10px">Cutting 3 low-use subscriptions frees up ~'+fmt(subTotal*0.3)+'/mo — that\'s '+fmt(subTotal*0.3*12)+' back per year.</div>'
-  );
-
   var gapH='<div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">Days where bill pressure peaks.</div><div style="display:flex;flex-direction:column;gap:10px">';
   gapDays.forEach(function(entry,i){
     var day=entry[0],total=entry[1];var pct=Math.round((total/monthly)*100);
@@ -3115,14 +3109,55 @@ function renderInsights(){
     gapH+='<div style="display:flex;align-items:center;gap:14px"><div style="width:36px;height:36px;border-radius:10px;background:'+bg+';border:'+(i>=2?'1px solid var(--border)':'none')+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:'+col+';flex-shrink:0">'+day+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:12px;color:var(--text2)">'+dayExps+'</span><span style="font-size:12px;font-weight:700">'+fmt(total)+'</span></div>'+ibar(total,monthly,i===0?'var(--red)':i===1?'var(--amber)':'var(--primary)')+'</div></div>';
   });
   gapH+='</div>';
-  html+=iCard(3,'Gap Map — Heaviest Bill Days',gapH);
+  html+=iCard(2,'Gap Map — Heaviest Bill Days',gapH);
 
-  var ceilH='<div class="g3" style="margin-bottom:16px">';
-  [{l:'Typical Month',v:fmt(monthlyPay),c:'var(--green)',s:'2 paychecks'},{l:'Critical Bills',v:fmt(floor),c:'var(--red)',s:'floor'},{l:'True Runway',v:fmt(runway),c:runway>0?'var(--primary)':'var(--red)',s:'discretionary'}].forEach(function(t){
-    ceilH+='<div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center"><div class="lbl" style="margin-bottom:6px">'+t.l+'</div><div style="font-size:1.1rem;font-weight:800;color:'+t.c+'">'+t.v+'</div><div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.s+'</div></div>';
+  // CARD 3 — Income Ceiling vs Expense Floor — visual bar rebuild
+  var ceilH='';
+  // Main visual: stacked bar showing income split into floor + runway
+  var floorPct=monthlyPay>0?Math.min(Math.round((floor/monthlyPay)*100),100):0;
+  var runwayPct2=100-floorPct;
+  var floorColor=floorPct>90?'var(--red)':floorPct>70?'var(--amber)':'#4361ee';
+  var runwayColor='var(--green)';
+
+  ceilH+='<div style="margin-bottom:20px">';
+  // Income label
+  ceilH+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+  ceilH+='<span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Monthly Income</span>';
+  ceilH+='<span style="font-size:1.2rem;font-weight:800;color:var(--text)">'+fmt(monthlyPay)+'</span></div>';
+  // Stacked bar
+  ceilH+='<div style="height:44px;border-radius:14px;overflow:hidden;display:flex;box-shadow:var(--shadow)">';
+  ceilH+='<div style="width:'+floorPct+'%;background:'+floorColor+';display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;min-width:60px">';
+  ceilH+='<span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:.04em">Bills</span>';
+  ceilH+='<span style="font-size:12px;font-weight:800;color:#fff">'+fmt(floor)+'</span></div>';
+  if(runwayPct2>0){
+    ceilH+='<div style="flex:1;background:'+runwayColor+';display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;min-width:50px">';
+    ceilH+='<span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:.04em">Runway</span>';
+    ceilH+='<span style="font-size:12px;font-weight:800;color:#fff">'+fmt(runway)+'</span></div>';
+  }
+  ceilH+='</div>';
+  // Labels below bar
+  ceilH+='<div style="display:flex;justify-content:space-between;margin-top:6px">';
+  ceilH+='<span style="font-size:11px;color:var(--muted)">'+floorPct+'% locked to bills</span>';
+  ceilH+='<span style="font-size:11px;color:var(--green);font-weight:600">'+runwayPct2+'% free</span></div></div>';
+
+  // What the floor is made of
+  ceilH+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.1);border-radius:12px;padding:12px 14px;margin-bottom:12px">';
+  ceilH+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">What locks up the '+fmt(floor)+'</div>';
+  EX.filter(function(e){return e.consequence!=='other'&&e.consequence!=='late_fee';}).sort(function(a,b){return b.amount-a.amount;}).slice(0,5).forEach(function(e){
+    var ePct=monthlyPay>0?Math.round((e.amount/monthlyPay)*100):0;
+    ceilH+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">';
+    ceilH+='<div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;color:var(--text)">'+e.name+'</span><span style="font-size:12px;font-weight:700">'+fmt(e.amount)+'</span></div>';
+    ceilH+='<div style="height:4px;background:rgba(200,210,240,0.3);border-radius:99px"><div style="height:100%;width:'+ePct+'%;background:'+floorColor+';border-radius:99px"></div></div></div></div>';
   });
-  ceilH+='</div><div style="height:10px;background:var(--bg);border-radius:99px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:'+runwayPct+'%;background:linear-gradient(90deg,var(--green),var(--amber),var(--red));border-radius:99px"></div></div>';
-  ceilH+='<div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:12px">'+runwayPct+'% of income committed to critical bills. '+(runwayPct>90?'Critical — almost no room for surprises.':runwayPct>70?'Tight — limited room for error.':'Manageable — protect this runway.')+'</div>';
+  ceilH+='</div>';
+
+  // Context sentence
+  ceilH+='<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px">';
+  ceilH+=floorPct>90?'Your critical bills eat almost your entire paycheck. There is almost no buffer for anything unexpected.':
+         floorPct>70?'Your bills take up most of your income. The '+fmt(runway)+' runway is real but thin — one surprise drains it.':
+         'Your bills are manageable. The '+fmt(runway)+' monthly runway is yours to deploy toward recovery and goals.';
+  ceilH+='</div>';
+
   // Three-check callout
   if(threeCheckThisYear.length>0){
     var tcMonthLabels=threeCheckThisYear.map(function(m){var parts=m.split('-');return monthNames[parseInt(parts[1])]||m;}).join(' and ');
@@ -3130,37 +3165,99 @@ function renderInsights(){
     ceilH+='<div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:4px">3-Paycheck Months This Year</div>';
     ceilH+='<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">'+tcMonthLabels+' — '+fmt(UP.paycheck_amount||0)+' extra each</div>';
     ceilH+='<div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:8px">'+fmt(threeCheckBonus)+' in bonus income this year currently unallocated toward goals.</div>';
-    var topGoal=GOALS.filter(function(g){return !g.is_complete;}).sort(function(a,b){return (a.importance==='need'?0:a.importance==='want'?1:2)-(b.importance==='need'?0:b.importance==='want'?1:2);})[0];
-    if(topGoal){
-      var pct=Math.round(topGoal.current_amount/topGoal.target_amount*100);
-      ceilH+='<div style="font-size:12px;color:var(--text2)">Top goal: <strong style="color:var(--primary)">'+topGoal.name+'</strong> is '+pct+'% funded. One 3rd check could add <strong>'+fmt(Math.min(UP.paycheck_amount||0,topGoal.target_amount-topGoal.current_amount))+'</strong> toward it.</div>';
-    }
+    var topGoal=GOALS.filter(function(g){return !g.is_complete;}).sort(function(a,b){return(a.importance==='need'?0:a.importance==='want'?1:2)-(b.importance==='need'?0:b.importance==='want'?1:2);})[0];
+    if(topGoal){var tgPct=Math.round(topGoal.current_amount/topGoal.target_amount*100);ceilH+='<div style="font-size:12px;color:var(--text2)">Top goal: <strong style="color:var(--primary)">'+topGoal.name+'</strong> is '+tgPct+'% funded. One 3rd check could add <strong>'+fmt(Math.min(UP.paycheck_amount||0,topGoal.target_amount-topGoal.current_amount))+'</strong> toward it.</div>';}
     ceilH+='</div>';
   }
-  html+=iCard(4,'Income Ceiling vs. Expense Floor',ceilH);
+  html+=iCard(3,'Income Ceiling vs. Expense Floor',ceilH);
 
+  // CARD 4 — Recovery Velocity — MPG framing, max vs actual
   var ttaId='tta_'+Date.now();
-  var velH='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-size:2.5rem;font-weight:800;color:'+(net>=0?'var(--green)':'var(--red)')+';line-height:1;letter-spacing:-.02em">'+(net>=0?'+':'')+fmt(net)+'</div><div style="font-size:13px;color:var(--text2);margin-top:4px">net per pay period after bills</div></div>';
-  if(spendable>=(SET.ahead_threshold||1000)){velH+='<div style="background:var(--gl);border-radius:12px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--green)">Already Ahead ✓</div>';}
-  else{velH+='<div style="background:var(--pl);border-radius:12px;padding:10px 14px;text-align:right;cursor:pointer" onclick="loadTimeToAhead(\''+ttaId+'\')">';
-  velH+='<div class="lbl">Time to "Ahead"</div>';
-  velH+='<div id="'+ttaId+'" style="margin-top:4px;font-size:12px;color:var(--primary);font-weight:600">Tap to calculate →</div></div>';}
+  var pdTotal2=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+
+  // Actual velocity — transactions logged this pay period
+  var lastPayDate=null;
+  if(UP.pay_dates){var pd2=getArr(UP.pay_dates).filter(function(d){return d<=today();}).sort();lastPayDate=pd2[pd2.length-1]||null;}
+  var periodTX=lastPayDate?TX.filter(function(t){var d=t.transaction_date||t.created_at.split('T')[0];return d>=lastPayDate;}):[];
+  var periodSpend=periodTX.reduce(function(s,t){return s+t.amount;},0);
+  var actualVelocity=net-periodSpend;
+  var hasActual=periodTX.length>0;
+
+  var velH='';
+
+  // MPG analogy header
+  velH+='<div style="background:rgba(67,97,238,0.06);border:1px solid rgba(67,97,238,0.12);border-radius:14px;padding:14px;margin-bottom:18px">';
+  velH+='<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:6px">Think of it like MPG on a car</div>';
+  velH+='<div style="font-size:13px;color:var(--text2);line-height:1.65">MPG tells you how efficient your car is — not how much gas is in the tank. Recovery Velocity tells you how fast your finances improve each pay period — not what you have available to spend right now.</div>';
   velH+='</div>';
-  velH+='<div style="font-size:12px;color:var(--text2);line-height:1.5;padding:10px 14px;background:var(--bg);border-radius:10px;margin-bottom:10px">'+(net>0?'You\'re gaining '+fmt(net)+' every two weeks. That compounds — protect it.':'Spending exceeds income per period. Reducing one category shifts this immediately.')+'</div>';
-  if(spendable<(SET.ahead_threshold||1000)){velH+='<div style="font-size:12px;color:var(--muted)">The calculation accounts for upcoming bills, active earmarks, goal contributions, split payments, and past due balances — not just your paycheck amount.</div>';}
-  html+=iCard(5,'Recovery Velocity',velH);
 
-  var passH='<div style="display:flex;justify-content:space-between;margin-bottom:14px"><div><div style="font-size:2.5rem;font-weight:800;color:'+(passive>0?'var(--green)':'var(--muted)')+';line-height:1;letter-spacing:-.02em">'+fmt(passive)+'</div><div style="font-size:13px;color:var(--text2);margin-top:4px">confirmed recurring/mo · '+passivePct+'% of bills covered</div></div><div style="text-align:right"><div class="lbl">Coverage goal</div><div style="font-size:1.1rem;font-weight:800;margin-top:4px">'+fmt(monthly)+'/mo</div></div></div>';
-  passH+='<div style="height:10px;background:var(--bg);border-radius:99px;overflow:hidden;margin-bottom:16px"><div style="height:100%;width:'+Math.min(passivePct,100)+'%;background:linear-gradient(90deg,#22c55e,#0ea5e9);border-radius:99px"></div></div>';
-  passH+='<div style="margin-top:8px"><div class="lbl" style="margin-bottom:12px">Spending by Category</div>';
-  catBreak.forEach(function(c,i){
-    var pct=Math.round((c.total/monthly)*100);
-    passH+='<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:13px;font-weight:500">'+c.cat+'</span><span style="font-size:13px;font-weight:700;color:'+CAT_COLORS[i%CAT_COLORS.length]+'">'+fmt(c.total)+' <span style="color:var(--muted);font-weight:400">('+pct+'%)</span></span></div>'+ibar(c.total,monthly,CAT_COLORS[i%CAT_COLORS.length])+'</div>';
+  // Two velocity numbers side by side
+  velH+='<div style="display:flex;gap:10px;margin-bottom:16px">';
+
+  // Max velocity
+  var maxColor=net>=0?'var(--green)':'var(--red)';
+  velH+='<div style="flex:1;background:var(--surface);border:1px solid var(--glass-border);border-radius:14px;padding:14px;text-align:center">';
+  velH+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Max Velocity</div>';
+  velH+='<div style="font-size:1.8rem;font-weight:900;color:'+maxColor+';letter-spacing:-.03em;line-height:1">'+(net>=0?'+':'')+fmt(net)+'</div>';
+  velH+='<div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">if you spent nothing<br>beyond your bills</div>';
+  velH+='</div>';
+
+  // Actual velocity
+  var actColor=!hasActual?'var(--muted)':actualVelocity>=0?'var(--primary)':'var(--red)';
+  velH+='<div style="flex:1;background:var(--surface);border:1px solid var(--glass-border);border-radius:14px;padding:14px;text-align:center">';
+  velH+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Actual Velocity</div>';
+  if(hasActual){
+    velH+='<div style="font-size:1.8rem;font-weight:900;color:'+actColor+';letter-spacing:-.03em;line-height:1">'+(actualVelocity>=0?'+':'')+fmt(actualVelocity)+'</div>';
+    velH+='<div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">after '+fmt(periodSpend)+' logged<br>this period</div>';
+  } else {
+    velH+='<div style="font-size:1.2rem;font-weight:700;color:var(--muted);line-height:1;margin-top:6px">—</div>';
+    velH+='<div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">log transactions<br>to see this</div>';
+  }
+  velH+='</div></div>';
+
+  // The math shown plainly
+  velH+='<div style="background:rgba(200,210,240,0.15);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+  velH+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">The math this period</div>';
+  var mathRows=[
+    {l:'Paycheck',v:'+'+fmt(paycheck),c:'var(--green)'},
+    {l:'Bills (half of '+fmt(monthly)+'/mo)',v:'−'+fmt(monthly/2),c:'var(--red)'},
+  ];
+  if(hasActual)mathRows.push({l:'Logged spending ('+periodTX.length+' transactions)',v:'−'+fmt(periodSpend),c:'var(--amber)'});
+  mathRows.push({l:hasActual?'Actual Velocity':'Max Velocity',v:(hasActual?actualVelocity>=0?'+':'':(net>=0?'+':''))+fmt(hasActual?actualVelocity:net),c:hasActual?actColor:maxColor,bold:true});
+  mathRows.forEach(function(r,i){
+    var isLast=i===mathRows.length-1;
+    velH+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;'+(isLast?'border-top:1px solid var(--bl);margin-top:4px;padding-top:10px':'')+'">';
+    velH+='<span style="font-size:12px;color:var(--text2);'+(r.bold?'font-weight:700':'')+'">'+r.l+'</span>';
+    velH+='<span style="font-size:13px;font-weight:'+(r.bold?'900':'700')+';color:'+r.c+'">'+r.v+'</span></div>';
   });
-  passH+='</div><div style="font-size:12px;color:var(--text2);line-height:1.5;padding:10px 14px;background:var(--bg);border-radius:10px;margin-top:8px">'+(passive===0?'No passive income yet. Even $50/mo starts this journey. Ask Clarity for first steps.':fmt(monthly-passive)+' more in passive income = financial independence.')+'</div>';
-  html+=iCard(6,'Passive Income Progress',passH);
+  velH+='</div>';
 
-  // INSIGHT 7 — 50/30/20 Budget Analysis
+  // Backlog context
+  if(pdTotal2>0){
+    var checksToClean=net>0?Math.ceil(pdTotal2/net):null;
+    velH+='<div style="background:var(--rl);border:1px solid rgba(220,38,38,0.2);border-radius:12px;padding:12px 14px;margin-bottom:12px">';
+    velH+='<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:5px">Where is your velocity going right now?</div>';
+    velH+='<div style="font-size:13px;color:var(--text2);line-height:1.65">You have <strong style="color:var(--red)">'+fmt(pdTotal2)+'</strong> in past due balances. Your engine is running at '+fmt(net)+'/check — it is pointed at clearing that backlog first.'+(checksToClean?' At max velocity, the backlog clears in about <strong>'+checksToClean+' paychecks</strong>. After that, the same '+fmt(net)+' per check starts building your cushion.':'')+'</div>';
+    velH+='</div>';
+  } else if(net>=0){
+    velH+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.2);border-radius:12px;padding:12px 14px;margin-bottom:12px">';
+    velH+='<div style="font-size:13px;color:var(--text2);line-height:1.65">No backlog. Your <strong style="color:var(--green)">'+fmt(net)+'/check</strong> engine is building your cushion directly. The less you spend beyond bills, the closer Actual gets to Max.</div>';
+    velH+='</div>';
+  }
+
+  // Time to Ahead
+  if(spendable<(SET.ahead_threshold||1000)){
+    velH+='<div style="background:var(--pl);border:1px solid var(--pm);border-radius:12px;padding:12px 14px;cursor:pointer" onclick="loadTimeToAhead(\''+ttaId+'\')">';
+    velH+='<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--primary)">Time to Ahead</div>';
+    velH+='<div id="'+ttaId+'" style="margin-top:4px;font-size:12px;color:var(--primary);font-weight:600">Tap to calculate →</div></div>';
+    velH+='<span style="font-size:20px">→</span></div></div>';
+  } else {
+    velH+='<div style="background:var(--gl);border-radius:12px;padding:12px 14px;font-size:13px;font-weight:700;color:var(--green);text-align:center">Already Ahead ✓</div>';
+  }
+
+  html+=iCard(4,'Recovery Velocity',velH);
+
+  // INSIGHT 6 — 50/30/20 Budget Analysis
   var takeHome=(UP.paycheck_amount||0)*2; // $8,600 baseline
   var needsCats=['Housing','Utilities','Food & Drinks','Transportation','Healthcare','Education & Childcare','Household Supplies','Debt & Retirement'];
   var wantsCats=['Entertainment','Subscriptions','Personal Care','Clothing','Gifts & Donations','Travel','Pets','Miscellaneous'];
@@ -3221,31 +3318,41 @@ function renderInsights(){
   bucket302Html+='<button onclick="load503020Analysis(\''+ttbId+'\','+needsTotal+','+needsPct+','+wantsCombined+','+wantsPct+','+savingsTotal+','+savingsPct+','+takeHome+')" style="width:100%;background:var(--gp);color:#fff;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Get Clarity\'s Full Analysis →</button>';
   bucket302Html+='</div>';
 
-  html+=iCard(7,'50/30/20 Budget Analysis',bucket302Html);
+  html+=iCard(5,'50/30/20 Budget Analysis',bucket302Html);
 
-  // SPENDING TRENDS CHART — category lines over 6 months
+  // SPENDING TRENDS CHART
   var trendId='trends_'+Date.now();
   html+='<div class="card" style="margin-bottom:14px">';
-  html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div class="ins-num">8</div><div style="font-size:15px;font-weight:700">Spending Trends</div></div>';
-  html+='<div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">Category spending over the last 6 months.</div>';
+  html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div class="ins-num">6</div><div style="font-size:15px;font-weight:700">Spending Trends</div></div>';
 
-  // DM selector
-  html+='<div style="display:flex;gap:6px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:16px" id="trend-dm-wrap">';
-  ['All','Jay','Chari'].forEach(function(dm){
-    var isAll=dm==='All';
-    html+='<button onclick="setTrendDM(\''+dm.toLowerCase()+'\')" id="tdm-'+dm.toLowerCase()+'" style="flex:1;padding:8px 0;border-radius:9px;font-size:13px;font-weight:600;border:none;background:'+(isAll?'var(--surface-solid)':'transparent')+';color:'+(isAll?'var(--primary)':'var(--muted)')+';box-shadow:'+(isAll?'var(--shadow)':'none')+';cursor:pointer">'+dm+'</button>';
+  // Time period selector
+  html+='<div style="display:flex;gap:4px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:10px" id="trend-tp-wrap">';
+  [{v:3,l:'3 Mo'},{v:6,l:'6 Mo'},{v:12,l:'12 Mo'}].forEach(function(tp,i){
+    var isOn=i===1;
+    html+='<button onclick="setTrendTP('+tp.v+')" id="ttp-'+tp.v+'" style="flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:600;border:none;background:'+(isOn?'var(--surface-solid)':'transparent')+';color:'+(isOn?'var(--primary)':'var(--muted)')+';box-shadow:'+(isOn?'var(--shadow)':'none')+';cursor:pointer">'+tp.l+'</button>';
   });
   html+='</div>';
-  html+='<div id="'+trendId+'">'+buildTrendsChart('all',TX,CATS)+'</div>';
+
+  // DM selector
+  html+='<div style="display:flex;gap:4px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:16px" id="trend-dm-wrap">';
+  ['All','Jay','Chari'].forEach(function(dm){
+    var isAll=dm==='All';
+    html+='<button onclick="setTrendDM(\''+dm.toLowerCase()+'\')" id="tdm-'+dm.toLowerCase()+'" style="flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:600;border:none;background:'+(isAll?'var(--surface-solid)':'transparent')+';color:'+(isAll?'var(--primary)':'var(--muted)')+';box-shadow:'+(isAll?'var(--shadow)':'none')+';cursor:pointer">'+dm+'</button>';
+  });
+  html+='</div>';
+
+  html+='<div id="'+trendId+'">'+buildTrendsChart('all',6,TX)+'</div>';
   html+='</div>';
 
   window._trendElId=trendId;
+  window._trendDM='all';
+  window._trendTP=6;
 
   document.getElementById('tab-insights').innerHTML=html;
 }
 
 function setTrendDM(dm){
-  // Update toggle buttons
+  window._trendDM=dm;
   ['all','jay','chari'].forEach(function(d){
     var btn=document.getElementById('tdm-'+d);if(!btn)return;
     var on=d===dm;
@@ -3254,30 +3361,35 @@ function setTrendDM(dm){
     btn.style.boxShadow=on?'var(--shadow)':'none';
   });
   var el=document.getElementById(window._trendElId);
-  if(el)el.innerHTML=buildTrendsChart(dm,TX,CATS);
+  if(el)el.innerHTML=buildTrendsChart(window._trendDM,window._trendTP||6,TX);
 }
 
-function buildTrendsChart(dm,txArr,cats){
-  // Filter transactions by DM
+function setTrendTP(tp){
+  window._trendTP=tp;
+  [3,6,12].forEach(function(v){
+    var btn=document.getElementById('ttp-'+v);if(!btn)return;
+    var on=v===tp;
+    btn.style.background=on?'var(--surface-solid)':'transparent';
+    btn.style.color=on?'var(--primary)':'var(--muted)';
+    btn.style.boxShadow=on?'var(--shadow)':'none';
+  });
+  var el=document.getElementById(window._trendElId);
+  if(el)el.innerHTML=buildTrendsChart(window._trendDM||'all',tp,TX);
+}
+
+function buildTrendsChart(dm,numMonths,txArr){
   var filtered=dm==='all'?txArr:txArr.filter(function(t){return t.decision_maker===dm;});
 
-  // Build 6-month buckets
+  // Build month buckets
   var now=new Date();
   var months=[];
-  for(var mi=5;mi>=0;mi--){
+  for(var mi=numMonths-1;mi>=0;mi--){
     var d=new Date(now.getFullYear(),now.getMonth()-mi,1);
-    months.push({
-      label:d.toLocaleString('default',{month:'short'}),
-      year:d.getFullYear(),
-      month:d.getMonth(),
-      cats:{}
-    });
+    months.push({label:d.toLocaleString('default',{month:'short'}),year:d.getFullYear(),month:d.getMonth(),cats:{}});
   }
 
-  // Accumulate spending per category per month
   filtered.forEach(function(t){
-    var raw=t.transaction_date||t.created_at;
-    if(!raw)return;
+    var raw=t.transaction_date||t.created_at;if(!raw)return;
     var td2=raw.indexOf('T')>=0?new Date(raw):new Date(raw+'T12:00:00');
     var m=months.find(function(x){return x.year===td2.getFullYear()&&x.month===td2.getMonth();});
     if(!m)return;
@@ -3285,73 +3397,68 @@ function buildTrendsChart(dm,txArr,cats){
     m.cats[cat]=(m.cats[cat]||0)+t.amount;
   });
 
-  // Find categories with any spend
+  // Top categories by total spend
   var activeCats={};
   months.forEach(function(m){Object.keys(m.cats).forEach(function(c){activeCats[c]=(activeCats[c]||0)+m.cats[c];});});
   var sortedCats=Object.entries(activeCats).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return e[0];});
 
   if(sortedCats.length===0){
-    return '<div style="text-align:center;color:var(--muted);padding:24px;font-size:13px">No transactions logged yet. Start logging to see trends.</div>';
+    return '<div style="text-align:center;color:var(--muted);padding:24px;font-size:13px">No transactions logged yet for this selection.</div>';
   }
 
-  // Find max value for scaling
   var maxVal=0;
   months.forEach(function(m){sortedCats.forEach(function(cat){if((m.cats[cat]||0)>maxVal)maxVal=m.cats[cat];});});
   if(maxVal===0)maxVal=1;
 
   var TCOLORS=['#4361ee','#22c55e','#f59e0b','#dc2626','#7c3aed','#0ea5e9'];
-  var cW=460;var cH=180;var pL=42;var pR=10;var pT=16;var pB=32;
+  var cW=460;var cH=180;var pL=44;var pR=10;var pT=16;var pB=32;
   var plW=cW-pL-pR;var plH=cH-pT-pB;
   var nM=months.length;
-
-  function xp(i){return pL+(i/(nM-1))*plW;}
+  function xp(i){return pL+(i/(Math.max(nM-1,1)))*plW;}
   function yp(v){return pT+plH-(v/maxVal)*plH;}
 
   var svg='<svg width="100%" viewBox="0 0 '+cW+' '+cH+'" xmlns="http://www.w3.org/2000/svg">';
 
-  // Grid lines — 4 horizontal
+  // Grid
   for(var gi=0;gi<=4;gi++){
     var gy=pT+(gi/4)*plH;
     var gv=Math.round(maxVal*(1-gi/4));
     svg+='<line x1="'+pL+'" y1="'+gy+'" x2="'+(cW-pR)+'" y2="'+gy+'" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>';
-    if(gi<4)svg+='<text x="'+(pL-4)+'" y="'+(gy+4)+'" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="-apple-system,sans-serif">$'+(gv>=1000?(gv/1000).toFixed(0)+'k':gv)+'</text>';
+    svg+='<text x="'+(pL-4)+'" y="'+(gy+4)+'" text-anchor="end" font-size="8.5" fill="#94a3b8" font-family="-apple-system,sans-serif">$'+(gv>=1000?(gv/1000).toFixed(0)+'k':gv)+'</text>';
   }
 
-  // Month labels
+  // Month labels — show fewer when 12 months
   months.forEach(function(m,i){
-    svg+='<text x="'+xp(i)+'" y="'+(pT+plH+13)+'" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="-apple-system,sans-serif">'+m.label+'</text>';
+    var show=nM<=6||(i===0||i===nM-1||i%3===0);
+    if(show)svg+='<text x="'+xp(i)+'" y="'+(pT+plH+13)+'" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="-apple-system,sans-serif">'+m.label+'</text>';
   });
 
-  // Lines per category
+  // Lines
   sortedCats.forEach(function(cat,ci){
     var color=TCOLORS[ci%TCOLORS.length];
-    var pts=months.map(function(m,i){return xp(i)+','+yp(m.cats[cat]||0);});
-    // Area fill
-    var areaD='M '+xp(0)+','+(pT+plH)+' L '+months.map(function(m,i){return xp(i)+' '+yp(m.cats[cat]||0);}).join(' L ')+' L '+xp(nM-1)+','+(pT+plH)+' Z';
-    svg+='<path d="'+areaD+'" fill="'+color+'" fill-opacity="0.05" stroke="none"/>';
-    // Line
-    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
-    // Dots
+    var areaD='M '+xp(0)+','+(pT+plH)+' '+months.map(function(m,i){return 'L '+xp(i)+' '+yp(m.cats[cat]||0);}).join(' ')+' L '+xp(nM-1)+','+(pT+plH)+' Z';
+    svg+='<path d="'+areaD+'" fill="'+color+'" fill-opacity="0.06" stroke="none"/>';
+    var pts=months.map(function(m,i){return xp(i)+','+yp(m.cats[cat]||0);}).join(' ');
+    svg+='<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
     months.forEach(function(m,i){
-      var val=m.cats[cat]||0;
-      if(val>0)svg+='<circle cx="'+xp(i)+'" cy="'+yp(val)+'" r="3.5" fill="'+color+'" stroke="white" stroke-width="1.5"/>';
+      if((m.cats[cat]||0)>0)svg+='<circle cx="'+xp(i)+'" cy="'+yp(m.cats[cat]||0)+'" r="3" fill="'+color+'" stroke="white" stroke-width="1.5"/>';
     });
   });
-
   svg+='</svg>';
 
   // Legend
   var legend='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">';
   sortedCats.forEach(function(cat,ci){
-    legend+='<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:3px;border-radius:99px;background:'+TCOLORS[ci%TCOLORS.length]+'"></div><span style="font-size:11px;color:var(--text2)">'+cat+'</span></div>';
+    var total=activeCats[cat]||0;
+    legend+='<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:3px;border-radius:99px;background:'+TCOLORS[ci%TCOLORS.length]+'"></div><span style="font-size:11px;color:var(--text2)">'+cat+' <span style="color:var(--muted)">'+fmt(total)+'</span></span></div>';
   });
   legend+='</div>';
 
-  // Monthly totals row
-  var totalsRow='<div style="display:flex;gap:2px;margin-top:12px">';
+  // Monthly totals
+  var totalsRow='<div style="display:flex;gap:2px;margin-top:10px;border-top:1px solid var(--bl);padding-top:8px">';
   months.forEach(function(m){
     var tot=sortedCats.reduce(function(s,c){return s+(m.cats[c]||0);},0);
-    totalsRow+='<div style="flex:1;text-align:center"><div style="font-size:9px;color:var(--muted)">'+(tot>0?'$'+(tot>=1000?(tot/1000).toFixed(1)+'k':tot):'—')+'</div></div>';
+    totalsRow+='<div style="flex:1;text-align:center"><div style="font-size:9px;color:var(--muted);font-weight:600">'+(tot>0?'$'+(tot>=1000?(tot/1000).toFixed(1)+'k':Math.round(tot)):'—')+'</div><div style="font-size:8px;color:var(--muted);margin-top:1px">'+m.label+'</div></div>';
   });
   totalsRow+='</div>';
 
