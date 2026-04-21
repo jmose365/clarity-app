@@ -3175,6 +3175,7 @@ function renderInsights(){
   var ttaId='tta_'+Date.now();
   var pd=EX.filter(function(e){return e.is_past_due;});
   var pdTotal2=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+  var paycheck=UP.paycheck_amount||0;
 
   // Actual velocity — transactions logged this pay period
   var lastPayDate=null;
