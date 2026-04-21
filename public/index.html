@@ -1461,7 +1461,7 @@ function openCashModal(){
   h+='<div style="display:flex;flex-direction:column;gap:14px">';
   h+='<div><label class="lbl">Current Balance</label>';
   h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
-  h+='<input class="inp" type="number" id="cash-inp" value="'+(SET.cash_on_hand||0)+'" style="font-size:1.1rem;font-weight:700" autofocus/></div></div>';
+  h+='<input class="inp" type="tel" id="cash-inp" value="'+(SET.cash_on_hand||0)+'" style="font-size:1.1rem;font-weight:700" inputmode="decimal"/></div></div>';
   h+='<div style="background:rgba(67,97,238,0.06);border-radius:12px;padding:12px;font-size:12px;color:var(--text2);line-height:1.5">';
   h+='Previous: <strong>'+fmt(SET.cash_on_hand||0)+'</strong> — update this whenever you check your bank to keep Clarity accurate.</div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveCashModal()">Update</button>';
@@ -1472,8 +1472,12 @@ function openCashModal(){
   setTimeout(function(){var el=document.getElementById('cash-inp');if(el){el.focus();el.select();}},100);
 }
 async function saveCashModal(){
-  var val=parseFloat(document.getElementById('cash-inp').value);
-  if(isNaN(val)){document.getElementById('cash-msg').style.color='var(--red)';document.getElementById('cash-msg').textContent='Enter a valid number.';return;}
+  var inp=document.getElementById('cash-inp');
+  var msg=document.getElementById('cash-msg');
+  if(!inp){if(msg){msg.style.color='var(--red)';msg.textContent='Input not found — try closing and reopening.';}return;}
+  var val=parseFloat(inp.value);
+  if(isNaN(val)||inp.value===''){if(msg){msg.style.color='var(--red)';msg.textContent='Enter a valid number.';}return;}
+  if(msg){msg.style.color='var(--muted)';msg.textContent='Saving...';}
   await updateCash(val);
   var modal=document.getElementById('cashModal');if(modal)modal.remove();
 }
