@@ -477,6 +477,9 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
     <button class="nb" onclick="goTab('insights',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Insights
     </button>
+    <button class="nb" onclick="goTab('settings',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>More
+    </button>
   </nav>
 
   <!-- Floating Clarity button -->
@@ -928,7 +931,7 @@ function goTab(id,btn){
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('on');});
   var panel=document.getElementById('tab-'+id);if(panel)panel.classList.add('on');
   if(btn)btn.classList.add('on');
-  else{var ids=['home','ledger','goals','plan','insights','activity'];var idx=ids.indexOf(id);var btns=document.querySelectorAll('.nb');if(idx>=0&&btns[idx])btns[idx].classList.add('on');}
+  else{var ids=['home','ledger','goals','plan','insights','settings'];var idx=ids.indexOf(id);var btns=document.querySelectorAll('.nb');if(idx>=0&&btns[idx])btns[idx].classList.add('on');}
   if(id==='home')renderHome();
   else if(id==='ledger')renderLedger();
   else if(id==='goals')renderGoals();
@@ -1112,6 +1115,168 @@ function getThreeCheckSuggestion(p,goals){
     return {msg:'You\'re on track. Route '+(topGoal?fmt(Math.min(paycheck,topGoal.target_amount-topGoal.current_amount))+' toward '+topGoal.name:'this full check toward your top goal')+' — you won\'t miss it.',action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
   return {msg:'You\'re ahead — this is exactly what this check is for. Go full goal mode. '+(topGoal?topGoal.name+' is '+Math.round(topGoal.current_amount/topGoal.target_amount*100)+'% funded — one more push could get you there.':'Set a goal and fund it now.'),action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
 
+function buildRecoveryRoadmap(pos,pd,available,spendable,paycheck,monthly,activeGoals){
+  var aheadThreshold=SET.ahead_threshold||1000;
+  var net=paycheck-(monthly/2);
+  var pdTotal=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+  var pdSorted=pd.slice().sort(function(a,b){
+    var sev={'eviction':0,'repossession':1,'disconnection':2,'collection':3,'late_fee':4,'other':5};
+    return (sev[a.consequence]||5)-(sev[b.consequence]||5);
+  });
+
+  // Build steps dynamically from current data
+  var steps=[];
+
+  // PAST DUE STEPS — one per past due bill, sorted by consequence severity
+  pdSorted.forEach(function(e){
+    var totalDue=calcTotalDueNow(e);
+    var checksNeeded=net>0?Math.ceil(totalDue/net):null;
+    var sevLabel={eviction:'Eviction risk',repossession:'Repossession risk',disconnection:'Disconnection risk',collection:'Collection risk',late_fee:'Late fee accruing',other:'Past due'}[e.consequence]||'Past due';
+    steps.push({
+      id:'pd_'+e.id,
+      done:false,
+      label:'Clear '+e.name+' past due',
+      sub:fmt(totalDue)+' total due — '+sevLabel,
+      action:'openMarkPaid(\''+e.id+'\')',
+      actionLabel:'Pay Now',
+      urgent:true,
+      checksNeeded:checksNeeded,
+      amount:totalDue
+    });
+  });
+
+  // STAY CURRENT 30 DAYS — only shows once all past due cleared
+  if(pd.length===0){
+    // Check if they've been current for 30 days by looking at activity
+    var thirtyDaysAgo=addDays(today(),-30);
+    var recentPD=ACT.filter(function(a){return a.action_type==='past_due_paid'&&a.created_at>=thirtyDaysAgo;});
+    var stayCurrent30Done=pd.length===0&&recentPD.length===0; // no past dues now and no recent past due payments means they were already current
+    steps.push({
+      id:'current_30',
+      done:stayCurrent30Done,
+      label:'Stay current for 30 days',
+      sub:stayCurrent30Done?'No past due bills in 30 days — milestone reached':'Clear all past due bills first, then maintain for 30 days',
+      locked:pd.length>0
+    });
+  }
+
+  // BUILD $500 BUFFER
+  var has500=spendable>=500;
+  steps.push({
+    id:'buffer_500',
+    done:has500,
+    label:'Build a $500 buffer',
+    sub:has500?'Buffer achieved — '+fmt(spendable)+' spendable':'Currently '+fmt(Math.max(0,spendable))+' spendable — need '+fmt(Math.max(0,500-spendable))+' more',
+    locked:pd.length>0,
+    checksNeeded:net>0&&!has500?Math.ceil(Math.max(0,500-spendable)/net):null
+  });
+
+  // STAY CURRENT 60 DAYS
+  var stayCurrent60Done=has500&&spendable>=500&&pd.length===0;
+  steps.push({
+    id:'current_60',
+    done:stayCurrent60Done,
+    label:'Stay current for 60 days',
+    sub:stayCurrent60Done?'60-day milestone reached':'Build your buffer first, then maintain current status',
+    locked:!has500||pd.length>0
+  });
+
+  // HIT AHEAD THRESHOLD
+  var isAhead=spendable>=(aheadThreshold);
+  steps.push({
+    id:'ahead',
+    done:isAhead,
+    label:'Reach Ahead — '+fmt(aheadThreshold)+' spendable',
+    sub:isAhead?'You are Ahead — great position':'Currently '+fmt(Math.max(0,spendable))+' spendable — '+fmt(Math.max(0,aheadThreshold-spendable))+' away',
+    locked:!stayCurrent60Done,
+    checksNeeded:net>0&&!isAhead?Math.ceil(Math.max(0,aheadThreshold-spendable)/net):null
+  });
+
+  // 1-MONTH EMERGENCY FUND
+  var emergencyTarget=monthly;
+  var emergencyGoal=GOALS.find(function(g){return g.goal_type==='Emergency Fund'&&!g.is_complete;});
+  var emergencyProgress=emergencyGoal?emergencyGoal.current_amount:0;
+  var hasEmergency=emergencyProgress>=emergencyTarget;
+  steps.push({
+    id:'emergency',
+    done:hasEmergency,
+    label:'Build 1-month emergency fund',
+    sub:hasEmergency?'Emergency fund complete':'Target: '+fmt(emergencyTarget)+' — '+(emergencyGoal?fmt(emergencyProgress)+' saved ('+Math.round((emergencyProgress/emergencyTarget)*100)+'%)':'No Emergency Fund goal yet'),
+    locked:!isAhead,
+    action:emergencyGoal?null:'openAddGoalEmergency()',
+    actionLabel:emergencyGoal?null:'Create Goal'
+  });
+
+  // Find current active step
+  var currentStepIdx=steps.findIndex(function(s){return !s.done&&!s.locked;});
+  var completedCount=steps.filter(function(s){return s.done;}).length;
+  var totalSteps=steps.length;
+  var pctComplete=Math.round((completedCount/totalSteps)*100);
+
+  var h='<div class="card" style="padding:16px;margin-bottom:12px">';
+
+  // Header row with refresh button
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
+  h+='<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Recovery Roadmap</div>';
+  h+='<div style="font-size:15px;font-weight:800;color:var(--text);margin-top:2px">'+completedCount+' of '+totalSteps+' steps complete</div></div>';
+  h+='<div style="display:flex;align-items:center;gap:8px">';
+  h+='<div style="font-size:1.1rem;font-weight:900;color:'+(pctComplete===100?'var(--green)':'var(--primary)')+'">'+pctComplete+'%</div>';
+  h+='<button onclick="renderHome()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--muted)">↻</button>';
+  h+='</div></div>';
+
+  // Progress bar
+  h+='<div style="height:6px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden;margin-bottom:16px">';
+  h+='<div style="height:100%;width:'+pctComplete+'%;background:linear-gradient(90deg,var(--primary),var(--green));border-radius:99px;transition:width .6s ease"></div></div>';
+
+  // Steps
+  steps.forEach(function(step,idx){
+    var isCurrent=idx===currentStepIdx;
+    var isDone=step.done;
+    var isLocked=step.locked&&!isDone;
+
+    var borderColor=isDone?'rgba(22,163,74,0.25)':isCurrent&&step.urgent?'rgba(220,38,38,0.3)':isCurrent?'rgba(67,97,238,0.3)':'rgba(200,210,240,0.3)';
+    var bg=isDone?'rgba(22,163,74,0.04)':isCurrent&&step.urgent?'rgba(220,38,38,0.03)':isCurrent?'rgba(67,97,238,0.03)':'transparent';
+
+    h+='<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;margin-bottom:6px;border:1px solid '+borderColor+';background:'+bg+';opacity:'+(isLocked?'0.45':'1')+'">';
+
+    // Step indicator
+    if(isDone){
+      h+='<div style="width:24px;height:24px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;flex-shrink:0;margin-top:1px">✓</div>';
+    } else if(isCurrent&&step.urgent){
+      h+='<div style="width:24px;height:24px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;margin-top:1px">'+( idx+1)+'</div>';
+    } else if(isCurrent){
+      h+='<div style="width:24px;height:24px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;margin-top:1px">'+(idx+1)+'</div>';
+    } else {
+      h+='<div style="width:24px;height:24px;border-radius:50%;background:rgba(200,210,240,0.4);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;margin-top:1px">'+(idx+1)+'</div>';
+    }
+
+    // Content
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-size:13px;font-weight:'+(isDone||isCurrent?'700':'500')+';color:'+(isDone?'var(--muted)':isCurrent?'var(--text)':'var(--text2)')+';'+(isDone?'text-decoration:line-through;':'')+'">'+step.label+'</div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4">'+step.sub+'</div>';
+    if(isCurrent&&step.checksNeeded){
+      h+='<div style="font-size:11px;color:'+(step.urgent?'var(--red)':'var(--primary)')+';font-weight:600;margin-top:3px">At current velocity: ~'+step.checksNeeded+' paycheck'+(step.checksNeeded>1?'s':'')+' away</div>';
+    }
+    h+='</div>';
+
+    // Action button
+    if(isCurrent&&step.action){
+      h+='<button onclick="'+step.action+'" style="background:'+(step.urgent?'var(--red)':'var(--primary)')+';border:none;border-radius:10px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.15)">'+step.actionLabel+'</button>';
+    }
+
+    h+='</div>';
+  });
+
+  h+='</div>';
+  return h;
+}
+
+// Quick shortcut to add Emergency Fund goal from roadmap
+function openAddGoalEmergency(){
+  goTab('goals');
+  setTimeout(function(){showAddGoal(false,'Emergency Fund');},300);
+}
+
 function renderHome(){
   var p=calcPos();
   var available=calcAvailable();
@@ -1171,6 +1336,9 @@ function renderHome(){
   }[p];
   html+='<div style="margin-top:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.5">'+posCtx+'</div>';
   html+='</div></div>'; // close hero-inner + hero
+
+  // RECOVERY ROADMAP
+  html+=buildRecoveryRoadmap(p,pd,available,spendable,paycheck,monthly,activeGoals);
 
   // HOUSEHOLD PRESENCE — show both members, last activity, earmarks
   var chari=HM.find(function(m){return m.id!==CU.id;});
@@ -4021,7 +4189,7 @@ function renderInsights(){
   function ibar(val,max,color){var p=Math.min((val/Math.max(max,1))*100,100);return '<div class="bar-t"><div class="bar-f" style="width:'+p+'%;background:'+color+'"></div></div>';}
   function iCard(num,title,content){return '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div class="ins-num">'+num+'</div><div style="font-size:15px;font-weight:700">'+title+'</div></div>'+content+'</div>';}
 
-  var html='<div class="ph"><div class="ph-eye">Insights</div><div class="ph-title">What Your Numbers <span style="color:var(--primary)">Reveal</span></div><div class="ph-sub">Seven views of your finances most apps never show you.</div></div>';
+  var html='<div class="ph"><div class="ph-eye">Insights</div><div class="ph-title">What Your Numbers <span style="color:var(--primary)">Reveal</span></div><div class="ph-sub">Six views of your finances most apps never show you.</div></div>';
 
   html+=iCard(1,'Paycheck Erosion Rate',
     '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><div style="font-size:3rem;font-weight:800;color:'+eColor+';line-height:1;letter-spacing:-.03em">'+erosionPct+'<span style="font-size:1.5rem">%</span></div><div style="font-size:13px;color:var(--text2);margin-top:4px">of your check committed before it arrives</div></div><div style="text-align:right"><div class="lbl">Auto-committed</div><div style="font-size:1.3rem;font-weight:800;color:var(--red)">'+fmt(erosionTotal)+'</div></div></div>'
@@ -4029,15 +4197,45 @@ function renderInsights(){
     +'<div style="font-size:12px;color:var(--text2);line-height:1.5;padding:10px 14px;background:var(--bg);border-radius:10px">'+(erosionPct>50?'More than half your check is gone before you see it — this creates the feeling money evaporates immediately.':'Low erosion means most of your check is available when it lands. Protect this.')+'</div>'
   );
 
-  var gapH='<div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">Days where bill pressure peaks.</div><div style="display:flex;flex-direction:column;gap:10px">';
-  gapDays.forEach(function(entry,i){
-    var day=entry[0],total=entry[1];var pct=Math.round((total/monthly)*100);
-    var dayExps=EX.filter(function(e){return e.due_day===parseInt(day);}).map(function(e){return e.name;}).slice(0,2).join(', ');
-    var bg=i===0?'var(--gr)':i===1?'var(--ga)':'var(--bg)';var col=i<2?'#fff':'var(--text)';
-    gapH+='<div style="display:flex;align-items:center;gap:14px"><div style="width:36px;height:36px;border-radius:10px;background:'+bg+';border:'+(i>=2?'1px solid var(--border)':'none')+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:'+col+';flex-shrink:0">'+day+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:12px;color:var(--text2)">'+dayExps+'</span><span style="font-size:12px;font-weight:700">'+fmt(total)+'</span></div>'+ibar(total,monthly,i===0?'var(--red)':i===1?'var(--amber)':'var(--primary)')+'</div></div>';
+  // CARD 2 — Bill-to-Income Ratio (replaces Gap Map)
+  var btiRatio=monthlyPay>0?Math.round((monthly/monthlyPay)*100):0;
+  var btiColor=btiRatio>90?'var(--red)':btiRatio>70?'var(--amber)':'var(--green)';
+  var btiMsg=btiRatio>90?'Critical — bills consume almost all income. One missed check creates a crisis.':
+             btiRatio>70?'Tight — limited room for error. Focus on reducing one recurring bill.':
+             btiRatio>50?'Manageable — you have runway. Protect it and direct it toward recovery.':
+             'Healthy — bills are well within income. Build aggressively.';
+
+  var btiH='';
+  // Big ratio number
+  btiH+='<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px">';
+  btiH+='<div><div style="font-size:3.5rem;font-weight:900;color:'+btiColor+';line-height:1;letter-spacing:-.04em">'+btiRatio+'<span style="font-size:1.8rem">%</span></div>';
+  btiH+='<div style="font-size:13px;color:var(--text2);margin-top:4px">of monthly income goes to bills</div></div>';
+  btiH+='<div style="text-align:right"><div style="font-size:11px;color:var(--muted);margin-bottom:2px">Bills</div><div style="font-size:1.1rem;font-weight:800;color:var(--red)">'+fmt(monthly)+'/mo</div>';
+  btiH+='<div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:2px">Income</div><div style="font-size:1.1rem;font-weight:800;color:var(--green)">'+fmt(monthlyPay)+'/mo</div></div></div>';
+
+  // Visual ratio bar
+  btiH+='<div style="height:14px;border-radius:99px;overflow:hidden;display:flex;margin-bottom:8px;background:rgba(200,210,240,0.2)">';
+  btiH+='<div style="width:'+Math.min(btiRatio,100)+'%;background:'+btiColor+';border-radius:99px;transition:width .6s ease"></div></div>';
+  btiH+='<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:14px">';
+  btiH+='<span>Bills: '+btiRatio+'%</span><span>Free: '+(100-btiRatio)+'%</span></div>';
+
+  // Context
+  btiH+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.1);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+  btiH+='<div style="font-size:13px;color:var(--text2);line-height:1.65">'+btiMsg+'</div></div>';
+
+  // Top 3 bills by weight
+  btiH+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Heaviest Bills by % of Income</div>';
+  EX.slice().sort(function(a,b){return b.amount-a.amount;}).slice(0,5).forEach(function(e){
+    var pct=monthlyPay>0?Math.round((e.amount/monthlyPay)*100):0;
+    btiH+='<div style="margin-bottom:8px">';
+    btiH+='<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
+    btiH+='<span style="font-size:12px;color:var(--text)">'+(e.is_past_due?'🔴 ':'')+e.name+'</span>';
+    btiH+='<span style="font-size:12px;font-weight:700;color:var(--text2)">'+fmt(e.amount)+' <span style="color:var(--muted);font-weight:400">('+pct+'%)</span></span></div>';
+    btiH+=ibar(e.amount,monthlyPay,e.is_past_due?'var(--red)':'var(--primary)');
+    btiH+='</div>';
   });
-  gapH+='</div>';
-  html+=iCard(2,'Gap Map — Heaviest Bill Days',gapH);
+
+  html+=iCard(2,'Bill-to-Income Ratio',btiH);
 
   // CARD 3 — Income Ceiling vs Expense Floor — visual bar rebuild
   var ceilH='';
@@ -4226,29 +4424,63 @@ function renderInsights(){
       +'<span>Target: '+fmt(target)+'</span></div></div>';
   }
 
-  var bucket302Html='';
-  bucket302Html+='<div style="background:var(--bg);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">';
-  bucket302Html+='<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Monthly Take-Home Baseline</div><div style="font-size:1.2rem;font-weight:800">'+fmt(takeHome)+'</div></div>';
-  bucket302Html+='<div style="font-size:11px;color:var(--muted);text-align:right">2 paychecks<br/>×'+fmt(UP.paycheck_amount||0)+'</div></div>';
-  bucket302Html+=bucketRow('Needs — Fixed Essentials',50,needsTotal,needsTarget,'#4361ee');
-  bucket302Html+=bucketRow('Wants — Discretionary',30,wantsCombined,wantsTarget,'#f59e0b');
-  bucket302Html+=bucketRow('Savings & Debt',20,savingsTotal,savingsTarget,'#22c55e');
+  // CARD 5 — Recovery Budget (replaces 50/30/20)
+  // Framework: Commitments → Recovery → Goals → Life
+  var pdTotal3=pd.reduce(function(s,e){return s+(e.past_due_amount||e.amount);},0);
+  var goalLoad=GOALS.filter(function(g){return !g.is_complete;}).reduce(function(s,g){return s+(g.contribution_per_paycheck||0)*2;},0); // monthly
+  var planLoad=PLAN.filter(function(p){return !p.is_funded;}).reduce(function(s,p){return s+(p.per_check_amount||0)*2;},0); // monthly
+  var committed=monthly; // all recurring bills
+  var recovery=Math.max(0,Math.min(pdTotal3,paycheck)); // what goes toward backlog
+  var goalsAmt=goalLoad+planLoad;
+  var lifeAmt=Math.max(0,monthlyPay-committed-goalsAmt); // what is left for life
+  var recoveryBudgetId='rb_'+Date.now();
 
-  // Overall verdict
-  var overallOk=needsPct<=50&&wantsPct<=30&&savingsPct>=20;
-  var biggestGap=savingsGap<0?'savings':wantsGap>0?'wants':'needs';
-  var verdictMsg=overallOk?'Your budget is well-balanced across all three buckets.':
-    biggestGap==='savings'?'Your savings rate is the critical gap — '+fmt(Math.abs(savingsGap))+'/mo below target. This is where to focus.':
-    biggestGap==='wants'?'Discretionary spending is over target by '+fmt(wantsGap)+'. Trimming here directly funds savings.':
-    'Fixed expenses are over the 50% threshold — review for any bills that could be reduced or eliminated.';
-  bucket302Html+='<div style="padding:12px 14px;background:'+(overallOk?'var(--gl)':'var(--al)')+';border-radius:10px;border:1px solid '+(overallOk?'rgba(34,197,94,0.2)':'rgba(245,158,11,0.2)')+';font-size:12px;color:var(--text2);line-height:1.55;margin-bottom:14px">'+verdictMsg+'</div>';
+  var rbH='';
+  rbH+='<div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.55">Unlike 50/30/20, this framework reflects where you actually are — not where a textbook says you should be.</div>';
 
-  // Claude analysis button
-  bucket302Html+='<div id="'+ttbId+'">';
-  bucket302Html+='<button onclick="load503020Analysis(\''+ttbId+'\','+needsTotal+','+needsPct+','+wantsCombined+','+wantsPct+','+savingsTotal+','+savingsPct+','+takeHome+')" style="width:100%;background:var(--gp);color:#fff;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Get Clarity\'s Full Analysis →</button>';
-  bucket302Html+='</div>';
+  // Four buckets visual
+  var buckets=[
+    {label:'Commitments',sub:'Recurring bills',amt:committed,color:'#4361ee',icon:'🔒',desc:'Every bill currently in your Ledger. Non-negotiable until renegotiated.'},
+    {label:'Recovery',sub:'Past due backlog',amt:pdTotal3,color:'#dc2626',icon:'🔧',desc:pdTotal3>0?'Your '+fmt(pdTotal3)+' backlog. Velocity clears this at '+fmt(net)+'/check.':'No past due balances. You are current.',urgent:pdTotal3>0},
+    {label:'Goals & Plans',sub:'Saving toward targets',amt:goalsAmt,color:'#7c3aed',icon:'🎯',desc:GOALS.filter(function(g){return !g.is_complete;}).length+' active goal'+(GOALS.filter(function(g){return !g.is_complete;}).length!==1?'s':'')+' + '+PLAN.filter(function(p){return !p.is_funded;}).length+' planned expense'+(PLAN.filter(function(p){return !p.is_funded;}).length!==1?'s':'')+' this month.'},
+    {label:'Life',sub:'What is left',amt:lifeAmt,color:lifeAmt>0?'#16a34a':'#dc2626',icon:'🌱',desc:lifeAmt>0?'This is your discretionary budget after everything above. Protect it.':'Your commitments exceed income. Focus on renegotiating or reducing one bill.'}
+  ];
 
-  html+=iCard(5,'50/30/20 Budget Analysis',bucket302Html);
+  // Stacked bar
+  var totalForBar=Math.max(monthlyPay,committed+goalsAmt+50);
+  rbH+='<div style="height:16px;border-radius:99px;overflow:hidden;display:flex;margin-bottom:6px">';
+  buckets.forEach(function(b){
+    var w=Math.min((b.amt/totalForBar)*100,100);
+    if(w>0)rbH+='<div style="width:'+w+'%;background:'+b.color+';transition:width .6s ease"></div>';
+  });
+  rbH+='</div>';
+  // Income line marker
+  var incomePct=(monthlyPay/totalForBar)*100;
+  rbH+='<div style="position:relative;height:12px;margin-bottom:16px">';
+  rbH+='<div style="position:absolute;left:'+incomePct+'%;top:0;bottom:0;width:2px;background:var(--text);opacity:0.4"></div>';
+  rbH+='<div style="position:absolute;left:'+incomePct+'%;top:0;font-size:9px;color:var(--muted);white-space:nowrap;padding-left:4px">Income</div>';
+  rbH+='</div>';
+
+  // Bucket cards
+  buckets.forEach(function(b){
+    var pct=monthlyPay>0?Math.round((b.amt/monthlyPay)*100):0;
+    rbH+='<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--bl)">';
+    rbH+='<div style="width:36px;height:36px;border-radius:10px;background:'+b.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">'+b.icon+'</div>';
+    rbH+='<div style="flex:1">';
+    rbH+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">';
+    rbH+='<span style="font-size:13px;font-weight:700;color:var(--text)">'+b.label+'</span>';
+    rbH+='<span style="font-size:14px;font-weight:800;color:'+b.color+'">'+fmt(b.amt)+'<span style="font-size:10px;color:var(--muted);font-weight:400"> '+pct+'%</span></span></div>';
+    rbH+='<div style="font-size:11px;color:var(--muted);margin-bottom:4px">'+b.sub+'</div>';
+    rbH+='<div style="font-size:12px;color:var(--text2);line-height:1.5">'+b.desc+'</div>';
+    rbH+='</div></div>';
+  });
+
+  // Clarity analysis button
+  rbH+='<div id="'+recoveryBudgetId+'" style="margin-top:14px">';
+  rbH+='<button onclick="loadRecoveryBudgetAnalysis(\''+recoveryBudgetId+'\','+committed+','+pdTotal3+','+goalsAmt+','+lifeAmt+','+monthlyPay+')" style="width:100%;background:var(--gp);color:#fff;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Get Clarity\'s Recovery Plan →</button>';
+  rbH+='</div>';
+
+  html+=iCard(5,'Recovery Budget',rbH);
 
   // SPENDING TRENDS CHART
   var trendId='trends_'+Date.now();
@@ -4395,59 +4627,59 @@ function buildTrendsChart(dm,numMonths,txArr){
   return svg+legend+totalsRow;
 }
 
-async function load503020Analysis(elId,needsAmt,needsPct,wantsAmt,wantsPct,savingsAmt,savingsPct,takeHome){
+async function loadRecoveryBudgetAnalysis(elId,committed,pdTotal,goalsAmt,lifeAmt,income){
   var el=document.getElementById(elId);if(!el)return;
-  el.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Clarity is analyzing your 50/30/20 budget...</div>';
-  var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
-  var subs=EX.filter(function(e){return e.category==='Subscriptions';}).reduce(function(s,e){return s+e.amount;},0);
-  var activeGoals=GOALS.filter(function(g){return !g.is_complete;});
-  var pd=EX.filter(function(e){return e.is_past_due;});
-  var sys='You are Clarity, a financial coach. Analyze this household\'s 50/30/20 budget breakdown and give specific, actionable advice. Be direct — point to exact dollar amounts and specific bills. Structure your response as:\n\nOVERALL: [1 sentence verdict — good/needs work/critical]\n\nNEEDS ([pct]%): [2 sentences — is it healthy? any specific bills to examine?]\n\nWANTS ([pct]%): [2 sentences — where is discretionary going? specific cuts?]\n\nSAVINGS ([pct]%): [2 sentences — the gap and the most realistic way to close it given their situation]\n\nPRIORITY MOVE: [The single most impactful action they can take this month, with specific dollar amount]\n\nMax 160 words. No generic advice — reference their actual numbers.';
-  var prompt='50/30/20 Analysis for the Moseberry household:\n'
-    +'Take-home baseline: '+fmt(takeHome)+'/mo (2 × '+fmt(UP.paycheck_amount||0)+')\n\n'
-    +'NEEDS ('+needsPct+'% / target 50%): '+fmt(needsAmt)+'/mo\n'
-    +'- Fixed bills: Housing, Utilities, Food, Transportation, Insurance, Healthcare\n'
-    +'- Monthly total: '+fmt(monthly)+'\n\n'
-    +'WANTS ('+wantsPct+'% / target 30%): '+fmt(wantsAmt)+'/mo\n'
-    +'- Subscriptions alone: '+fmt(subs)+'/mo\n'
-    +'- Includes recent discretionary transactions\n\n'
-    +'SAVINGS ('+savingsPct+'% / target 20%): '+fmt(savingsAmt)+'/mo\n'
-    +'- Active goals: '+activeGoals.length+(activeGoals.length>0?' ('+activeGoals.map(function(g){return g.name+' '+fmt(g.contribution_per_paycheck||0)+'/check';}).join(', ')+')':'')+'\n\n'
-    +'Additional context:\n'
-    +'- Past due bills: '+(pd.length>0?pd.map(function(b){return b.name;}).join(', '):'None')+'\n'
-    +'- Position: '+calcPos().toUpperCase()+'\n'
-    +'- Spendable: '+fmt(calcSpendable())+'\n\n'
-    +'Give specific, honest analysis. If savings is critically low, say so and tell them exactly what to cut to fund it.';
+  el.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Building your recovery plan...</div>';
+  var pd2=EX.filter(function(e){return e.is_past_due;});
+  var sys='You are Clarity, a financial recovery coach. A household is in active financial recovery. Give them a concrete, honest, actionable plan — not generic advice. Use their real numbers. Structure exactly as:\n\nSITUATION\n[2 sentences: where they are right now, what the numbers mean]\n\nPRIORITY ORDER\n1. [most important action with $ amount]\n2. [second priority]\n3. [third priority]\n\nQUICK WIN\n[One thing they can do this week that costs nothing or very little but moves the needle]\n\nIN 90 DAYS\n[What their situation looks like if they follow this plan for 90 days]\n\nMax 180 words. Be direct. No fluff.';
+  var prompt='Recovery Budget:\n'
+    +'Monthly income: $'+Math.round(income)+'\n'
+    +'Committed (bills): $'+Math.round(committed)+'/mo\n'
+    +'Past due backlog: $'+Math.round(pdTotal)+'\n'
+    +'Goals/plans saving: $'+Math.round(goalsAmt)+'/mo\n'
+    +'Life budget remaining: $'+Math.round(lifeAmt)+'/mo\n'
+    +'Past due bills: '+(pd2.length>0?pd2.map(function(e){return e.name+' $'+(e.past_due_amount||e.amount);}).join(', '):'None')+'\n'
+    +'Position: '+calcPos().toUpperCase();
   try{
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,system:sys,messages:[{role:'user',content:prompt}]})});
     var data=await res.json();
-    var text=(data.content&&data.content[0]&&data.content[0].text)||'Could not load analysis.';
-    var lines=text.split('\n').filter(function(l){return l.trim();});
-    var formatted='<div style="display:flex;flex-direction:column;gap:10px">';
-    lines.forEach(function(line){
-      if(!line.trim())return;
-      var isPriority=line.startsWith('PRIORITY MOVE:');
-      var isHeader=line.match(/^(OVERALL|NEEDS|WANTS|SAVINGS|PRIORITY MOVE):/);
-      if(isPriority){
-        formatted+='<div style="background:var(--gp);border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,0.75);margin-bottom:4px">Priority Move This Month</div><div style="font-size:13px;font-weight:600;color:#fff;line-height:1.5">'+line.replace('PRIORITY MOVE:','').trim()+'</div></div>';
-      } else if(isHeader){
-        var label=line.split(':')[0];var content=line.split(':').slice(1).join(':').trim();
-        var colors={OVERALL:'var(--text)',NEEDS:'#4361ee',WANTS:'#f59e0b',SAVINGS:'#22c55e'};
-        formatted+='<div style="background:var(--bg);border-radius:10px;padding:10px 12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:'+(colors[label]||'var(--muted)')+';margin-bottom:4px">'+label+'</div><div style="font-size:13px;color:var(--text2);line-height:1.55">'+content+'</div></div>';
-      } else {
-        formatted+='<div style="font-size:13px;color:var(--text2);line-height:1.55;padding:0 2px">'+line+'</div>';
-      }
+    var text=(data.content&&data.content[0]&&data.content[0].text)||'';
+    var sections=['SITUATION','PRIORITY ORDER','QUICK WIN','IN 90 DAYS'];
+    var colors={SITUATION:'rgba(67,97,238,0.06)',  'PRIORITY ORDER':'var(--rl)','QUICK WIN':'var(--gl)','IN 90 DAYS':'var(--pl)'};
+    var textColors={SITUATION:'var(--primary)','PRIORITY ORDER':'var(--red)','QUICK WIN':'var(--green)','IN 90 DAYS':'var(--primary)'};
+    var formatted='';
+    sections.forEach(function(sec){
+      var idx=text.indexOf(sec);if(idx<0)return;
+      var ends=sections.map(function(s){return text.indexOf(s,idx+1);}).filter(function(i){return i>idx;});
+      var end=ends.length?Math.min.apply(null,ends):text.length;
+      var content=text.substring(idx+sec.length,end).replace(/^\n+/,'').trim();
+      formatted+='<div style="background:'+colors[sec]+';border-radius:12px;padding:12px 14px;margin-bottom:10px">';
+      formatted+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:'+textColors[sec]+';margin-bottom:6px">'+sec+'</div>';
+      formatted+='<div style="font-size:13px;color:var(--text2);line-height:1.65;white-space:pre-line">'+content+'</div></div>';
     });
-    formatted+='</div>';
-    el.innerHTML=formatted;
-  }catch(e){el.innerHTML='<div style="font-size:13px;color:var(--muted)">Could not load analysis. Open Clarity and ask about your 50/30/20 breakdown.</div>';}
+    el.innerHTML=formatted||'<div style="font-size:13px;color:var(--text2)">'+text+'</div>';
+  }catch(e){el.innerHTML='<div style="color:var(--red);font-size:13px">Could not load. Try again.</div>';}
 }
 
 // SETTINGS
 function renderSettings(){
   var isEmp=UP.employment_status==='employed'||UP.employment_status==='self_employed';
   var payLinks=EX.filter(function(e){return e.pay_link;});
-  var html='<div class="ph"><div class="ph-eye">Settings</div><div class="ph-title">Profile & Preferences</div></div>';
+  var html='<div class="ph"><div class="ph-eye">More</div><div class="ph-title">Settings & <span style="color:var(--primary)">History</span></div></div>';
+
+  // History & Logs section
+  html+='<div class="sec-t">History & Logs</div>';
+  html+='<div class="card" style="padding:0;margin-bottom:12px">';
+  [{label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\'activity\')'},
+   {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
+  ].forEach(function(item,i,arr){
+    html+='<div onclick="'+item.fn+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:'+(i<arr.length-1?'1px solid var(--bl)':'none')+'">';
+    html+='<div style="width:36px;height:36px;border-radius:10px;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+item.icon+'</div>';
+    html+='<div style="flex:1"><div style="font-size:14px;font-weight:600">'+item.label+'</div><div style="font-size:12px;color:var(--muted)">'+item.sub+'</div></div>';
+    html+='<span style="color:var(--muted);font-size:20px">›</span></div>';
+  });
+  html+='</div>';
+
   html+='<div class="card"><div class="sec-t">My Profile</div>';
   html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><div style="width:48px;height:48px;border-radius:50%;background:'+(UP.avatar_color||'#4361ee')+';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff">'+UP.first_name.charAt(0)+'</div>';
   html+='<div><div style="font-size:16px;font-weight:700">'+UP.first_name+(UP.last_name?' '+UP.last_name:'')+'</div><div style="font-size:13px;color:var(--muted)">'+UP.email+'</div></div></div>';
@@ -5088,7 +5320,36 @@ function renderTimeFil(){
   ps.forEach(function(p){html+='<button onclick="setTP(\''+p.id+'\')" class="tb'+(timePeriod===p.id?' on':'')+'">'+p.l+'</button>';});
   html+='</div>';return html;
 }
-function setTP(p){timePeriod=p;var on=document.querySelector('.nb.on');if(on){var ids=['home','ledger','goals','insights','activity'];var t=on.textContent.toLowerCase().trim();var id=ids.find(function(i){return t.indexOf(i)>=0||i.indexOf(t)>=0;});if(id)goTab(id);}}
+function openCheckinHistory(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='checkinHistModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:16px">Check-In History</div>';
+  if(CHECKINS.length===0){h+='<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">No check-ins yet.</div>';}
+  else{
+    CHECKINS.slice(0,20).forEach(function(c){
+      var typeLabel=c.checkin_type==='wednesday'?'Wednesday':c.checkin_type==='friday'?'Friday':'Sunday';
+      var typeColor=c.checkin_type==='friday'?'var(--amber)':c.checkin_type==='sunday'?'var(--green)':'var(--primary)';
+      h+='<div style="padding:12px 0;border-bottom:1px solid var(--bl)">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+      h+='<span style="font-size:13px;font-weight:700;color:'+typeColor+'">'+typeLabel+' Check-In</span>';
+      h+='<span style="font-size:11px;color:var(--muted)">'+fmtD(c.checkin_date,true)+'</span></div>';
+      h+='<div style="font-size:12px;color:var(--text2)">'+c.completed_by_name;
+      if(c.cash_updated)h+=' · Balance updated to '+fmt(c.cash_amount);
+      if(c.paycheck_logged)h+=' · Paycheck logged';
+      if(c.past_due_acknowledged>0)h+=' · '+c.past_due_acknowledged+' past due acknowledged';
+      if(c.weekend_budget_jay||c.weekend_budget_chari){
+        h+=' · Weekend: Jay '+fmt(c.weekend_budget_jay||0)+' / Chari '+fmt(c.weekend_budget_chari||0);
+      }
+      h+='</div></div>';
+    });
+  }
+  h+='<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'checkinHistModal\').remove()">Close</button>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+function setTP(p){timePeriod=p;var on=document.querySelector('.nb.on');if(on){var ids=['home','ledger','goals','plan','insights','settings'];var t=on.textContent.toLowerCase().trim();var id=ids.find(function(i){return t.indexOf(i)>=0||i.indexOf(t)>=0;});if(id)goTab(id);}}
 function getByTime(arr,field){
   var now=new Date();var start,end;
   if(timePeriod==='week'){
