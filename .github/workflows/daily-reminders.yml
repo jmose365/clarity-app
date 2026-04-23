@@ -1,0 +1,23 @@
+name: ¢larity Daily Reminders
+
+on:
+  schedule:
+    # 8:00 AM Central Time = 13:00 UTC (CST) / 14:00 UTC (CDT)
+    - cron: '0 13 * * *'
+  workflow_dispatch: # allows manual trigger from GitHub Actions tab
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ¢larity Reminder Function
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET \
+            "${{ secrets.VERCEL_REMIND_URL }}")
+          echo "Response code: $response"
+          if [ "$response" != "200" ]; then
+            echo "Reminder function returned $response"
+            exit 1
+          fi
+          echo "Reminders sent successfully"
