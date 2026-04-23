@@ -1121,7 +1121,11 @@ function buildRecoveryRoadmap(pos,pd,available,spendable,paycheck,monthly,active
   var pdTotal=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
   var pdSorted=pd.slice().sort(function(a,b){
     var sev={'eviction':0,'repossession':1,'disconnection':2,'collection':3,'late_fee':4,'other':5};
-    return (sev[a.consequence]||5)-(sev[b.consequence]||5);
+    // Housing always first regardless of consequence field
+    var catA=a.category==='Housing'?-1:(sev[a.consequence]!==undefined?sev[a.consequence]:5);
+    var catB=b.category==='Housing'?-1:(sev[b.consequence]!==undefined?sev[b.consequence]:5);
+    if(catA!==catB)return catA-catB;
+    return (b.past_due_amount||b.amount)-(a.past_due_amount||a.amount);
   });
 
   // Build steps dynamically from current data
