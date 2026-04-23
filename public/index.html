@@ -598,7 +598,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
@@ -619,7 +619,12 @@ function getArr(v){if(!v)return[];if(Array.isArray(v))return v;try{return JSON.p
 
 // FINANCIAL CALCULATIONS
 function calcAvailable(){
-  // Cash on hand is the source of truth (updated when paychecks logged and bills paid)
+  // If accounts are set up, sum all spending accounts
+  var spendingAccounts=ACCOUNTS.filter(function(a){return a.is_spending&&a.is_active;});
+  if(spendingAccounts.length>0){
+    return spendingAccounts.reduce(function(s,a){return s+(a.balance||0);},0);
+  }
+  // Fall back to manual cash_on_hand
   return SET.cash_on_hand||0;
 }
 function calcEarmarkedForExp(exp){
@@ -786,12 +791,13 @@ async function loadApp(){
     sb.from('goal_contributions').select('*').eq('household_id',HID).order('contribution_date',{ascending:true}),
     sb.from('planned_expenses').select('*').eq('household_id',HID).order('target_date',{ascending:true}),
     sb.from('checkins').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(10),
-    sb.from('bill_acknowledgments').select('*').eq('household_id',HID).gte('expires_at',today())
+    sb.from('bill_acknowledgments').select('*').eq('household_id',HID).gte('expires_at',today()),
+    sb.from('accounts').select('*').eq('household_id',HID).order('sort_order',{ascending:true})
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
   BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
-  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];
+  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -1984,7 +1990,7 @@ function openCashModal(){
   h+='<div style="display:flex;flex-direction:column;gap:14px">';
   h+='<div><label class="lbl">Your Bank Balance Right Now</label>';
   h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
-  h+='<input class="inp" type="tel" id="cash-inp" inputmode="decimal" placeholder="Enter current bank balance" style="font-size:1.1rem;font-weight:700"/></div></div>';
+  h+='<input class="inp" type="tel" id="cash-inp" inputmode="decimal" placeholder="e.g. 1250 or -45 if overdrawn" style="font-size:1.1rem;font-weight:700"/></div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveCashModal()">Update</button>';
   h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'cashModal\').remove()">Cancel</button></div>';
   h+='<div id="cash-msg" style="font-size:13px;font-weight:500"></div>';
@@ -1996,8 +2002,9 @@ async function saveCashModal(){
   var inp=document.getElementById('cash-inp');
   var msg=document.getElementById('cash-msg');
   if(!inp){if(msg){msg.style.color='var(--red)';msg.textContent='Input not found — try closing and reopening.';}return;}
-  var val=parseFloat(inp.value);
-  if(isNaN(val)||inp.value===''){if(msg){msg.style.color='var(--red)';msg.textContent='Enter a valid number.';}return;}
+  var raw=inp.value.replace(/[^0-9.\-]/g,'');
+  var val=parseFloat(raw);
+  if(isNaN(val)){if(msg){msg.style.color='var(--red)';msg.textContent='Enter a valid number. Use - for negative (e.g. -45).';}return;}
   if(msg){msg.style.color='var(--muted)';msg.textContent='Saving...';}
   await updateCash(val);
   var modal=document.getElementById('cashModal');if(modal)modal.remove();
@@ -4684,6 +4691,35 @@ function renderSettings(){
   });
   html+='</div>';
 
+  html+='<div class="sec-t">Accounts</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">';
+  if(ACCOUNTS.length===0){
+    html+='<div style="background:rgba(67,97,238,0.05);border:1px dashed rgba(67,97,238,0.2);border-radius:14px;padding:16px;text-align:center">';
+    html+='<div style="font-size:13px;color:var(--muted);margin-bottom:8px">No accounts yet. Add your bank accounts to track balances and import statements.</div>';
+    html+='<button onclick="openAddAccount()" class="btn btn-ghost btn-sm">+ Add Account</button></div>';
+  } else {
+    ACCOUNTS.forEach(function(acc){
+      html+='<div style="background:var(--surface);border:1px solid var(--glass-border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px">';
+      html+='<div style="width:36px;height:36px;border-radius:10px;background:'+acc.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">';
+      html+=(acc.account_type==='savings'?'🏦':acc.account_type==='credit'?'💳':'🏛️')+'</div>';
+      html+='<div style="flex:1"><div style="font-size:14px;font-weight:700">'+acc.name+'</div>';
+      html+='<div style="font-size:12px;color:var(--muted)">'+acc.account_type+(acc.last_four?' ····'+acc.last_four:'')+' · '+(acc.is_spending?'Included in Available':'Not in Available')+'</div></div>';
+      html+='<div style="text-align:right"><div style="font-size:15px;font-weight:800;color:'+(acc.balance<0?'var(--red)':acc.balance>0?'var(--green)':'var(--muted)')+'">'+fmt(acc.balance)+'</div>';
+      html+='<button onclick="openEditAccount(\''+acc.id+'\')" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0">Edit</button></div></div>';
+    });
+    html+='<button onclick="openAddAccount()" class="btn btn-ghost btn-sm" style="align-self:flex-start">+ Add Account</button>';
+  }
+  html+='</div>';
+
+  html+='<div class="sec-t">Import Transactions</div>';
+  html+='<div class="card" style="padding:14px 16px;margin-bottom:12px">';
+  html+='<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5">Upload a CSV bank statement to bulk-import transactions. Clarity will parse, categorize, and match bills automatically.</div>';
+  if(ACCOUNTS.length===0){
+    html+='<div style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px">⚠️ Add at least one account first</div>';
+  }
+  html+='<button onclick="openCSVImport()" class="btn btn-p" '+(ACCOUNTS.length===0?'disabled style="opacity:.5"':'')+'>Import Bank Statement (CSV)</button>';
+  html+='</div>';
+
   html+='<div class="card"><div class="sec-t">My Profile</div>';
   html+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><div style="width:48px;height:48px;border-radius:50%;background:'+(UP.avatar_color||'#4361ee')+';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff">'+UP.first_name.charAt(0)+'</div>';
   html+='<div><div style="font-size:16px;font-weight:700">'+UP.first_name+(UP.last_name?' '+UP.last_name:'')+'</div><div style="font-size:13px;color:var(--muted)">'+UP.email+'</div></div></div>';
@@ -5324,6 +5360,332 @@ function renderTimeFil(){
   ps.forEach(function(p){html+='<button onclick="setTP(\''+p.id+'\')" class="tb'+(timePeriod===p.id?' on':'')+'">'+p.l+'</button>';});
   html+='</div>';return html;
 }
+// ══════════════════════════════════════════════
+// ACCOUNTS
+// ══════════════════════════════════════════════
+function openAddAccount(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='addAcctModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var colors=['#4361ee','#7c3aed','#16a34a','#d97706','#dc2626','#0ea5e9','#ec4899','#0f172a'];
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:16px">Add Account</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Account Name</label><input class="inp" id="aa-name" placeholder="e.g. Chase Checking"/></div>';
+  h+='<div><label class="lbl">Institution</label><input class="inp" id="aa-inst" placeholder="e.g. Chase, Wells Fargo"/></div>';
+  h+='<div class="g2"><div><label class="lbl">Type</label><select class="sel" id="aa-type"><option value="checking">Checking</option><option value="savings">Savings</option><option value="credit">Credit Card</option><option value="cash">Cash</option></select></div>';
+  h+='<div><label class="lbl">Last 4 Digits</label><input class="inp" type="tel" id="aa-last4" placeholder="1234" maxlength="4"/></div></div>';
+  h+='<div><label class="lbl">Current Balance</label><input class="inp" type="tel" inputmode="decimal" id="aa-bal" placeholder="e.g. 1250 or -45 if overdrawn"/></div>';
+  h+='<div><label class="lbl">Color</label><div style="display:flex;gap:6px;flex-wrap:wrap">';
+  colors.forEach(function(c){h+='<div onclick="setAcctColor(this,\''+c+'\')" style="width:28px;height:28px;border-radius:8px;background:'+c+';cursor:pointer;border:2px solid transparent" data-color="'+c+'"></div>';});
+  h+='</div></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--pl);border-radius:10px">';
+  h+='<input type="checkbox" id="aa-spending" checked style="width:16px;height:16px;accent-color:var(--primary)"/>';
+  h+='<div><div style="font-size:13px;font-weight:600">Include in Available balance</div><div style="font-size:11px;color:var(--muted)">Checking/spending accounts should be checked. Savings optional.</div></div></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveNewAccount()">Add Account</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addAcctModal\').remove()">Cancel</button></div>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._acctColor='#4361ee';
+  setTimeout(function(){
+    var first=document.querySelector('#addAcctModal [data-color="#4361ee"]');
+    if(first)first.style.border='2px solid white';
+  },50);
+}
+
+function setAcctColor(el,color){
+  window._acctColor=color;
+  var wrap=el.closest('div');
+  wrap.querySelectorAll('[data-color]').forEach(function(d){d.style.border='2px solid transparent';});
+  el.style.border='2px solid white';
+}
+
+async function saveNewAccount(){
+  var name=(document.getElementById('aa-name').value||'').trim();
+  var inst=(document.getElementById('aa-inst').value||'').trim();
+  var type=document.getElementById('aa-type').value||'checking';
+  var last4=(document.getElementById('aa-last4').value||'').trim();
+  var balRaw=(document.getElementById('aa-bal').value||'0').replace(/[^0-9.\-]/g,'');
+  var bal=parseFloat(balRaw)||0;
+  var isSpending=document.getElementById('aa-spending').checked;
+  if(!name){alert('Account name is required.');return;}
+  var r=await sb.from('accounts').insert({
+    household_id:HID,created_by:CU.id,name:name,institution:inst||null,
+    account_type:type,last_four:last4||null,balance:bal,
+    is_spending:isSpending,color:window._acctColor||'#4361ee',
+    sort_order:ACCOUNTS.length,last_synced_at:new Date().toISOString()
+  }).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  ACCOUNTS.push(r.data);
+  // If this is the first account, migrate cash_on_hand to it
+  if(ACCOUNTS.length===1&&SET.cash_on_hand&&SET.cash_on_hand!==0&&bal===0){
+    await sb.from('accounts').update({balance:SET.cash_on_hand}).eq('id',r.data.id);
+    r.data.balance=SET.cash_on_hand;
+  }
+  document.getElementById('addAcctModal').remove();
+  await logAct('account_added',name+' account added — '+fmt(bal),'account',r.data.id,{});
+  renderSettings();
+  updateTopBar();renderHome();
+}
+
+function openEditAccount(acctId){
+  var acc=ACCOUNTS.find(function(a){return a.id===acctId;});if(!acc)return;
+  var m=document.createElement('div');m.className='modal-ov';m.id='editAcctModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:16px">Edit Account</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Account Name</label><input class="inp" id="ea-name" value="'+acc.name+'"/></div>';
+  h+='<div><label class="lbl">Current Balance</label><input class="inp" type="tel" inputmode="decimal" id="ea-bal" value="'+acc.balance+'"/></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--pl);border-radius:10px">';
+  h+='<input type="checkbox" id="ea-spending" '+(acc.is_spending?'checked':'')+' style="width:16px;height:16px;accent-color:var(--primary)"/>';
+  h+='<div style="font-size:13px;font-weight:600">Include in Available balance</div></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button class="btn btn-p" style="flex:1" onclick="saveEditAccount(\''+acctId+'\')">Save</button>';
+  h+='<button class="btn btn-red" style="flex:1" onclick="deleteAccount(\''+acctId+'\')">Remove</button></div>';
+  h+='<button class="btn btn-ghost" onclick="document.getElementById(\'editAcctModal\').remove()">Cancel</button>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+async function saveEditAccount(acctId){
+  var name=(document.getElementById('ea-name').value||'').trim();
+  var balRaw=(document.getElementById('ea-bal').value||'0').replace(/[^0-9.\-]/g,'');
+  var bal=parseFloat(balRaw)||0;
+  var isSpending=document.getElementById('ea-spending').checked;
+  var r=await sb.from('accounts').update({name:name,balance:bal,is_spending:isSpending,last_synced_at:new Date().toISOString()}).eq('id',acctId).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  var idx=ACCOUNTS.findIndex(function(a){return a.id===acctId;});if(idx>=0)ACCOUNTS[idx]=r.data;
+  document.getElementById('editAcctModal').remove();
+  renderSettings();updateTopBar();renderHome();
+}
+
+async function deleteAccount(acctId){
+  if(!confirm('Remove this account? Transactions linked to it will remain.'))return;
+  await sb.from('accounts').update({is_active:false}).eq('id',acctId);
+  ACCOUNTS=ACCOUNTS.filter(function(a){return a.id!==acctId;});
+  document.getElementById('editAcctModal').remove();
+  renderSettings();updateTopBar();renderHome();
+}
+
+// Update a single account balance (used after import)
+async function updateAccountBalance(acctId,newBalance){
+  var r=await sb.from('accounts').update({balance:newBalance,last_synced_at:new Date().toISOString()}).eq('id',acctId).select('*').single();
+  if(!r.error){var idx=ACCOUNTS.findIndex(function(a){return a.id===acctId;});if(idx>=0)ACCOUNTS[idx]=r.data;}
+}
+
+// ══════════════════════════════════════════════
+// CSV IMPORT
+// ══════════════════════════════════════════════
+function openCSVImport(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='csvImportModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Import Bank Statement</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">CSV from your bank — Clarity will parse and categorize automatically.</div>';
+
+  // Account selector
+  h+='<div style="margin-bottom:12px"><label class="lbl">Which account is this from?</label>';
+  h+='<select class="sel" id="csv-acct">';
+  ACCOUNTS.filter(function(a){return a.is_active;}).forEach(function(a){
+    h+='<option value="'+a.id+'">'+a.name+(a.last_four?' (····'+a.last_four+')':'')+'</option>';
+  });
+  h+='</select></div>';
+
+  // File upload
+  h+='<div style="margin-bottom:16px"><label class="lbl">CSV File</label>';
+  h+='<div style="border:2px dashed rgba(67,97,238,0.3);border-radius:14px;padding:24px;text-align:center;background:rgba(67,97,238,0.03);cursor:pointer" onclick="document.getElementById(\'csv-file-input\').click()">';
+  h+='<div style="font-size:2rem;margin-bottom:8px">📄</div>';
+  h+='<div style="font-size:13px;font-weight:600;color:var(--primary)">Tap to select CSV file</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-top:4px">Exported from your bank — .csv format</div>';
+  h+='<input type="file" id="csv-file-input" accept=".csv" style="display:none" onchange="handleCSVFile(this)"/>';
+  h+='</div></div>';
+
+  h+='<div id="csv-status"></div>';
+  h+='<button class="btn btn-ghost" onclick="document.getElementById(\'csvImportModal\').remove()">Cancel</button>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+function handleCSVFile(input){
+  var file=input.files[0];if(!file)return;
+  var status=document.getElementById('csv-status');
+  status.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Reading '+file.name+'...</div>';
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var csv=e.target.result;
+    parseCSVWithClaude(csv,file.name);
+  };
+  reader.readAsText(file);
+}
+
+async function parseCSVWithClaude(csvText,filename){
+  var status=document.getElementById('csv-status');
+  if(status)status.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Clarity is parsing your statement...</div>';
+
+  // Get first 50 rows max to avoid token limits
+  var lines=csvText.trim().split('\n').slice(0,51);
+  var preview=lines.join('\n');
+
+  var sys='You are a bank statement parser. Parse this CSV and return ONLY a JSON array of transaction objects. No explanation, no markdown, just the JSON array.\n\nRules:\n- Date format: YYYY-MM-DD\n- Amount: negative = money out (debit), positive = money in (credit)\n- type: "debit", "credit", "transfer"\n- Transfer detection: if "TFR", "TRANSFER", "XFER", "TFR FRM", "TFR TO" appears in payee or memo\n- Paycheck detection: if "DIRECT DEP", "PAYROLL", "DIR DEP", "ACH CR" appears\n- category: one of [Housing, Utilities, Food & Drinks, Transportation, Healthcare, Entertainment, Subscriptions, Personal Care, Clothing, Household Supplies, Debt & Retirement, Gifts, Income, Transfer, Other]\n- is_paycheck: true if paycheck/direct deposit\n- is_transfer: true if transfer between accounts\n- clean_name: merchant name cleaned up (remove bank prefixes like POS, ACH, CHECKCARD etc)\n\nReturn format: [{date,clean_name,memo,amount,type,category,is_paycheck,is_transfer}]';
+
+  try{
+    var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys,
+        messages:[{role:'user',content:'Parse this bank statement CSV:\n\n'+preview}]})});
+    var data=await res.json();
+    var text=(data.content&&data.content[0]&&data.content[0].text)||'[]';
+    // Strip markdown if present
+    text=text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    var parsed=JSON.parse(text);
+    showCSVReview(parsed,filename);
+  }catch(e){
+    if(status)status.innerHTML='<div style="color:var(--red);font-size:13px;padding:12px 0">Could not parse CSV. Make sure it is a valid CSV export from your bank.</div>';
+  }
+}
+
+function showCSVReview(rows,filename){
+  var acctId=document.getElementById('csv-acct').value;
+  var acct=ACCOUNTS.find(function(a){return a.id===acctId;});
+
+  // Separate transfers, paychecks, and regular transactions
+  var transfers=rows.filter(function(r){return r.is_transfer;});
+  var paychecks=rows.filter(function(r){return r.is_paycheck&&!r.is_transfer;});
+  var debits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount<0;});
+  var credits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount>0;});
+
+  // Calculate ending balance effect
+  var netChange=rows.filter(function(r){return !r.is_transfer;}).reduce(function(s,r){return s+(r.amount||0);},0);
+  var currentBal=acct?acct.balance:0;
+  var endingBal=currentBal+netChange;
+
+  // Store for confirm
+  window._csvImportData={rows:rows,acctId:acctId,filename:filename,netChange:netChange,endingBal:endingBal};
+  window._csvSelected=rows.map(function(r,i){return i;}); // all selected by default
+
+  var m=document.getElementById('csvImportModal');if(!m)return;
+  var h='<div class="modal" style="max-height:95vh"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Review Import</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:14px">'+rows.length+' transactions from '+filename+'</div>';
+
+  // Summary bar
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">';
+  [{l:'Transactions',v:debits.length+credits.length,c:'var(--primary)'},
+   {l:'Transfers',v:transfers.length,c:'var(--muted)'},
+   {l:'Net Change',v:(netChange>=0?'+':'')+fmt(netChange),c:netChange>=0?'var(--green)':'var(--red)'}
+  ].forEach(function(t){
+    h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
+    h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">'+t.l+'</div>';
+    h+='<div style="font-size:13px;font-weight:800;color:'+t.c+'">'+t.v+'</div></div>';
+  });
+  h+='</div>';
+
+  // Paycheck alert
+  if(paychecks.length>0){
+    h+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.2);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:center">';
+    h+='<span style="font-size:18px">💰</span>';
+    h+='<div><div style="font-size:12px;font-weight:700;color:var(--green)">'+paychecks.length+' paycheck'+(paychecks.length>1?'s':'')+' detected</div>';
+    h+='<div style="font-size:11px;color:var(--text2)">Will be logged to your paycheck history</div></div></div>';
+  }
+
+  // Transfer info
+  if(transfers.length>0){
+    h+='<div style="background:rgba(200,210,240,0.15);border-radius:12px;padding:10px 14px;margin-bottom:12px">';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--muted)">'+transfers.length+' transfer'+(transfers.length>1?'s':'')+' detected — excluded from import</div>';
+    h+='<div style="font-size:11px;color:var(--muted)">Transfers between your accounts are skipped automatically.</div></div>';
+  }
+
+  // Transaction list — scrollable
+  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Transactions to Import</div>';
+  h+='<div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;margin-bottom:14px">';
+  var importable=rows.filter(function(r){return !r.is_transfer;});
+  importable.forEach(function(r,i){
+    // Match against existing bills
+    var matchedBill=EX.find(function(e){return r.clean_name&&e.name&&r.clean_name.toLowerCase().includes(e.name.toLowerCase().substring(0,6));});
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(200,210,240,0.2)">';
+    h+='<input type="checkbox" data-idx="'+i+'" checked style="width:14px;height:14px;accent-color:var(--primary);flex-shrink:0"/>';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.clean_name+'</div>';
+    h+='<div style="font-size:10px;color:var(--muted)">'+fmtD(r.date,true)+(r.is_paycheck?' · <span style="color:var(--green);font-weight:600">Paycheck</span>':'')+(matchedBill?' · <span style="color:var(--primary);font-weight:600">Matches '+matchedBill.name+'</span>':'')+'</div></div>';
+    h+='<div style="font-size:12px;font-weight:700;color:'+(r.amount>=0?'var(--green)':'var(--text)')+';flex-shrink:0">'+(r.amount>=0?'+':'')+fmt(Math.abs(r.amount))+'</div></div>';
+  });
+  h+='</div>';
+
+  // Ending balance
+  h+='<div style="background:var(--surface);border:1px solid var(--glass-border);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
+  h+='<span style="font-size:12px;color:var(--text2)">Current balance ('+(acct?acct.name:'account')+')</span>';
+  h+='<span style="font-size:12px;font-weight:700">'+fmt(currentBal)+'</span></div>';
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
+  h+='<span style="font-size:12px;color:var(--text2)">Net change from import</span>';
+  h+='<span style="font-size:12px;font-weight:700;color:'+(netChange>=0?'var(--green)':'var(--red)')+'">'+(netChange>=0?'+':'')+fmt(netChange)+'</span></div>';
+  h+='<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--bl)">';
+  h+='<span style="font-size:13px;font-weight:700">Updated balance</span>';
+  h+='<span style="font-size:14px;font-weight:900;color:'+(endingBal<0?'var(--red)':'var(--primary)')+'">'+fmt(endingBal)+'</span></div></div>';
+
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="confirmCSVImport()" class="btn btn-p" style="flex:1">Import '+importable.length+' Transactions</button>';
+  h+='<button onclick="document.getElementById(\'csvImportModal\').remove()" class="btn btn-ghost" style="flex:1">Cancel</button></div>';
+  h+='</div></div>';
+  m.innerHTML=h;
+}
+
+async function confirmCSVImport(){
+  var d=window._csvImportData;if(!d)return;
+  var status=document.createElement('div');
+  status.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+  status.textContent='Importing transactions...';document.body.appendChild(status);
+
+  var acctId=d.acctId;
+  var importable=d.rows.filter(function(r){return !r.is_transfer;});
+  var imported=0;var paycheckCount=0;
+
+  // Get checked items from modal
+  var checks=document.querySelectorAll('#csvImportModal [data-idx]');
+  var selectedIndices=new Set();
+  checks.forEach(function(cb){if(cb.checked)selectedIndices.add(parseInt(cb.getAttribute('data-idx')));});
+
+  var toImport=importable.filter(function(r,i){return selectedIndices.has(i);});
+
+  // Bulk insert transactions
+  var txInserts=toImport.filter(function(r){return !r.is_paycheck;}).map(function(r){
+    return {household_id:HID,logged_by:CU.id,name:r.clean_name,amount:Math.abs(r.amount),
+      category:r.category||'Other',transaction_date:r.date,notes:r.memo||null,
+      decision_maker:selectedIndices.size>0?'joint':'joint',account_id:acctId};
+  });
+
+  if(txInserts.length>0){
+    var r=await sb.from('transactions').insert(txInserts).select('*');
+    if(!r.error){TX=TX.concat(r.data||[]);imported+=txInserts.length;}
+  }
+
+  // Log paychecks
+  var pcRows=toImport.filter(function(r){return r.is_paycheck;});
+  for(var i=0;i<pcRows.length;i++){
+    var pc=pcRows[i];
+    var pR=await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,pay_date:pc.date,amount:Math.abs(pc.amount),scheduled_date:pc.date,arrived_on_time:true}).select('*').single();
+    if(!pR.error){PAYLOG.push(pR.data);paycheckCount++;}
+  }
+
+  // Update account balance
+  var acct=ACCOUNTS.find(function(a){return a.id===acctId;});
+  if(acct){
+    var newBal=acct.balance+d.netChange;
+    await updateAccountBalance(acctId,newBal);
+  }
+
+  // Log import
+  await sb.from('statement_imports').insert({household_id:HID,imported_by:CU.id,account_id:acctId,
+    filename:d.filename,row_count:d.rows.length,imported_count:imported,skipped_count:d.rows.length-imported});
+  await logAct('csv_import',imported+' transactions imported from '+d.filename,'import',null,{count:imported,file:d.filename});
+  sendNotification('transaction_logged',imported+' transactions imported from '+d.filename,null);
+
+  document.getElementById('csvImportModal').remove();
+  status.textContent='✅ Imported '+imported+' transactions'+(paycheckCount>0?', '+paycheckCount+' paycheck'+(paycheckCount>1?'s':''):'');
+  setTimeout(function(){status.remove();},3500);
+
+  updateTopBar();renderHome();renderSettings();
+}
+
 function openCheckinHistory(){
   var m=document.createElement('div');m.className='modal-ov';m.id='checkinHistModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
