@@ -595,7 +595,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
@@ -781,11 +781,14 @@ async function loadApp(){
     sb.from('paycheck_log').select('*').eq('household_id',HID).order('logged_at',{ascending:false}),
     sb.from('acknowledged_notifications').select('*').eq('user_id',CU.id),
     sb.from('goal_contributions').select('*').eq('household_id',HID).order('contribution_date',{ascending:true}),
-    sb.from('planned_expenses').select('*').eq('household_id',HID).order('target_date',{ascending:true})
+    sb.from('planned_expenses').select('*').eq('household_id',HID).order('target_date',{ascending:true}),
+    sb.from('checkins').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(10),
+    sb.from('bill_acknowledgments').select('*').eq('household_id',HID).gte('expires_at',today())
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
-  BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];PLAN=res[11].data||[];
+  BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
+  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -1216,6 +1219,27 @@ function renderHome(){
     html+='</div></div></div>';
   }
 
+  // CHECK-IN PROMPT — show if today is Wed/Fri/Sun and no checkin done today
+  var todayDay=new Date().getDay(); // 0=Sun,3=Wed,5=Fri
+  var isCheckinDay=todayDay===0||todayDay===3||todayDay===5;
+  var checkinType=todayDay===0?'sunday':todayDay===3?'wednesday':'friday';
+  var todayCheckin=CHECKINS.find(function(c){return c.checkin_date===td&&c.checkin_type===checkinType;});
+  if(isCheckinDay&&!todayCheckin){
+    var dayLabel=checkinType==='wednesday'?'Wednesday':checkinType==='friday'?'Friday':'Sunday';
+    var dayMsg=checkinType==='friday'?'Weekend prep — know your balance before Saturday.':checkinType==='sunday'?'Week reset — start fresh and set your intentions.':'Mid-week sync — catch up on what has moved since Monday.';
+    html+='<div style="background:var(--gp);border-radius:18px;padding:16px 18px;margin-bottom:14px;cursor:pointer" onclick="openCheckin(\''+checkinType+'\')">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center">';
+    html+='<div><div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">'+dayLabel+' Check-In</div>';
+    html+='<div style="font-size:14px;font-weight:700;color:#fff;line-height:1.4">'+dayMsg+'</div></div>';
+    html+='<div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📋</div></div>';
+    html+='<div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:8px">Takes 2 minutes. Tap to start →</div></div>';
+  } else if(isCheckinDay&&todayCheckin){
+    html+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.2);border-radius:14px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">';
+    html+='<span style="font-size:20px">✅</span>';
+    html+='<div><div style="font-size:13px;font-weight:700;color:var(--green)">Check-in complete</div>';
+    html+='<div style="font-size:12px;color:var(--muted)">'+todayCheckin.completed_by_name+' checked in today</div></div></div>';
+  }
+
   // Health score — tappable, Claude-powered
   var healthExplId='healthExpl_'+Date.now();
   html+='<div class="card" style="cursor:pointer" onclick="loadHealthExplanation(\''+healthExplId+'\')">';
@@ -1455,6 +1479,315 @@ function renderHome(){
   }
 
   document.getElementById('tab-home').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════
+// CHECK-IN SYSTEM
+// ══════════════════════════════════════════════
+var _checkinState={};
+
+function openCheckin(type){
+  _checkinState={
+    type:type,
+    step:1,
+    totalSteps:type==='friday'?4:4,
+    cashUpdated:false,cashAmount:null,
+    paycheckLogged:false,
+    pastDueAcked:[],upcomingAcked:[],
+    weekendBudget:null,
+    notes:''
+  };
+  renderCheckinModal();
+}
+
+function renderCheckinModal(){
+  var existing=document.getElementById('checkinModal');
+  if(existing)existing.remove();
+  var m=document.createElement('div');m.className='modal-ov';m.id='checkinModal';m.style.display='flex';
+  var type=_checkinState.type;var step=_checkinState.step;var total=_checkinState.totalSteps;
+  var typeLabel=type==='wednesday'?'Wednesday Check-In':type==='friday'?'Friday Check-In':'Sunday Check-In';
+
+  var h='<div class="modal" style="padding-bottom:48px"><div class="modal-handle"></div>';
+
+  // Header + progress
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
+  h+='<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">'+typeLabel+'</div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-top:2px">Step '+step+' of '+total+'</div></div>';
+  h+='<button onclick="document.getElementById(\'checkinModal\').remove()" style="background:var(--bg);border:none;border-radius:10px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer">Skip</button></div>';
+
+  // Progress dots
+  h+='<div style="display:flex;gap:5px;margin-bottom:20px">';
+  for(var i=1;i<=total;i++){
+    h+='<div style="flex:1;height:4px;border-radius:99px;background:'+(i<=step?'var(--primary)':'rgba(200,210,240,0.4)')+'"></div>';
+  }
+  h+='</div>';
+
+  // Step content
+  if(step===1){
+    // STEP 1 — Cash on Hand
+    h+=checkinStep1();
+  } else if(step===2){
+    // STEP 2 — Paycheck
+    h+=checkinStep2();
+  } else if(step===3){
+    // STEP 3 — Past Due + Upcoming Acknowledgment
+    h+=checkinStep3();
+  } else if(step===4){
+    // STEP 4 — Friday: Weekend Budget / Wed+Sun: Summary
+    if(type==='friday'){h+=checkinStep4Friday();}
+    else{h+=checkinStepSummary();}
+  }
+
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+function checkinStep1(){
+  var current=calcAvailable();
+  var h='<div style="font-size:18px;font-weight:800;margin-bottom:6px">💰 Update Your Balance</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">What does your bank account actually show right now?</div>';
+  h+='<div style="background:rgba(67,97,238,0.06);border-radius:12px;padding:12px 14px;margin-bottom:16px">';
+  h+='<div style="font-size:12px;color:var(--text2)">Last recorded: <strong>'+fmt(current)+'</strong></div></div>';
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">';
+  h+='<span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
+  h+='<input class="inp" type="tel" inputmode="decimal" id="ci-cash" placeholder="Enter current bank balance" style="font-size:1.1rem;font-weight:700"/></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="checkinNext1()" class="btn btn-p" style="flex:1">Update & Continue</button>';
+  h+='<button onclick="checkinSkipStep()" class="btn btn-ghost" style="flex:1">Skip this step</button>';
+  h+='</div>';
+  return h;
+}
+
+function checkinStep2(){
+  var td2=today();var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
+  // Find paychecks since last check-in
+  var lastCheckin=CHECKINS[0];var since=lastCheckin?lastCheckin.checkin_date:addDays(td2,-7);
+  var missedPays=payDates.filter(function(d){return d>since&&d<=td2;});
+  var alreadyLogged=PAYLOG.filter(function(p){return p.pay_date>since&&p.pay_date<=td2;});
+
+  var h='<div style="font-size:18px;font-weight:800;margin-bottom:6px">📥 Paycheck Check</div>';
+  if(missedPays.length===0){
+    h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">No paycheck was scheduled since your last check-in.</div>';
+    h+='<button onclick="checkinSkipStep()" class="btn btn-p">Continue</button>';
+  } else if(alreadyLogged.length>=missedPays.length){
+    h+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.2);border-radius:12px;padding:14px;margin-bottom:16px">';
+    h+='<div style="font-size:14px;font-weight:700;color:var(--green)">✅ Already logged</div>';
+    h+='<div style="font-size:13px;color:var(--text2);margin-top:4px">'+alreadyLogged.length+' paycheck'+(alreadyLogged.length>1?'s':'')+' recorded since last check-in.</div></div>';
+    h+='<button onclick="checkinSkipStep()" class="btn btn-p">Continue</button>';
+  } else {
+    var unlogged=missedPays.filter(function(d){return !alreadyLogged.find(function(p){return p.pay_date===d;});});
+    h+='<div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">';
+    h+='A paycheck of <strong>'+fmt(paycheck)+'</strong> was scheduled for <strong>'+fmtD(unlogged[0],true)+'</strong>. Did it arrive?</div>';
+    h+='<div style="display:flex;flex-direction:column;gap:8px">';
+    h+='<button onclick="checkinLogPaycheck(\''+unlogged[0]+'\')" class="btn btn-g">Yes — Log it now</button>';
+    h+='<button onclick="checkinPartialPaycheck(\''+unlogged[0]+'\')" class="btn btn-amber" style="background:var(--al);color:var(--amber);border:1px solid rgba(217,119,6,0.2)">Partial / Different amount</button>';
+    h+='<button onclick="checkinSkipStep()" class="btn btn-ghost">Not yet — skip</button>';
+    h+='</div>';
+  }
+  return h;
+}
+
+function checkinStep3(){
+  var pd=EX.filter(function(e){return e.is_past_due;});
+  var upcoming7=[];var td2=today();
+  for(var d=0;d<=7;d++){
+    var checkDate=addDays(td2,d);var dom=new Date(checkDate+'T12:00:00').getDate();
+    EX.forEach(function(e){
+      if(!e.is_past_due&&(e.due_day===dom||e.due_day_2===dom)&&!isPaidThisCycle(e)){
+        if(!upcoming7.find(function(u){return u.id===e.id;}))upcoming7.push({exp:e,date:checkDate,days:d});
+      }
+    });
+  }
+
+  var h='<div style="font-size:18px;font-weight:800;margin-bottom:6px">📋 Bills to Acknowledge</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Acknowledge means you are aware — not that you are paying right now.</div>';
+
+  if(pd.length>0){
+    h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--red);margin-bottom:8px">Past Due</div>';
+    pd.slice(0,5).forEach(function(e){
+      var isAcked=_checkinState.pastDueAcked.indexOf(e.id)>=0||ACKS.find(function(a){return a.expense_id===e.id;});
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:'+(isAcked?'var(--gl)':'var(--rl)')+';border-radius:12px;margin-bottom:6px;border:1px solid '+(isAcked?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.15)')+'">';
+      h+='<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+e.name+'</div>';
+      h+='<div style="font-size:11px;color:var(--muted)">'+fmt(e.past_due_amount||e.amount)+' past due</div></div>';
+      if(isAcked){h+='<span style="font-size:12px;font-weight:700;color:var(--green)">✓ Acknowledged</span>';}
+      else{h+='<button onclick="ackBill(\''+e.id+'\',\'past_due\')" style="background:var(--red);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Acknowledge</button>';}
+      h+='</div>';
+    });
+  }
+
+  if(upcoming7.length>0){
+    h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--primary);margin:12px 0 8px">Due This Week</div>';
+    upcoming7.slice(0,5).forEach(function(u){
+      var isAcked=_checkinState.upcomingAcked.indexOf(u.exp.id)>=0;
+      var daysLbl=u.days===0?'Today':u.days===1?'Tomorrow':'In '+u.days+' days';
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:'+(isAcked?'var(--gl)':'var(--pl)')+';border-radius:12px;margin-bottom:6px;border:1px solid '+(isAcked?'rgba(22,163,74,0.2)':'var(--pm)')+'">';
+      h+='<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+u.exp.name+'</div>';
+      h+='<div style="font-size:11px;color:var(--muted)">'+fmt(u.exp.amount)+' · '+daysLbl+'</div></div>';
+      if(isAcked){h+='<span style="font-size:12px;font-weight:700;color:var(--green)">✓ Got it</span>';}
+      else{h+='<button onclick="ackBill(\''+u.exp.id+'\',\'upcoming\')" style="background:var(--primary);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Got it</button>';}
+      h+='</div>';
+    });
+  }
+
+  if(pd.length===0&&upcoming7.length===0){
+    h+='<div style="background:var(--gl);border-radius:12px;padding:16px;text-align:center">';
+    h+='<div style="font-size:20px;margin-bottom:8px">🎉</div>';
+    h+='<div style="font-size:14px;font-weight:700;color:var(--green)">Nothing needs attention</div>';
+    h+='<div style="font-size:12px;color:var(--text2);margin-top:4px">No past due bills and nothing due this week.</div></div>';
+  }
+
+  h+='<button onclick="checkinNext()" class="btn btn-p" style="margin-top:14px">Continue</button>';
+  return h;
+}
+
+function checkinStep4Friday(){
+  var paycheck=UP.paycheck_amount||0;var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
+  var available=calcAvailable();var earmarked=calcEarmarked();var spendable=calcSpendable();
+  var h='<div style="font-size:18px;font-weight:800;margin-bottom:6px">🎉 Weekend Budget</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Set a personal spending target for the weekend. Both of you set your own.</div>';
+
+  // Snapshot
+  h+='<div style="background:var(--surface);border:1px solid var(--glass-border);border-radius:14px;padding:14px;margin-bottom:16px">';
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:8px">';
+  h+='<span style="font-size:12px;color:var(--text2)">Available</span><span style="font-size:13px;font-weight:700">'+fmt(available)+'</span></div>';
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:8px">';
+  h+='<span style="font-size:12px;color:var(--text2)">Earmarked</span><span style="font-size:13px;font-weight:700;color:var(--amber)">'+fmt(earmarked)+'</span></div>';
+  h+='<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--bl)">';
+  h+='<span style="font-size:13px;font-weight:700">Spendable this weekend</span><span style="font-size:14px;font-weight:800;color:'+(spendable>0?'var(--green)':'var(--red)')+'">'+fmt(spendable)+'</span></div></div>';
+
+  // Existing budgets
+  var lastFriday=CHECKINS.find(function(c){return c.checkin_type==='friday';});
+  var myExisting=CU.id===HM[0]?.id?lastFriday?.weekend_budget_jay:lastFriday?.weekend_budget_chari;
+
+  h+='<div><label class="lbl">'+UP.first_name+'\'s Weekend Budget</label>';
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+  h+='<span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
+  h+='<input class="inp" type="tel" inputmode="decimal" id="ci-wknd" placeholder="e.g. 150" style="font-size:1.1rem;font-weight:700" value="'+(myExisting||'')+'"/></div></div>';
+
+  // Quick amounts
+  h+='<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">';
+  [50,100,150,200,250].forEach(function(amt){
+    h+='<button onclick="document.getElementById(\'ci-wknd\').value=\''+amt+'\'" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer">$'+amt+'</button>';
+  });
+  h+='</div>';
+  h+='<button onclick="checkinFinishFriday()" class="btn btn-p">Set Budget & Finish</button>';
+  return h;
+}
+
+function checkinStepSummary(){
+  var pd=EX.filter(function(e){return e.is_past_due;});
+  var h='<div style="font-size:18px;font-weight:800;margin-bottom:6px">✅ Check-In Complete</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:20px">Here is what you covered today.</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">';
+  [{done:_checkinState.cashUpdated,label:'Balance updated to '+fmt(_checkinState.cashAmount||calcAvailable())},
+   {done:_checkinState.paycheckLogged,label:'Paycheck logged'},
+   {done:_checkinState.pastDueAcked.length>0||pd.length===0,label:pd.length===0?'No past due bills':_checkinState.pastDueAcked.length+' past due bill'+(  _checkinState.pastDueAcked.length>1?'s':'')+' acknowledged'},
+   {done:_checkinState.upcomingAcked.length>0,label:_checkinState.upcomingAcked.length+' upcoming bill'+(  _checkinState.upcomingAcked.length!==1?'s':'')+' noted'},
+  ].forEach(function(item){
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--glass-border);border-radius:12px">';
+    h+='<div style="width:20px;height:20px;border-radius:50%;background:'+(item.done?'var(--green)':'rgba(200,210,240,0.3)')+';display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;flex-shrink:0">'+(item.done?'✓':'—')+'</div>';
+    h+='<span style="font-size:13px;color:'+(item.done?'var(--text)':'var(--muted)')+'">'+item.label+'</span></div>';
+  });
+  h+='</div>';
+  h+='<button onclick="finishCheckin()" class="btn btn-p">Done</button>';
+  return h;
+}
+
+function ackBill(expId,ackType){
+  if(ackType==='past_due'){
+    if(_checkinState.pastDueAcked.indexOf(expId)<0)_checkinState.pastDueAcked.push(expId);
+  } else {
+    if(_checkinState.upcomingAcked.indexOf(expId)<0)_checkinState.upcomingAcked.push(expId);
+  }
+  renderCheckinModal();
+}
+
+async function checkinNext1(){
+  var val=parseFloat((document.getElementById('ci-cash')||{}).value||'');
+  if(!isNaN(val)&&val!==0){
+    await updateCash(val);
+    _checkinState.cashUpdated=true;
+    _checkinState.cashAmount=val;
+  }
+  _checkinState.step++;renderCheckinModal();
+}
+
+async function checkinLogPaycheck(date){
+  var amt=UP.paycheck_amount||0;
+  var r=await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,pay_date:date,amount:amt,scheduled_date:date,arrived_on_time:true}).select('*').single();
+  if(!r.error){PAYLOG.push(r.data);}
+  await updateCash(calcAvailable()+amt);
+  await logAct('paycheck_logged','Paycheck logged via check-in — '+fmt(amt),'profile',null,{amount:amt});
+  sendNotification('paycheck_logged','Paycheck logged — '+fmt(amt),amt);
+  _checkinState.paycheckLogged=true;
+  _checkinState.step++;renderCheckinModal();
+}
+
+function checkinPartialPaycheck(date){
+  var amt=prompt('Enter the amount that arrived:',UP.paycheck_amount||0);
+  if(amt){checkinLogPaycheckAmt(date,parseFloat(amt));}
+}
+
+async function checkinLogPaycheckAmt(date,amt){
+  var r=await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,pay_date:date,amount:amt,scheduled_date:date,arrived_on_time:false}).select('*').single();
+  if(!r.error)PAYLOG.push(r.data);
+  await updateCash(calcAvailable()+amt);
+  await logAct('paycheck_logged','Partial paycheck logged — '+fmt(amt),'profile',null,{amount:amt});
+  _checkinState.paycheckLogged=true;
+  _checkinState.step++;renderCheckinModal();
+}
+
+function checkinSkipStep(){_checkinState.step++;renderCheckinModal();}
+function checkinNext(){_checkinState.step++;renderCheckinModal();}
+
+async function checkinFinishFriday(){
+  var budget=parseFloat((document.getElementById('ci-wknd')||{}).value||0);
+  _checkinState.weekendBudget=budget;
+  // Save weekend budget to checkin
+  await saveCheckin();
+  document.getElementById('checkinModal').remove();
+  // Show confirmation
+  var conf=document.createElement('div');conf.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600;box-shadow:0 8px 24px rgba(0,0,0,0.3)';
+  conf.textContent='Weekend budget set — $'+Math.round(budget)+' for '+UP.first_name;
+  document.body.appendChild(conf);setTimeout(function(){conf.remove();},3000);
+  renderHome();
+}
+
+async function finishCheckin(){
+  await saveCheckin();
+  document.getElementById('checkinModal').remove();
+  renderHome();
+}
+
+async function saveCheckin(){
+  // Save acknowledgments to DB
+  var now2=new Date();var expiresAt=addDays(today(),7);
+  for(var i=0;i<_checkinState.pastDueAcked.length;i++){
+    var expId=_checkinState.pastDueAcked[i];
+    if(!ACKS.find(function(a){return a.expense_id===expId;})){
+      var r2=await sb.from('bill_acknowledgments').insert({household_id:HID,acknowledged_by:CU.id,acknowledged_by_name:UP.first_name,expense_id:expId,ack_type:'aware',expires_at:expiresAt});
+      if(!r2.error)ACKS.push({expense_id:expId,expires_at:expiresAt});
+    }
+  }
+  // Save checkin record
+  var ci={household_id:HID,completed_by:CU.id,completed_by_name:UP.first_name,
+    checkin_type:_checkinState.type,checkin_date:today(),
+    cash_updated:_checkinState.cashUpdated,cash_amount:_checkinState.cashAmount,
+    paycheck_logged:_checkinState.paycheckLogged,
+    past_due_acknowledged:_checkinState.pastDueAcked.length,
+    upcoming_acknowledged:_checkinState.upcomingAcked.length,
+    weekend_budget_jay:null,weekend_budget_chari:null
+  };
+  // Assign weekend budget to right person
+  if(_checkinState.weekendBudget){
+    var isJay=CU.id==='5c8b0ba1-6ff6-4762-af06-942dd0342769';
+    if(isJay)ci.weekend_budget_jay=_checkinState.weekendBudget;
+    else ci.weekend_budget_chari=_checkinState.weekendBudget;
+  }
+  var r3=await sb.from('checkins').insert(ci).select('*').single();
+  if(!r3.error)CHECKINS.unshift(r3.data);
+  await logAct('checkin_completed',UP.first_name+' completed '+_checkinState.type+' check-in','checkin',r3.data?.id,{type:_checkinState.type});
+  sendNotification('cash_updated',UP.first_name+' completed the '+_checkinState.type+' check-in');
 }
 
 function openCashModal(){
