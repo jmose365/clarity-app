@@ -5734,28 +5734,132 @@ function handleCSVFile(input){
   reader.readAsText(file);
 }
 
+function parseCSVRow(line){
+  // Handle quoted CSV fields properly
+  var result=[];var current='';var inQuotes=false;
+  for(var i=0;i<line.length;i++){
+    var ch=line[i];
+    if(ch==='"'){inQuotes=!inQuotes;}
+    else if(ch===','&&!inQuotes){result.push(current.trim());current='';}
+    else{current+=ch;}
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseDateToISO(dateStr){
+  // Handle MM/DD/YYYY and YYYY-MM-DD formats
+  if(!dateStr)return null;
+  dateStr=dateStr.trim();
+  if(dateStr.match(/^\d{4}-\d{2}-\d{2}$/))return dateStr;
+  if(dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var parts=dateStr.split('/');
+    return parts[2]+'-'+parts[0]+'-'+parts[1];
+  }
+  return null;
+}
+
+function detectTransactionType(payee,memo,amount){
+  var p=(payee||'').toUpperCase();var m=(memo||'').toUpperCase();
+  var combined=p+' '+m;
+  // Transfer detection
+  if(combined.match(/TFR|TRANSFER|XFER|INTERNET TFR|TFR FRM|TFR TO/))return 'transfer';
+  if(combined.match(/ZELLE|VENMO|CASHAPP|PAYPAL.*TRANSFER/))return 'transfer';
+  // Paycheck detection
+  if(combined.match(/DIRECT DEP|DIR DEP|PAYROLL|ACH CR|EMPLOYER|SALARY/))return 'paycheck';
+  // Credit/Debit
+  return parseFloat(amount||0)>=0?'credit':'debit';
+}
+
+function cleanMerchantName(payee,memo){
+  var name=payee||memo||'Unknown';
+  // Remove bank prefixes
+  name=name.replace(/^(POS |ACH |CHECKCARD |ONLINE PMT |DEBIT |CREDIT |ACH DEBIT |ACH CREDIT |PRE-AUTH )/i,'');
+  // Clean up Huntington specific formats
+  name=name.replace(/\s+\d{6,}$/,'').trim(); // remove trailing transaction numbers
+  name=name.replace(/\s{2,}/g,' ').trim();
+  if(!name||name.length<2)name=memo||'Transaction';
+  return name.substring(0,60);
+}
+
+function inferCategoryFromName(name,memo){
+  var s=(name+' '+memo).toUpperCase();
+  if(s.match(/RENT|MORTGAGE|HOA/))return 'Housing';
+  if(s.match(/ELECTRIC|GAS|WATER|UTILITY|UTILITIES|XCEL|CONSUMERS|DUKE/))return 'Utilities';
+  if(s.match(/GROCERY|FOOD|RESTAURANT|MCDONALD|STARBUCKS|SUBWAY|CHIPOTLE|PIZZA|WALMART|KROGER|ALDI|WHOLE FOODS|PANERA|TACO|BURGER|WENDY|CHICK-FIL/))return 'Food & Drinks';
+  if(s.match(/GAS STATION|SHELL|BP |EXXON|CHEVRON|SPEEDWAY|MEIJER GAS|MARATHON/))return 'Transportation';
+  if(s.match(/UBER|LYFT|TRANSIT|BUS |TRAIN|PARKING|TOLL/))return 'Transportation';
+  if(s.match(/DOCTOR|HOSPITAL|PHARMACY|CVS|WALGREEN|MEDICAL|DENTAL|VISION|HEALTH/))return 'Healthcare';
+  if(s.match(/NETFLIX|HULU|SPOTIFY|APPLE|DISNEY|HBO|AMAZON PRIME|YOUTUBE/))return 'Subscriptions';
+  if(s.match(/T-MOBILE|TMOBILE|AT&T|VERIZON|SPRINT|CRICKET|BOOST/))return 'Subscriptions';
+  if(s.match(/AMAZON|EBAY|ETSY|TARGET|WALMART|COSTCO|BEST BUY|HOME DEPOT|LOWES/))return 'Household Supplies';
+  if(s.match(/SALON|BARBER|SPA|BEAUTY|NAIL/))return 'Personal Care';
+  if(s.match(/GYM|FITNESS|PLANET FITNESS|LA FITNESS/))return 'Healthcare';
+  if(s.match(/LOAN|CREDIT CARD|CAPITAL ONE|CHASE|DISCOVER|BANK OF AMERICA|WELLS FARGO|HUNTINGTON/))return 'Debt & Retirement';
+  if(s.match(/INSURANCE|GEICO|STATE FARM|ALLSTATE|PROGRESSIVE/))return 'Debt & Retirement';
+  if(s.match(/DIRECT DEP|PAYROLL|SALARY|EMPLOYER/))return 'Income';
+  if(s.match(/TFR|TRANSFER|ZELLE|VENMO/))return 'Transfer';
+  return 'Other';
+}
+
 async function parseCSVWithClaude(csvText,filename){
   var status=document.getElementById('csv-status');
-  if(status)status.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Clarity is parsing your statement...</div>';
-
-  // Get first 50 rows max to avoid token limits
-  var lines=csvText.trim().split('\n').slice(0,51);
-  var preview=lines.join('\n');
-
-  var sys='You are a bank statement parser. Parse this CSV and return ONLY a JSON array of transaction objects. No explanation, no markdown, just the JSON array.\n\nRules:\n- Date format: YYYY-MM-DD\n- Amount: negative = money out (debit), positive = money in (credit)\n- type: "debit", "credit", "transfer"\n- Transfer detection: if "TFR", "TRANSFER", "XFER", "TFR FRM", "TFR TO" appears in payee or memo\n- Paycheck detection: if "DIRECT DEP", "PAYROLL", "DIR DEP", "ACH CR" appears\n- category: one of [Housing, Utilities, Food & Drinks, Transportation, Healthcare, Entertainment, Subscriptions, Personal Care, Clothing, Household Supplies, Debt & Retirement, Gifts, Income, Transfer, Other]\n- is_paycheck: true if paycheck/direct deposit\n- is_transfer: true if transfer between accounts\n- clean_name: merchant name cleaned up (remove bank prefixes like POS, ACH, CHECKCARD etc)\n\nReturn format: [{date,clean_name,memo,amount,type,category,is_paycheck,is_transfer}]';
+  if(status)status.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Parsing your Huntington statement...</div>';
 
   try{
-    var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys,
-        messages:[{role:'user',content:'Parse this bank statement CSV:\n\n'+preview}]})});
-    var data=await res.json();
-    var text=(data.content&&data.content[0]&&data.content[0].text)||'[]';
-    // Strip markdown if present
-    text=text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    var parsed=JSON.parse(text);
+    // Pre-process CSV client-side — no Claude needed for well-structured bank exports
+    var lines=csvText.trim().split(/\r?\n/);
+    if(lines.length<2){throw new Error('CSV appears empty');}
+
+    // Parse header to find column indices
+    var headers=parseCSVRow(lines[0]).map(function(h){return h.toLowerCase().trim();});
+    var dateIdx=headers.findIndex(function(h){return h.includes('date');});
+    var payeeIdx=headers.findIndex(function(h){return h.includes('payee');});
+    var memoIdx=headers.findIndex(function(h){return h.includes('memo');});
+    var amtIdx=headers.findIndex(function(h){return h.includes('amount');});
+    var catIdx=headers.findIndex(function(h){return h.includes('category');});
+
+    if(dateIdx<0||amtIdx<0){throw new Error('Could not find Date or Amount columns. Headers found: '+headers.join(', '));}
+
+    var parsed=[];
+    for(var i=1;i<lines.length;i++){
+      var line=lines[i].trim();if(!line)continue;
+      var cols=parseCSVRow(line);
+      var dateRaw=dateIdx>=0?cols[dateIdx]:'';
+      var payee=payeeIdx>=0?cols[payeeIdx]:'';
+      var memo=memoIdx>=0?cols[memoIdx]:'';
+      var amtRaw=amtIdx>=0?cols[amtIdx]:'0';
+      var bankCat=catIdx>=0?cols[catIdx]:'';
+
+      var dateISO=parseDateToISO(dateRaw);
+      if(!dateISO)continue; // skip rows with no valid date
+
+      var amount=parseFloat(amtRaw.replace(/[^0-9.\-]/g,''))||0;
+      var txType=detectTransactionType(payee,memo,amount);
+      var cleanName=cleanMerchantName(payee,memo);
+      var category=bankCat||inferCategoryFromName(cleanName,memo);
+      var isPaycheck=txType==='paycheck';
+      var isTransfer=txType==='transfer';
+
+      parsed.push({
+        date:dateISO,
+        clean_name:cleanName,
+        memo:memo,
+        amount:amount,
+        type:txType,
+        category:category,
+        is_paycheck:isPaycheck,
+        is_transfer:isTransfer,
+        original_payee:payee
+      });
+    }
+
+    if(parsed.length===0){throw new Error('No valid transactions found in file.');}
     showCSVReview(parsed,filename);
+
   }catch(e){
-    if(status)status.innerHTML='<div style="color:var(--red);font-size:13px;padding:12px 0">Could not parse CSV. Make sure it is a valid CSV export from your bank.</div>';
+    if(status)status.innerHTML='<div style="color:var(--red);font-size:13px;padding:12px 0">Parse error: '+e.message+'</div>';
+    console.error('CSV parse error:',e);
   }
 }
 
