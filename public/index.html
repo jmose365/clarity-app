@@ -619,14 +619,32 @@ function getArr(v){if(!v)return[];if(Array.isArray(v))return v;try{return JSON.p
 
 // FINANCIAL CALCULATIONS
 function calcAvailable(){
-  // If accounts are set up, sum all spending accounts
-  var spendingAccounts=ACCOUNTS.filter(function(a){return a.is_spending&&a.is_active;});
-  if(spendingAccounts.length>0){
-    return spendingAccounts.reduce(function(s,a){return s+(a.balance||0);},0);
+  // Joint accounts = household Available (Direct Deposit account pays bills)
+  var jointAccounts=ACCOUNTS.filter(function(a){return a.account_purpose==='joint'&&a.is_active;});
+  if(jointAccounts.length>0){
+    return jointAccounts.reduce(function(s,a){return s+(a.balance||0);},0);
   }
-  // Fall back to manual cash_on_hand
+  // Fallback: non-private spending accounts
+  var shared=ACCOUNTS.filter(function(a){return a.is_spending&&a.is_active&&!a.is_private;});
+  if(shared.length>0)return shared.reduce(function(s,a){return s+(a.balance||0);},0);
   return SET.cash_on_hand||0;
 }
+
+function calcPersonalBalance(){
+  // Returns logged-in user's personal account total
+  var myName=UP?UP.first_name.toLowerCase():'';
+  return ACCOUNTS.filter(function(a){
+    return a.is_active&&(
+      a.account_purpose==='personal_'+myName||
+      (a.is_private&&a.owner_id===CU.id)
+    );
+  }).reduce(function(s,a){return s+(a.balance||0);},0);
+}
+
+function getJointAccount(){
+  return ACCOUNTS.find(function(a){return a.account_purpose==='joint'&&a.is_active;})||null;
+}
+
 function calcEarmarkedForExp(exp){
   // Returns the effective earmarked amount for one expense accounting for pre-allocation
   var prealloc=exp.preallocated_amount||0;
@@ -975,10 +993,10 @@ async function logPaycheck(){
   var scheduled=window._pendingPaycheckDate||today();
   // Log to paycheck_log
   await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,amount:amt,scheduled_date:scheduled,actual_date:date,arrived_early:pcEarly});
-  // Update cash on hand
-  var newCash=(SET.cash_on_hand||0)+amt;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
+  // Credit joint account (or cash_on_hand fallback)
+  var jAPay=getJointAccount();
+  if(jAPay){await updateAccountBalance(jAPay.id,(jAPay.balance||0)+amt);}
+  else{var newCash=(SET.cash_on_hand||0)+amt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
   // If arrived early, adjust pay schedule
   if(pcEarly&&date<scheduled){
     var diff=daysUntil(scheduled)-daysUntil(date);
@@ -1346,6 +1364,16 @@ function renderHome(){
   }[p];
   html+='<div style="margin-top:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.5">'+posCtx+'</div>';
   html+='</div></div>'; // close hero-inner + hero
+
+  // PERSONAL BALANCE — only visible to the account owner
+  var personalBal=calcPersonalBalance();
+  var personalAccounts=ACCOUNTS.filter(function(a){return a.is_private&&a.is_active&&a.owner_id===CU.id;});
+  if(personalAccounts.length>0){
+    html+='<div style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.15);border-radius:16px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">';
+    html+='<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--purple);margin-bottom:2px">Your Personal</div>';
+    html+='<div style="font-size:11px;color:var(--muted)">'+personalAccounts.map(function(a){return a.name;}).join(', ')+'</div></div>';
+    html+='<div style="font-size:1.1rem;font-weight:900;color:'+(personalBal<0?'var(--red)':'var(--purple)')+'">'+fmt(personalBal)+'</div></div>';
+  }
 
   // RECOVERY ROADMAP
   html+=buildRecoveryRoadmap(p,pd,available,spendable,paycheck,monthly,activeGoals);
@@ -2093,9 +2121,9 @@ async function markPaidFull(expId,totalAmt){
   await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:totalAmt,payment_date:today_s,payment_month:payMonth,is_partial:false});
   var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:exp.name+' — Full Payment (incl. past due + late charge)',amount:totalAmt,category:exp.category,transaction_date:today_s,notes:'Full payment: past due + late charge + current'}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
-  var newCash=(SET.cash_on_hand||0)-totalAmt;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
+  var jA1=getPayFromAccount()||getJointAccount();
+  if(jA1){await updateAccountBalance(jA1.id,jA1.balance-totalAmt);window._payFromAcctId=null;}
+  else{var newCash=(SET.cash_on_hand||0)-totalAmt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
   var updates={last_paid_date:today_s,is_earmarked:false,earmark_state:'inactive',is_past_due:false,past_due_amount:0,late_charge_amount:0};
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
@@ -2115,9 +2143,9 @@ async function markPaidPastDue(expId){
   await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:paidAmt,payment_date:today_s,payment_month:payMonth,is_partial:true});
   var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:exp.name+' — Past Due Payment'+(lc>0?' + Late Charge':''),amount:paidAmt,category:exp.category,transaction_date:today_s,notes:'Past due payment'+(lc>0?' + late charge':'')}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
-  var newCash=(SET.cash_on_hand||0)-paidAmt;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
+  var jA2=getPayFromAccount()||getJointAccount();
+  if(jA2){await updateAccountBalance(jA2.id,jA2.balance-paidAmt);window._payFromAcctId=null;}
+  else{var newCash=(SET.cash_on_hand||0)-paidAmt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
   var updates={is_past_due:false,past_due_amount:0,late_charge_amount:0,is_earmarked:false,earmark_state:'inactive'};
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
@@ -2171,7 +2199,7 @@ function renderProactiveBanner(){
   html+='<div style="font-size:13px;font-weight:600;line-height:1.55;margin-bottom:10px">'+b.msg+'</div>';
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
   if(b.canCover&&b.expId){
-    html+='<button onclick="markPaidFull(\''+b.expId+'\','+b.totalDue+')" style="background:'+(b.type==='critical'?'var(--red)':'var(--amber)')+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Pay '+fmt(b.totalDue)+' Now</button>';
+    html+='<button onclick="openMarkPaid(\''+b.expId+'\',\'full\','+b.totalDue+')" style="background:'+(b.type==='critical'?'var(--red)':'var(--amber)')+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Pay '+fmt(b.totalDue)+' Now</button>';
   }
   html+='<button onclick="openAdvisorWithContext(\''+b.msg.replace(/'/g,'')+'\',\'critical\')" style="background:var(--gp);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Get a Plan from Clarity</button>';
   html+='</div></div>';
@@ -2204,10 +2232,17 @@ async function markPaid(expId,isHalf,halfNum){
   var txLabel=exp.name+(isBiweekly?' (Occurrence '+(cycleNum)+')':isHalf?' (Half '+(halfNum||1)+')':'')+' — Bill Paid';
   var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:txLabel,amount:fullAmt,category:exp.category,transaction_date:today_s,notes:'Bill payment'+(prealloc>0?' ('+fmt(prealloc)+' pre-allocated)':'')}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
-  // Deduct gap amount from Available
-  var newCash=(SET.cash_on_hand||0)-deductAmt;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
+  // Deduct from Joint account if accounts are set up, otherwise cash_on_hand
+  var jointAcct=getPayFromAccount()||getJointAccount();
+  if(jointAcct){
+    var newJointBal=jointAcct.balance-deductAmt;
+    await updateAccountBalance(jointAcct.id,newJointBal);
+    window._payFromAcctId=null;
+  } else {
+    var newCash=(SET.cash_on_hand||0)-deductAmt;
+    await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
+    SET.cash_on_hand=newCash;
+  }
   // Build updates
   var updates={};
   if(isBiweekly){
@@ -3276,10 +3311,10 @@ async function deleteTx(id,amt){
   if(!confirm('Delete this transaction? This will add '+fmt(amt)+' back to your Available balance.'))return;
   var r=await sb.from('transactions').delete().eq('id',id);
   if(r.error){alert('Error deleting transaction.');return;}
-  // Add amount back to cash
-  var newCash=(SET.cash_on_hand||0)+amt;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
+  // Add amount back to joint account or cash_on_hand
+  var jATx=getJointAccount();
+  if(jATx){await updateAccountBalance(jATx.id,(jATx.balance||0)+amt);}
+  else{var newCash=(SET.cash_on_hand||0)+amt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
   TX=TX.filter(function(t){return t.id!==id;});
   // Remove receipt image from localStorage if exists
   try{localStorage.removeItem('receipt_img_'+id);}catch(e){}
@@ -4699,13 +4734,19 @@ function renderSettings(){
     html+='<button onclick="openAddAccount()" class="btn btn-ghost btn-sm">+ Add Account</button></div>';
   } else {
     ACCOUNTS.forEach(function(acc){
+      var isOwner=!acc.is_private||acc.owner_id===CU.id;
+      var balDisplay=isOwner?fmt(acc.balance):'••••';
+      var balColor=isOwner?(acc.balance<0?'var(--red)':acc.balance>0?'var(--green)':'var(--muted)'):'var(--muted)';
       html+='<div style="background:var(--surface);border:1px solid var(--glass-border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px">';
       html+='<div style="width:36px;height:36px;border-radius:10px;background:'+acc.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">';
       html+=(acc.account_type==='savings'?'🏦':acc.account_type==='credit'?'💳':'🏛️')+'</div>';
-      html+='<div style="flex:1"><div style="font-size:14px;font-weight:700">'+acc.name+'</div>';
+      html+='<div style="flex:1"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">'+acc.name+'</span>';
+      if(acc.is_private)html+='<span style="font-size:9px;font-weight:700;background:rgba(124,58,237,0.1);color:var(--purple);border-radius:4px;padding:1px 6px">PRIVATE</span>';
+      html+='</div>';
       html+='<div style="font-size:12px;color:var(--muted)">'+acc.account_type+(acc.last_four?' ····'+acc.last_four:'')+' · '+(acc.is_spending?'Included in Available':'Not in Available')+'</div></div>';
-      html+='<div style="text-align:right"><div style="font-size:15px;font-weight:800;color:'+(acc.balance<0?'var(--red)':acc.balance>0?'var(--green)':'var(--muted)')+'">'+fmt(acc.balance)+'</div>';
-      html+='<button onclick="openEditAccount(\''+acc.id+'\')" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0">Edit</button></div></div>';
+      html+='<div style="text-align:right"><div style="font-size:15px;font-weight:800;color:'+balColor+';filter:'+(isOwner?'none':'blur(6px)')+';user-select:'+(isOwner?'auto':'none')+'">'+balDisplay+'</div>';
+      if(isOwner)html+='<button onclick="openEditAccount(\''+acc.id+'\')" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0">Edit</button>';
+      html+='</div></div>';
     });
     html+='<button onclick="openAddAccount()" class="btn btn-ghost btn-sm" style="align-self:flex-start">+ Add Account</button>';
   }
@@ -5378,9 +5419,21 @@ function openAddAccount(){
   h+='<div><label class="lbl">Color</label><div style="display:flex;gap:6px;flex-wrap:wrap">';
   colors.forEach(function(c){h+='<div onclick="setAcctColor(this,\''+c+'\')" style="width:28px;height:28px;border-radius:8px;background:'+c+';cursor:pointer;border:2px solid transparent" data-color="'+c+'"></div>';});
   h+='</div></div>';
-  h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--pl);border-radius:10px">';
-  h+='<input type="checkbox" id="aa-spending" checked style="width:16px;height:16px;accent-color:var(--primary)"/>';
-  h+='<div><div style="font-size:13px;font-weight:600">Include in Available balance</div><div style="font-size:11px;color:var(--muted)">Checking/spending accounts should be checked. Savings optional.</div></div></div>';
+  h+='<div><label class="lbl">Account Purpose</label><div style="display:flex;flex-direction:column;gap:6px" id="aa-purpose-wrap">';
+  var partner=HM.find(function(m){return m.id!==CU.id;})||{first_name:'Partner'};
+  var myName=UP.first_name;var partnerName=partner.first_name;
+  var purposes=[
+    {v:'joint',label:'Joint — Direct Deposit',sub:'Paychecks land here, bills paid from here. Counts toward household Available.',icon:'🏠'},
+    {v:'personal_'+myName.toLowerCase(),label:'Personal — '+myName,sub:'Your personal account. Balance blurred for '+partnerName+'. Excluded from household Available.',icon:'👤'},
+    {v:'personal_'+partnerName.toLowerCase(),label:'Personal — '+partnerName,sub:partnerName+"'s personal account. Balance blurred for you. Excluded from household Available.",icon:'👥'},
+  ];
+  purposes.forEach(function(p,i){
+    h+='<div onclick="setPurpose(this,\''+p.v+'\')" data-purpose="'+p.v+'" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1.5px solid '+(i===0?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(i===0?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer;margin-bottom:2px">';
+    h+='<span style="font-size:18px;flex-shrink:0;margin-top:1px">'+p.icon+'</span>';
+    h+='<div><div style="font-size:13px;font-weight:700">'+p.label+'</div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4">'+p.sub+'</div></div></div>';
+  });
+  h+='</div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveNewAccount()">Add Account</button>';
   h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addAcctModal\').remove()">Cancel</button></div>';
   h+='</div></div></div>';
@@ -5390,6 +5443,134 @@ function openAddAccount(){
     var first=document.querySelector('#addAcctModal [data-color="#4361ee"]');
     if(first)first.style.border='2px solid white';
   },50);
+}
+
+function setPurpose(el,purpose){
+  window._acctPurpose=purpose;
+  var wrap=document.getElementById('aa-purpose-wrap');if(!wrap)return;
+  wrap.querySelectorAll('[data-purpose]').forEach(function(d){
+    d.style.border='1.5px solid rgba(200,210,240,0.4)';
+    d.style.background='transparent';
+  });
+  el.style.border='1.5px solid var(--primary)';
+  el.style.background='rgba(67,97,238,0.05)';
+}
+
+async function saveNewAccount(){
+  var name=(document.getElementById('aa-name').value||'').trim();
+  var inst=(document.getElementById('aa-inst').value||'').trim();
+  var type=document.getElementById('aa-type').value||'checking';
+  var last4=(document.getElementById('aa-last4').value||'').trim();
+  var balRaw=(document.getElementById('aa-bal').value||'0').replace(/[^0-9.\-]/g,'');
+  var bal=parseFloat(balRaw)||0;
+  var purpose=window._acctPurpose||'joint';
+  var isJoint=purpose==='joint';
+  var isPrivate=!isJoint;
+  var myName=UP.first_name.toLowerCase();
+  var isMyPersonal=purpose==='personal_'+myName;
+  if(!name){alert('Account name is required.');return;}
+  var r=await sb.from('accounts').insert({
+    household_id:HID,created_by:CU.id,name:name,institution:inst||null,
+    account_type:type,last_four:last4||null,balance:bal,
+    account_purpose:purpose,
+    is_spending:isJoint,
+    is_private:isPrivate,
+    owner_id:isMyPersonal?CU.id:(isPrivate?null:null),
+    color:window._acctColor||'#4361ee',
+    sort_order:ACCOUNTS.length,last_synced_at:new Date().toISOString()
+  }).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  ACCOUNTS.push(r.data);
+  if(ACCOUNTS.length===1&&SET.cash_on_hand&&SET.cash_on_hand!==0&&bal===0){
+    await sb.from('accounts').update({balance:SET.cash_on_hand}).eq('id',r.data.id);
+    r.data.balance=SET.cash_on_hand;
+  }
+  document.getElementById('addAcctModal').remove();
+  await logAct('account_added',name+' ('+purpose+') added — '+fmt(bal),'account',r.data.id,{});
+  renderSettings();updateTopBar();renderHome();
+}
+
+function openMarkPaid(expId,payType,extra){
+  var exp=EX.find(function(e){return e.id===expId;});if(!exp)return;
+  // If only one account or no accounts, skip modal and pay directly
+  var activeAccts=ACCOUNTS.filter(function(a){return a.is_active;});
+  if(activeAccts.length<=1){
+    routeMarkPaid(expId,payType,extra,activeAccts[0]?activeAccts[0].id:null);
+    return;
+  }
+  // Show account selector
+  var m=document.createElement('div');m.className='modal-ov';m.id='paidFromModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var totalDue=payType==='full'?extra:payType==='pastdue'?calcTotalDueNow(exp):exp.amount;
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Pay '+exp.name+'</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">'+fmt(totalDue)+' — which account is this coming from?</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">';
+  activeAccts.forEach(function(acc){
+    var isJoint=acc.account_purpose==='joint';
+    var myName=UP.first_name.toLowerCase();
+    var isMyPersonal=acc.account_purpose==='personal_'+myName;
+    var canSee=isJoint||isMyPersonal||!acc.is_private;
+    if(!canSee)return; // hide other person's private accounts
+    var balColor=acc.balance<0?'var(--red)':acc.balance>0?'var(--green)':'var(--muted)';
+    h+='<div onclick="selectPaidFrom(this,\''+acc.id+'\')" data-acct="'+acc.id+'" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:1.5px solid '+(isJoint?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(isJoint?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer">';
+    h+='<div style="width:36px;height:36px;border-radius:10px;background:'+acc.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">';
+    h+=(acc.account_type==='savings'?'🏦':acc.account_type==='credit'?'💳':'🏛️')+'</div>';
+    h+='<div style="flex:1"><div style="font-size:13px;font-weight:700">'+acc.name+'</div>';
+    h+='<div style="font-size:11px;color:var(--muted)">'+(isJoint?'Joint account':'Personal account')+'</div></div>';
+    h+='<div style="text-align:right"><div style="font-size:14px;font-weight:800;color:'+balColor+'">'+fmt(acc.balance)+'</div>';
+    if(acc.balance<totalDue&&acc.balance>=0)h+='<div style="font-size:10px;color:var(--amber);font-weight:600">Low balance</div>';
+    h+='</div></div>';
+  });
+  h+='</div>';
+  h+='<div style="background:rgba(67,97,238,0.05);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">';
+  h+='Only Joint account payments reduce household Available. Personal account payments update your personal balance only.</div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="confirmPaidFrom(\''+expId+'\',\''+( payType||'')+'\',\''+( extra||'')+'\')" class="btn btn-p" style="flex:1">Confirm Payment</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'paidFromModal\').remove()">Cancel</button>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  // Pre-select joint account
+  window._selectedPaidFromAcct=activeAccts.find(function(a){return a.account_purpose==='joint';});
+  if(!window._selectedPaidFromAcct)window._selectedPaidFromAcct=activeAccts[0];
+}
+
+function selectPaidFrom(el,acctId){
+  window._selectedPaidFromAcct=ACCOUNTS.find(function(a){return a.id===acctId;});
+  var wrap=el.closest('div[style*="flex-direction:column"]');
+  if(!wrap)return;
+  wrap.querySelectorAll('[data-acct]').forEach(function(d){
+    d.style.border='1.5px solid rgba(200,210,240,0.4)';
+    d.style.background='transparent';
+  });
+  el.style.border='1.5px solid var(--primary)';
+  el.style.background='rgba(67,97,238,0.05)';
+}
+
+function confirmPaidFrom(expId,payType,extra){
+  var acct=window._selectedPaidFromAcct;
+  document.getElementById('paidFromModal').remove();
+  routeMarkPaid(expId,payType||null,extra||null,acct?acct.id:null);
+}
+
+function routeMarkPaid(expId,payType,extra,acctId){
+  window._payFromAcctId=acctId;
+  if(payType==='full')markPaidFull(expId,parseFloat(extra)||0);
+  else if(payType==='pastdue')markPaidPastDue(expId);
+  else if(payType==='cycle1')markPaid(expId,false,1,true);
+  else if(payType==='cycle2')markPaid(expId,false,2,true);
+  else if(payType==='half1')markPaid(expId,true,1);
+  else if(payType==='half2')markPaid(expId,true,2);
+  else markPaid(expId);
+}
+
+function getPayFromAccount(){
+  // Returns the account to deduct from — selected account or joint fallback
+  if(window._payFromAcctId){
+    var acc=ACCOUNTS.find(function(a){return a.id===window._payFromAcctId;});
+    if(acc)return acc;
+  }
+  return getJointAccount();
 }
 
 function setAcctColor(el,color){
@@ -5407,11 +5588,14 @@ async function saveNewAccount(){
   var balRaw=(document.getElementById('aa-bal').value||'0').replace(/[^0-9.\-]/g,'');
   var bal=parseFloat(balRaw)||0;
   var isSpending=document.getElementById('aa-spending').checked;
+  var isPrivate=document.getElementById('aa-private').checked;
   if(!name){alert('Account name is required.');return;}
   var r=await sb.from('accounts').insert({
     household_id:HID,created_by:CU.id,name:name,institution:inst||null,
     account_type:type,last_four:last4||null,balance:bal,
-    is_spending:isSpending,color:window._acctColor||'#4361ee',
+    is_spending:isSpending,is_private:isPrivate,
+    owner_id:isPrivate?CU.id:null,
+    color:window._acctColor||'#4361ee',
     sort_order:ACCOUNTS.length,last_synced_at:new Date().toISOString()
   }).select('*').single();
   if(r.error){alert('Error: '+r.error.message);return;}
@@ -5436,9 +5620,21 @@ function openEditAccount(acctId){
   h+='<div style="display:flex;flex-direction:column;gap:12px">';
   h+='<div><label class="lbl">Account Name</label><input class="inp" id="ea-name" value="'+acc.name+'"/></div>';
   h+='<div><label class="lbl">Current Balance</label><input class="inp" type="tel" inputmode="decimal" id="ea-bal" value="'+acc.balance+'"/></div>';
-  h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--pl);border-radius:10px">';
-  h+='<input type="checkbox" id="ea-spending" '+(acc.is_spending?'checked':'')+' style="width:16px;height:16px;accent-color:var(--primary)"/>';
-  h+='<div style="font-size:13px;font-weight:600">Include in Available balance</div></div>';
+  h+='<div><label class="lbl">Account Purpose</label><div style="display:flex;flex-direction:column;gap:6px" id="ea-purpose-wrap">';
+  var eaPartner=HM.find(function(m){return m.id!==CU.id;})||{first_name:'Partner'};
+  var eaMyName=UP.first_name;
+  var eaPurposes=[
+    {v:'joint',label:'Joint — Direct Deposit',icon:'🏠'},
+    {v:'personal_'+eaMyName.toLowerCase(),label:'Personal — '+eaMyName,icon:'👤'},
+    {v:'personal_'+eaPartner.first_name.toLowerCase(),label:'Personal — '+eaPartner.first_name,icon:'👥'},
+  ];
+  eaPurposes.forEach(function(p){
+    var isSel=(acc.account_purpose||'joint')===p.v;
+    h+='<div onclick="setEditPurpose(this,\''+p.v+'\')" data-purpose="'+p.v+'" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;border:1.5px solid '+(isSel?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(isSel?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer;margin-bottom:2px">';
+    h+='<span style="font-size:16px">'+p.icon+'</span>';
+    h+='<div style="font-size:13px;font-weight:600">'+p.label+'</div></div>';
+  });
+  h+='</div></div>';
   h+='<div style="display:flex;gap:8px">';
   h+='<button class="btn btn-p" style="flex:1" onclick="saveEditAccount(\''+acctId+'\')">Save</button>';
   h+='<button class="btn btn-red" style="flex:1" onclick="deleteAccount(\''+acctId+'\')">Remove</button></div>';
@@ -5447,12 +5643,32 @@ function openEditAccount(acctId){
   m.innerHTML=h;document.body.appendChild(m);
 }
 
+function setEditPurpose(el,purpose){
+  window._editAcctPurpose=purpose;
+  var wrap=document.getElementById('ea-purpose-wrap');if(!wrap)return;
+  wrap.querySelectorAll('[data-purpose]').forEach(function(d){
+    d.style.border='1.5px solid rgba(200,210,240,0.4)';d.style.background='transparent';
+  });
+  el.style.border='1.5px solid var(--primary)';el.style.background='rgba(67,97,238,0.05)';
+}
+
 async function saveEditAccount(acctId){
+  var acc=ACCOUNTS.find(function(a){return a.id===acctId;});if(!acc)return;
   var name=(document.getElementById('ea-name').value||'').trim();
   var balRaw=(document.getElementById('ea-bal').value||'0').replace(/[^0-9.\-]/g,'');
   var bal=parseFloat(balRaw)||0;
-  var isSpending=document.getElementById('ea-spending').checked;
-  var r=await sb.from('accounts').update({name:name,balance:bal,is_spending:isSpending,last_synced_at:new Date().toISOString()}).eq('id',acctId).select('*').single();
+  var purpose=window._editAcctPurpose||(acc.account_purpose||'joint');
+  var isJoint=purpose==='joint';
+  var myName=UP.first_name.toLowerCase();
+  var isMyPersonal=purpose==='personal_'+myName;
+  var r=await sb.from('accounts').update({
+    name:name,balance:bal,
+    account_purpose:purpose,
+    is_spending:isJoint,
+    is_private:!isJoint,
+    owner_id:isMyPersonal?CU.id:(!isJoint?acc.owner_id:null),
+    last_synced_at:new Date().toISOString()
+  }).eq('id',acctId).select('*').single();
   if(r.error){alert('Error: '+r.error.message);return;}
   var idx=ACCOUNTS.findIndex(function(a){return a.id===acctId;});if(idx>=0)ACCOUNTS[idx]=r.data;
   document.getElementById('editAcctModal').remove();
