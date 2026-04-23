@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/remind.js": { "runtime": "nodejs18.x" },
+    "api/notify.js": { "runtime": "nodejs18.x" },
+    "api/claude.js": { "runtime": "nodejs18.x" }
+  },
   "rewrites": [
     { "source": "/api/claude", "destination": "/api/claude.js" },
     { "source": "/api/notify", "destination": "/api/notify.js" },
