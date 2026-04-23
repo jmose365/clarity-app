@@ -3126,15 +3126,16 @@ async function deleteGoal(id){
 // ══════════════════════════════════════════════
 var planForecastMonths=2;
 var planForecastYear=new Date().getFullYear();
-var planForecastMonth=new Date().getMonth(); // 0-indexed
+var planForecastMonth=new Date().getMonth();
+var planForecastMaxYear=new Date().getFullYear()+5;
 
 function renderPlan(){
   var td=today();var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
 
-  // Build 600-day cash flow projection (covers through 2027)
+  // Build 5-year cash flow projection
   var cf=[];var balAvail=calcAvailable();
-  for(var i=0;i<600;i++){
+  for(var i=0;i<1825;i++){
     var date=addDays(td,i);var dom=new Date(date+'T12:00:00').getDate();
     var inflow=0,outflow=0,evts=[];
     if(payDates.indexOf(date)>=0){inflow+=paycheck;evts.push({label:'Paycheck',type:'income',amount:paycheck});}
@@ -3277,7 +3278,7 @@ function renderPlanCard(p,cf){
 function buildForecastCalendar(cf,yr,mo){
   var now=new Date();
   var minYear=now.getFullYear();var minMonth=now.getMonth();
-  var maxYear=2027;var maxMonth=11;
+  var maxYear=planForecastMaxYear;var maxMonth=11;
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   // Month/year navigation
@@ -3406,6 +3407,7 @@ function buildForecastCalendar(cf,yr,mo){
 
 function navForecast(yr,mo){
   planForecastYear=parseInt(yr);planForecastMonth=parseInt(mo);
+  if(planForecastYear>=planForecastMaxYear-1)planForecastMaxYear=planForecastYear+5;
   renderPlan();
 }
 function setForecastMonth(mo,yr){
@@ -3414,6 +3416,10 @@ function setForecastMonth(mo,yr){
 }
 function setForecastYear(yr,mo){
   planForecastYear=parseInt(yr);planForecastMonth=parseInt(mo);
+  // Auto-extend max year if user is selecting near the limit
+  if(planForecastYear>=planForecastMaxYear-1){
+    planForecastMaxYear=planForecastYear+5;
+  }
   // Clamp month if needed
   var now=new Date();
   if(planForecastYear===now.getFullYear()&&planForecastMonth<now.getMonth())planForecastMonth=now.getMonth();
