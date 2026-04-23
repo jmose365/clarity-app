@@ -453,29 +453,29 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
     <div id="tab-home" class="panel on"></div>
     <div id="tab-ledger" class="panel"></div>
     <div id="tab-goals" class="panel"></div>
+    <div id="tab-plan" class="panel"></div>
     <div id="tab-activity" class="panel"></div>
     <div id="tab-insights" class="panel"></div>
     <div id="tab-settings" class="panel"></div>
   </div>
 
-  <!-- Bottom nav: Home · Flow · Ledger · Goals · Activity · Insights -->
+  <!-- Bottom nav -->
   <nav class="bnav">
     <button class="nb on" onclick="goTab('home',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
       <span id="home-badge" class="nb-badge" style="display:none">!</span>
     </button>
-
     <button class="nb" onclick="goTab('ledger',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Ledger
     </button>
     <button class="nb" onclick="goTab('goals',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Goals
     </button>
+    <button class="nb" onclick="goTab('plan',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></svg>Plan
+    </button>
     <button class="nb" onclick="goTab('insights',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Insights
-    </button>
-    <button class="nb" onclick="goTab('activity',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><polyline points="10 17 10 11 8 13"/></svg>Activity
     </button>
   </nav>
 
@@ -595,7 +595,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
@@ -605,7 +605,7 @@ var CONS=['eviction','repossession','disconnection','collections','late_fee','cr
 var GOAL_TYPES=['Nest Egg','Vacation','Emergency Fund','New Car','Home Down Payment','Debt Payoff','Kids Education','Investment Seed','Holiday Fund','Birthday / Gift','Home Improvement','Other'];
 
 // HELPERS
-function fmt(n){return '$'+Math.abs(n||0).toLocaleString('en-US',{maximumFractionDigits:0});}
+function fmt(n){var abs='$'+Math.abs(n||0).toLocaleString('en-US',{maximumFractionDigits:0});return (n||0)<0?'-'+abs:abs;}
 function fmtD(s,sh){if(!s)return '';var d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-US',sh?{month:'short',day:'numeric'}:{month:'short',day:'numeric',year:'numeric'});}
 function fmtTS(s){if(!s)return '';var d=new Date(s);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
 function today(){return new Date().toISOString().split('T')[0];}
@@ -780,11 +780,12 @@ async function loadApp(){
     sb.from('badges').select('*').eq('household_id',HID).order('earned_at',{ascending:false}),
     sb.from('paycheck_log').select('*').eq('household_id',HID).order('logged_at',{ascending:false}),
     sb.from('acknowledged_notifications').select('*').eq('user_id',CU.id),
-    sb.from('goal_contributions').select('*').eq('household_id',HID).order('contribution_date',{ascending:true})
+    sb.from('goal_contributions').select('*').eq('household_id',HID).order('contribution_date',{ascending:true}),
+    sb.from('planned_expenses').select('*').eq('household_id',HID).order('target_date',{ascending:true})
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
-  BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
+  BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];PLAN=res[11].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -924,10 +925,11 @@ function goTab(id,btn){
   document.querySelectorAll('.nb').forEach(function(b){b.classList.remove('on');});
   var panel=document.getElementById('tab-'+id);if(panel)panel.classList.add('on');
   if(btn)btn.classList.add('on');
-  else{var ids=['home','ledger','goals','insights','activity'];var idx=ids.indexOf(id);var btns=document.querySelectorAll('.nb');if(idx>=0&&btns[idx])btns[idx].classList.add('on');}
+  else{var ids=['home','ledger','goals','plan','insights','activity'];var idx=ids.indexOf(id);var btns=document.querySelectorAll('.nb');if(idx>=0&&btns[idx])btns[idx].classList.add('on');}
   if(id==='home')renderHome();
-    else if(id==='ledger')renderLedger();
+  else if(id==='ledger')renderLedger();
   else if(id==='goals')renderGoals();
+  else if(id==='plan')renderPlan();
   else if(id==='activity')renderActivity();
   else if(id==='insights')renderInsights();
   else if(id==='settings')renderSettings();
@@ -1456,23 +1458,34 @@ function renderHome(){
 }
 
 function openCashModal(){
+  var currentAvail=calcAvailable();
+  var earmarked=calcEarmarked();
   var m=document.createElement('div');m.className='modal-ov';m.id='cashModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
   var h='<div class="modal"><div class="modal-handle"></div>';
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:6px">Update Available Balance</div>';
-  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5">Enter what your bank account actually shows right now.</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">Enter what your bank account actually shows right now.</div>';
+  // Math breakdown
+  h+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.12);border-radius:12px;padding:12px 14px;margin-bottom:16px">';
+  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">How your balance is calculated</div>';
+  h+='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:4px 0">'+
+     '<span>Cash on hand (this number)</span><span style="font-weight:700">'+fmt(SET.cash_on_hand||0)+'</span></div>';
+  if(earmarked>0){h+='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:4px 0">'+
+     '<span>Earmarked bills</span><span style="font-weight:700;color:var(--amber)">-'+fmt(earmarked)+'</span></div>';}
+  h+='<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:8px 0 4px;border-top:1px solid var(--bl);margin-top:4px">'+
+     '<span>Spendable</span><span style="color:'+(calcSpendable()>=0?'var(--green)':'var(--red)')+'">'+fmt(calcSpendable())+'</span></div>';
+  if(currentAvail<0)h+='<div style="font-size:11px;color:var(--red);font-weight:600;margin-top:4px">Balance is negative — bills paid have exceeded what was entered. Enter your real bank balance below to reset.</div>';
+  h+='</div>';
   h+='<div style="display:flex;flex-direction:column;gap:14px">';
-  h+='<div><label class="lbl">Current Balance</label>';
+  h+='<div><label class="lbl">Your Bank Balance Right Now</label>';
   h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
-  h+='<input class="inp" type="tel" id="cash-inp" value="'+(SET.cash_on_hand||0)+'" style="font-size:1.1rem;font-weight:700" inputmode="decimal"/></div></div>';
-  h+='<div style="background:rgba(67,97,238,0.06);border-radius:12px;padding:12px;font-size:12px;color:var(--text2);line-height:1.5">';
-  h+='Previous: <strong>'+fmt(SET.cash_on_hand||0)+'</strong> — update this whenever you check your bank to keep Clarity accurate.</div>';
+  h+='<input class="inp" type="tel" id="cash-inp" inputmode="decimal" placeholder="Enter current bank balance" style="font-size:1.1rem;font-weight:700"/></div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveCashModal()">Update</button>';
   h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'cashModal\').remove()">Cancel</button></div>';
   h+='<div id="cash-msg" style="font-size:13px;font-weight:500"></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
-  setTimeout(function(){var el=document.getElementById('cash-inp');if(el){el.focus();el.select();}},100);
+  setTimeout(function(){var el=document.getElementById('cash-inp');if(el)el.focus();},100);
 }
 async function saveCashModal(){
   var inp=document.getElementById('cash-inp');
@@ -3108,6 +3121,398 @@ async function deleteGoal(id){
 }
 
 // ACTIVITY
+// ══════════════════════════════════════════════
+// PLAN TAB
+// ══════════════════════════════════════════════
+var planForecastMonths=2;
+
+function renderPlan(){
+  var td=today();var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
+  var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
+
+  // Build 90-day cash flow projection including planned expenses
+  var cf=[];var balAvail=calcAvailable();
+  for(var i=0;i<90;i++){
+    var date=addDays(td,i);var dom=new Date(date+'T12:00:00').getDate();
+    var inflow=0,outflow=0,evts=[];
+    if(payDates.indexOf(date)>=0){inflow+=paycheck;evts.push({label:'Paycheck',type:'income',amount:paycheck});}
+    EX.forEach(function(exp){
+      var arrActive=exp.arrangement_active&&(!exp.arrangement_expires||exp.arrangement_expires>=date);
+      if(arrActive){
+        if(exp.arrangement_due_1===dom){var a=exp.arrangement_amount_1||exp.amount;outflow+=a;evts.push({label:exp.name+' (Arr.)',type:'bill',amount:a});}
+        if(exp.arrangement_due_2===dom){var a2=exp.arrangement_amount_2||0;if(a2>0){outflow+=a2;evts.push({label:exp.name+' (Arr.2)',type:'bill',amount:a2});}}
+      } else if(exp.is_recurring&&exp.due_day===dom){
+        outflow+=exp.amount;evts.push({label:exp.name,type:'bill',amount:exp.amount,pd:exp.is_past_due});
+      }
+    });
+    // Planned expenses hitting this date
+    PLAN.forEach(function(p){
+      if(p.target_date===date&&!p.is_funded){
+        outflow+=p.estimated_amount;evts.push({label:p.name,type:'planned',amount:p.estimated_amount,pid:p.id});
+      }
+    });
+    balAvail+=inflow-outflow;
+    cf.push({date:date,bal:balAvail,inflow:inflow,outflow:outflow,events:evts,dom:dom});
+  }
+
+  var html='<div class="ph"><div class="ph-eye">Plan</div><div class="ph-title">Future <span style="color:var(--primary)">Expenses</span> & Forecast</div><div class="ph-sub">Plan big expenses, budget for them, and see the impact on your cash flow.</div></div>';
+
+  // ADD PLANNED EXPENSE BUTTON
+  html+='<button onclick="openAddPlan()" class="btn btn-p" style="margin-bottom:16px">+ Add Planned Expense</button>';
+
+  // PLANNED EXPENSES LIST
+  var upcoming=PLAN.filter(function(p){return !p.is_funded;}).sort(function(a,b){return a.target_date>b.target_date?1:-1;});
+  var funded=PLAN.filter(function(p){return p.is_funded;});
+
+  if(upcoming.length===0&&funded.length===0){
+    html+='<div class="card" style="text-align:center;padding:32px;color:var(--muted)">';
+    html+='<div style="font-size:2rem;margin-bottom:10px">🗓️</div>';
+    html+='<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">No planned expenses yet</div>';
+    html+='<div style="font-size:13px;line-height:1.6">Add upcoming big expenses like trips, parties, or repairs to see how they affect your cash flow and get a saving plan.</div></div>';
+  } else {
+    if(upcoming.length>0){
+      html+='<div class="sec-t">Upcoming Plans</div>';
+      upcoming.forEach(function(p){html+=renderPlanCard(p,cf);});
+    }
+    if(funded.length>0){
+      html+='<div class="sec-t">Funded</div>';
+      funded.forEach(function(p){
+        html+='<div class="card" style="opacity:.65;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">';
+        html+='<div><div style="font-size:14px;font-weight:600">✓ '+p.name+'</div><div style="font-size:12px;color:var(--muted)">'+fmt(p.estimated_amount)+' · '+fmtD(p.target_date,true)+'</div></div>';
+        html+='<span style="font-size:20px">🎉</span></div>';
+      });
+    }
+  }
+
+  // FORECAST CALENDAR
+  html+='<div class="sec-t" style="margin-top:8px">90-Day Forecast</div>';
+  html+=buildForecastCalendar(cf);
+
+  document.getElementById('tab-plan').innerHTML=html;
+}
+
+function renderPlanCard(p,cf){
+  var td2=today();
+  var daysAway=Math.round((new Date(p.target_date+'T12:00:00')-new Date())/86400000);
+  var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
+  // Paychecks between now and target date
+  var checksLeft=payDates.filter(function(d){return d>td2&&d<=p.target_date;}).length;
+  if(checksLeft===0)checksLeft=Math.max(1,Math.floor(daysAway/14));
+  var perCheck=checksLeft>0?Math.ceil((p.estimated_amount-p.amount_saved)/checksLeft):p.estimated_amount;
+  var savedPct=p.estimated_amount>0?Math.min(Math.round((p.amount_saved/p.estimated_amount)*100),100):0;
+  // Projected balance on target date
+  var projEntry=cf.find(function(d){return d.date===p.target_date;});
+  var projBal=projEntry?projEntry.bal:null;
+  var canAfford=projBal!==null&&projBal>=p.estimated_amount;
+
+  // Color
+  var borderColor=daysAway<=14?'rgba(220,38,38,0.3)':daysAway<=30?'rgba(217,119,6,0.3)':'rgba(67,97,238,0.2)';
+  var accentColor=daysAway<=14?'var(--red)':daysAway<=30?'var(--amber)':'var(--primary)';
+
+  var h='<div class="card" style="padding:0;border-color:'+borderColor+';margin-bottom:10px;overflow:hidden">';
+
+  // Header
+  h+='<div style="background:linear-gradient(135deg,rgba(67,97,238,0.08),rgba(124,58,237,0.06));padding:14px 16px;border-bottom:1px solid var(--bl)">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+  h+='<div><div style="font-size:15px;font-weight:800;color:var(--text)">'+p.name+'</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+fmtD(p.target_date,true)+' · '+(daysAway<=0?'<span style="color:var(--red);font-weight:700">Today!</span>':daysAway===1?'Tomorrow':daysAway+' days away')+'</div></div>';
+  h+='<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900;color:var(--primary)">'+fmt(p.estimated_amount)+'</div>';
+  h+='<div style="font-size:10px;color:var(--muted)">estimated</div></div></div></div>';
+
+  h+='<div style="padding:14px 16px">';
+
+  // Progress bar
+  if(p.amount_saved>0){
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="display:flex;justify-content:space-between;margin-bottom:5px">';
+    h+='<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Saved so far</span>';
+    h+='<span style="font-size:12px;font-weight:700;color:var(--green)">'+fmt(p.amount_saved)+' of '+fmt(p.estimated_amount)+'</span></div>';
+    h+='<div style="height:8px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden">';
+    h+='<div style="height:100%;width:'+savedPct+'%;background:var(--green);border-radius:99px"></div></div></div>';
+  }
+
+  // Saving strategy
+  h+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.12);border-radius:12px;padding:12px;margin-bottom:12px">';
+  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saving Strategy</div>';
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+  h+='<span style="font-size:12px;color:var(--text2)">Paychecks until target</span><span style="font-size:12px;font-weight:700">'+checksLeft+'</span></div>';
+  h+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+  h+='<span style="font-size:12px;color:var(--text2)">Still needed</span><span style="font-size:12px;font-weight:700;color:var(--red)">'+fmt(p.estimated_amount-p.amount_saved)+'</span></div>';
+  h+='<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--bl)">';
+  h+='<span style="font-size:13px;font-weight:700;color:var(--text)">Set aside per check</span>';
+  h+='<span style="font-size:14px;font-weight:900;color:var(--primary)">'+fmt(perCheck)+'/check</span></div></div>';
+
+  // Projected balance check
+  if(projBal!==null){
+    h+='<div style="background:'+(canAfford?'var(--gl)':'var(--rl)')+';border:1px solid '+(canAfford?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)')+';border-radius:12px;padding:10px 12px;margin-bottom:12px">';
+    h+='<div style="font-size:12px;font-weight:700;color:'+(canAfford?'var(--green)':'var(--red)')+'">'+( canAfford?'✅ Projected balance covers this':'⚠️ Projected balance falls short')+'</div>';
+    h+='<div style="font-size:12px;color:var(--text2);margin-top:3px">Balance on '+fmtD(p.target_date,true)+': <strong>'+fmt(projBal)+'</strong>'+(canAfford?'':' — '+fmt(p.estimated_amount-projBal)+' short. Start saving now.')+'</div></div>';
+  }
+
+  // Sub items if any
+  var subs=Array.isArray(p.sub_items)?p.sub_items:[];
+  if(subs.length>0){
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px">Budget Breakdown</div>';
+    subs.forEach(function(s){
+      var sPct=p.estimated_amount>0?Math.round((s.amount/p.estimated_amount)*100):0;
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(200,210,240,0.2)">';
+      h+='<span style="font-size:12px;color:var(--text2)">'+s.name+'</span>';
+      h+='<span style="font-size:12px;font-weight:700;color:var(--text)">'+fmt(s.amount)+'<span style="color:var(--muted);font-weight:400;font-size:10px"> ('+sPct+'%)</span></span></div>';
+    });
+    h+='</div>';
+  }
+
+  // Action buttons
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="openClarityPlanAdvice(\''+p.id+'\')" style="flex:1;background:var(--gp);border:none;border-radius:12px;padding:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Get Budget Plan</button>';
+  h+='<button onclick="openLogPlanSaving(\''+p.id+'\')" style="flex:1;background:var(--gl);border:none;border-radius:12px;padding:10px;color:var(--green);font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(22,163,74,0.3)">Log Saving</button>';
+  h+='<button onclick="openEditPlan(\''+p.id+'\')" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer">Edit</button>';
+  h+='</div></div></div>';
+  return h;
+}
+
+function buildForecastCalendar(cf){
+  var now=new Date();var curMonth=-1;var html='<div class="card" style="padding:14px">';
+  // Build day grid
+  html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+  cf.slice(0,90).forEach(function(d){
+    var dt=new Date(d.date+'T12:00:00');
+    var dom=dt.getDate();var mn=dt.getMonth();
+    // Month label
+    if(mn!==curMonth){
+      curMonth=mn;
+      if(dom>1){html+='<div style="width:100%;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 0 4px">'+dt.toLocaleString('default',{month:'long',year:'numeric'})+'</div>';}
+      else{html+='<div style="width:100%;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:4px 0">'+dt.toLocaleString('default',{month:'long',year:'numeric'})+'</div>';}
+    }
+    // Day color
+    var isPay=d.inflow>0;
+    var hasPlan=d.events.some(function(e){return e.type==='planned';});
+    var isNeg=d.bal<0;
+    var pressure=d.outflow>800?'high':d.outflow>300?'med':d.outflow>0?'low':'none';
+    var bg=hasPlan?'#7c3aed':isPay?'#4361ee':isNeg?'#dc2626':pressure==='high'?'#ef4444':pressure==='med'?'#f59e0b':pressure==='low'?'rgba(67,97,238,0.18)':'var(--bg)';
+    var fc=hasPlan||isPay||isNeg||pressure==='high'?'#fff':pressure==='med'?'#fff':'var(--text2)';
+    var billNames=d.events.map(function(e){return e.label;}).slice(0,2).join(', ');
+    var tip=fmtD(d.date,true)+'|Balance: '+fmt(d.bal)+(d.inflow>0?'|+'+fmt(d.inflow)+' paycheck':'')+(d.outflow>0?'|-'+fmt(d.outflow)+' out':'')+(billNames?'|'+billNames:'');
+    html+='<div onclick="showCalTip(event,\''+tip.replace(/'/g,'')+'\')" style="width:36px;height:36px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(isPay||hasPlan||isNeg?'800':'600')+';color:'+fc+';cursor:pointer;flex-shrink:0;position:relative">';
+    html+=dom;
+    if(hasPlan)html+='<div style="position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#fff;opacity:.8"></div>';
+    html+='</div>';
+  });
+  html+='</div>';
+  // Legend
+  html+='<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">';
+  [{c:'#4361ee',l:'Payday'},{c:'#7c3aed',l:'Planned Expense'},{c:'#ef4444',l:'Heavy Bills'},{c:'#f59e0b',l:'Moderate'},{c:'#dc2626',l:'Negative'}].forEach(function(x){
+    html+='<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:10px;height:10px;border-radius:3px;background:'+x.c+'"></div>'+x.l+'</div>';
+  });
+  html+='</div></div>';
+  return html;
+}
+
+// ADD PLAN MODAL
+function openAddPlan(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='addPlanModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var cats=['Travel','Party / Event','Home Repair','Medical','Car','Electronics','Clothing','Education','Gift','Other'];
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:6px">New Planned Expense</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:20px">Plan a future expense and get a saving strategy.</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Name</label><input class="inp" id="np-name" placeholder="e.g. Zoe Birthday Party"/></div>';
+  h+='<div><label class="lbl">Category</label><select class="sel" id="np-cat">'+cats.map(function(c){return'<option>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div><label class="lbl">Target Date</label><input class="inp" type="date" id="np-date"/></div>';
+  h+='<div><label class="lbl">Total Estimated Cost</label><input class="inp" type="tel" inputmode="decimal" id="np-amt" placeholder="0"/></div>';
+  h+='<div><label class="lbl">Who is this for</label><div class="tog-wrap"><button class="tog-btn on" onclick="setPlanDM(this,\'joint\')">Joint</button><button class="tog-btn" onclick="setPlanDM(this,\'jay\')">Jay</button><button class="tog-btn" onclick="setPlanDM(this,\'chari\')">Chari</button></div></div>';
+  h+='<div><label class="lbl">Budget Breakdown <span style="font-weight:400;color:var(--muted)">(optional — break into sub-items)</span></label>';
+  h+='<div id="np-subs"></div>';
+  h+='<button onclick="addPlanSubItem()" style="background:transparent;border:1px dashed var(--border);border-radius:10px;padding:7px 14px;font-size:12px;color:var(--muted);cursor:pointer;width:100%;margin-top:4px">+ Add Line Item</button></div>';
+  h+='<div><label class="lbl">Notes</label><input class="inp" id="np-notes" placeholder="e.g. Chicago trip June 14-17"/></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="savePlan()">Add Plan</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addPlanModal\').remove()">Cancel</button></div>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._planDM='joint';
+}
+
+function setPlanDM(btn,dm){
+  window._planDM=dm;
+  btn.closest('.tog-wrap').querySelectorAll('.tog-btn').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+}
+
+function addPlanSubItem(){
+  var wrap=document.getElementById('np-subs');if(!wrap)return;
+  var idx=wrap.children.length;
+  var div=document.createElement('div');
+  div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  div.innerHTML='<input class="inp" placeholder="Item name" style="flex:2" id="sub-name-'+idx+'"/>'
+    +'<input class="inp" type="tel" inputmode="decimal" placeholder="$" style="flex:1" id="sub-amt-'+idx+'"/>'
+    +'<button onclick="this.parentElement.remove()" style="background:var(--rl);border:none;border-radius:8px;padding:8px 10px;color:var(--red);cursor:pointer;font-size:14px">×</button>';
+  wrap.appendChild(div);
+}
+
+async function savePlan(){
+  var name=(document.getElementById('np-name').value||'').trim();
+  var date=document.getElementById('np-date').value;
+  var amt=parseFloat(document.getElementById('np-amt').value||0);
+  var cat=document.getElementById('np-cat').value||'Other';
+  var notes=(document.getElementById('np-notes').value||'').trim();
+  if(!name||!date||!amt){alert('Please fill in name, date, and amount.');return;}
+  // Sub items
+  var subs=[];var wrap=document.getElementById('np-subs');
+  if(wrap){Array.from(wrap.children).forEach(function(row,i){
+    var n=(document.getElementById('sub-name-'+i)||{}).value||'';
+    var a=parseFloat((document.getElementById('sub-amt-'+i)||{}).value||0);
+    if(n&&a>0)subs.push({name:n,amount:a});
+  });}
+  var r=await sb.from('planned_expenses').insert({
+    household_id:HID,created_by:CU.id,name:name,category:cat,
+    target_date:date,estimated_amount:amt,decision_maker:window._planDM||'joint',
+    notes:notes||null,sub_items:subs,amount_saved:0
+  }).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  PLAN.push(r.data);
+  document.getElementById('addPlanModal').remove();
+  await logAct('plan_created',name+' planned — '+fmt(amt)+' by '+fmtD(date,true),'plan',r.data.id,{amount:amt});
+  sendNotification('goal_created',name+' — '+fmt(amt)+' by '+fmtD(date,true),amt);
+  renderPlan();
+}
+
+// CLARITY BUDGET PLAN — AI powered breakdown
+async function openClarityPlanAdvice(pid){
+  var p=PLAN.find(function(x){return x.id===pid;});if(!p)return;
+  var td2=today();var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
+  var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
+  var checksLeft=payDates.filter(function(d){return d>td2&&d<=p.target_date;}).length;
+  if(checksLeft===0)checksLeft=Math.max(1,Math.floor(Math.round((new Date(p.target_date+'T12:00:00')-new Date())/86400000)/14));
+  var pd=EX.filter(function(e){return e.is_past_due;});
+  var pdTotal=pd.reduce(function(s,e){return s+(e.past_due_amount||e.amount);},0);
+
+  var m=document.createElement('div');m.className='modal-ov';m.id='planAdviceModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Budget Plan — '+p.name+'</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Clarity is building your saving strategy...</div>';
+  h+='<div id="plan-advice-content"><div style="display:flex;align-items:center;gap:10px;color:var(--muted);padding:20px 0"><div class="spinner"></div> Analyzing your finances...</div></div>';
+  h+='<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'planAdviceModal\').remove()">Close</button>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+
+  var sys='You are Clarity, a personal finance coach. A household is planning a future expense and needs a concrete budgeting plan. Be specific, practical, and honest about constraints. Structure your response with these exact headers:\n\nOVERVIEW\n[2-3 sentences on whether this is achievable given their finances]\n\nSAVING STRATEGY\n[Exactly how much to save per paycheck, which check to start, any risks]\n\nBUDGET BREAKDOWN\n[If no sub-items provided, suggest logical breakdown of the estimated cost]\n\nWATCH OUT FOR\n[1-3 specific risks or conflicts with their current bills/situation]\n\nPRO TIP\n[One creative or non-obvious suggestion to make this easier]\n\nKeep it under 200 words total. Use $ amounts throughout.';
+
+  var prompt='Planned expense: '+p.name+'\n'
+    +'Estimated cost: '+fmt(p.estimated_amount)+'\n'
+    +'Target date: '+fmtD(p.target_date)+'\n'
+    +'Category: '+p.category+'\n'
+    +'Notes: '+(p.notes||'none')+'\n'
+    +(p.sub_items&&p.sub_items.length>0?'Budget items: '+p.sub_items.map(function(s){return s.name+' '+fmt(s.amount);}).join(', ')+'\n':'\n')
+    +'Already saved toward this: '+fmt(p.amount_saved)+'\n\n'
+    +'Household finances:\n'
+    +'Paycheck: '+fmt(paycheck)+' biweekly\n'
+    +'Monthly bills: '+fmt(monthly)+'\n'
+    +'Past due: '+fmt(pdTotal)+'\n'
+    +'Paychecks until target date: '+checksLeft+'\n'
+    +'Per-check capacity (bills-only net): '+fmt(paycheck-(monthly/2));
+
+  try{
+    var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:sys,messages:[{role:'user',content:prompt}]})});
+    var data=await res.json();
+    var text=(data.content&&data.content[0]&&data.content[0].text)||'Could not generate plan.';
+    var el=document.getElementById('plan-advice-content');if(!el)return;
+    var sections=['OVERVIEW','SAVING STRATEGY','BUDGET BREAKDOWN','WATCH OUT FOR','PRO TIP'];
+    var colors={'OVERVIEW':'var(--pl)','SAVING STRATEGY':'var(--gl)','BUDGET BREAKDOWN':'rgba(67,97,238,0.05)','WATCH OUT FOR':'var(--rl)','PRO TIP':'rgba(124,58,237,0.08)'};
+    var borders={'OVERVIEW':'rgba(67,97,238,0.15)','SAVING STRATEGY':'rgba(22,163,74,0.15)','BUDGET BREAKDOWN':'rgba(67,97,238,0.1)','WATCH OUT FOR':'rgba(220,38,38,0.15)','PRO TIP':'rgba(124,58,237,0.15)'};
+    var textColors={'OVERVIEW':'var(--primary)','SAVING STRATEGY':'var(--green)','BUDGET BREAKDOWN':'var(--primary)','WATCH OUT FOR':'var(--red)','PRO TIP':'var(--purple)'};
+    var formatted='';
+    sections.forEach(function(sec){
+      var idx=text.indexOf(sec);if(idx<0)return;
+      var nextIdx=sections.map(function(s){return text.indexOf(s,idx+1);}).filter(function(i){return i>idx;});
+      var end=nextIdx.length>0?Math.min.apply(null,nextIdx):text.length;
+      var content=text.substring(idx+sec.length,end).replace(/^\n+/,'').trim();
+      formatted+='<div style="background:'+colors[sec]+';border:1px solid '+borders[sec]+';border-radius:12px;padding:12px 14px;margin-bottom:10px">';
+      formatted+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:'+textColors[sec]+';margin-bottom:6px">'+sec+'</div>';
+      formatted+='<div style="font-size:13px;color:var(--text2);line-height:1.65">'+content+'</div></div>';
+    });
+    el.innerHTML=formatted||'<div style="font-size:13px;color:var(--text2)">'+text+'</div>';
+  }catch(e){var el2=document.getElementById('plan-advice-content');if(el2)el2.innerHTML='<div style="color:var(--red)">Could not load plan. Try again.</div>';}
+}
+
+// LOG SAVING toward a planned expense
+function openLogPlanSaving(pid){
+  var p=PLAN.find(function(x){return x.id===pid;});if(!p)return;
+  var m=document.createElement('div');m.className='modal-ov';m.id='logPlanSavingModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var remaining=p.estimated_amount-p.amount_saved;
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Log Saving — '+p.name+'</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">'+fmt(p.amount_saved)+' saved · '+fmt(remaining)+' still needed</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Amount</label><input class="inp" type="tel" inputmode="decimal" id="lps-amt" placeholder="0"/></div>';
+  h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="lps-date" value="'+today()+'"/></div>';
+  h+='<div><label class="lbl">Note</label><input class="inp" id="lps-note" placeholder="e.g. From May 2nd paycheck"/></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-g" style="flex:1" onclick="savePlanSaving(\''+pid+'\')">Log Saving</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'logPlanSavingModal\').remove()">Cancel</button></div>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+async function savePlanSaving(pid){
+  var p=PLAN.find(function(x){return x.id===pid;});if(!p)return;
+  var amt=parseFloat((document.getElementById('lps-amt')||{}).value||0);
+  if(!amt||amt<=0){alert('Enter an amount.');return;}
+  var newSaved=p.amount_saved+amt;
+  var isFunded=newSaved>=p.estimated_amount;
+  var r=await sb.from('planned_expenses').update({amount_saved:newSaved,is_funded:isFunded}).eq('id',pid).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  var idx=PLAN.findIndex(function(x){return x.id===pid;});
+  if(idx>=0)PLAN[idx]=r.data;
+  document.getElementById('logPlanSavingModal').remove();
+  await logAct('plan_saving',p.name+' — '+fmt(amt)+' saved'+(isFunded?' — FULLY FUNDED!':''),'plan',pid,{amount:amt});
+  sendNotification('goal_contribution',p.name+' — '+fmt(amt)+' saved'+(isFunded?' — FULLY FUNDED!':''),amt);
+  renderPlan();
+}
+
+// EDIT PLAN MODAL
+function openEditPlan(pid){
+  var p=PLAN.find(function(x){return x.id===pid;});if(!p)return;
+  var m=document.createElement('div');m.className='modal-ov';m.id='editPlanModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:16px">Edit Plan</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Name</label><input class="inp" id="ep-name" value="'+p.name+'"/></div>';
+  h+='<div><label class="lbl">Target Date</label><input class="inp" type="date" id="ep-date" value="'+p.target_date+'"/></div>';
+  h+='<div><label class="lbl">Estimated Amount</label><input class="inp" type="tel" inputmode="decimal" id="ep-amt" value="'+p.estimated_amount+'"/></div>';
+  h+='<div><label class="lbl">Notes</label><input class="inp" id="ep-notes" value="'+(p.notes||'')+'" placeholder="Notes"/></div>';
+  h+='<div style="display:flex;gap:10px">';
+  h+='<button class="btn btn-p" style="flex:1" onclick="saveEditPlan(\''+pid+'\')">Save</button>';
+  h+='<button class="btn btn-red" style="flex:1" onclick="deletePlan(\''+pid+'\')">Delete</button></div>';
+  h+='<button class="btn btn-ghost" onclick="document.getElementById(\'editPlanModal\').remove()">Cancel</button>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+async function saveEditPlan(pid){
+  var name=(document.getElementById('ep-name').value||'').trim();
+  var date=document.getElementById('ep-date').value;
+  var amt=parseFloat(document.getElementById('ep-amt').value||0);
+  var notes=(document.getElementById('ep-notes').value||'').trim();
+  if(!name||!date||!amt)return;
+  var r=await sb.from('planned_expenses').update({name:name,target_date:date,estimated_amount:amt,notes:notes||null}).eq('id',pid).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  var idx=PLAN.findIndex(function(x){return x.id===pid;});if(idx>=0)PLAN[idx]=r.data;
+  document.getElementById('editPlanModal').remove();
+  renderPlan();
+}
+
+async function deletePlan(pid){
+  if(!confirm('Delete this planned expense?'))return;
+  await sb.from('planned_expenses').delete().eq('id',pid);
+  PLAN=PLAN.filter(function(x){return x.id!==pid;});
+  document.getElementById('editPlanModal').remove();
+  renderPlan();
+}
+
 function renderActivity(){
   var filtered=getByTime(ACT,'created_at');
   var html='<div class="ph"><div class="ph-eye">Activity</div><div class="ph-title">What\'s been happening</div><div class="ph-sub">Every action logged by who did it and when.</div></div>';
