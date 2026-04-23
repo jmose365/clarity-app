@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/api/claude", "destination": "/api/claude.js" },
     { "source": "/api/notify", "destination": "/api/notify.js" },
+    { "source": "/api/remind", "destination": "/api/remind.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
