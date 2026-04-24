@@ -5918,11 +5918,15 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Review Import</div>';
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:14px">'+rows.length+' transactions from '+filename+'</div>';
 
-  // Summary bar
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">';
-  [{l:'Transactions',v:(debits.length+credits.length),c:'var(--primary)'},
+  var transfersOut=transfers.filter(function(r){return r.amount<0;});
+  var transfersOutTotal=transfersOut.reduce(function(s,r){return s+r.amount;},0);
+
+  // Summary bar — 4 tiles
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">';
+  [{l:'Transactions',v:debits.length+credits.length,c:'var(--primary)'},
    {l:'Paychecks',v:paychecks.length,c:'var(--green)'},
-   {l:'Spending',v:fmt(Math.abs(spendingNet)),c:'var(--red)'}
+   {l:'Spending',v:fmt(Math.abs(spendingNet)),c:'var(--red)'},
+   {l:'Transfers Out',v:fmt(Math.abs(transfersOutTotal)),c:'var(--amber)'}
   ].forEach(function(t){
     h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
     h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">'+t.l+'</div>';
@@ -5940,9 +5944,10 @@ function showCSVReview(rows,filename){
 
   // Transfer info
   if(transfers.length>0){
+    var transfersIn=transfers.filter(function(r){return r.amount>0;});
     h+='<div style="background:rgba(200,210,240,0.15);border-radius:12px;padding:10px 14px;margin-bottom:12px">';
-    h+='<div style="font-size:12px;font-weight:700;color:var(--muted)">'+transfers.length+' transfer'+(transfers.length>1?'s':'')+' detected — excluded from import</div>';
-    h+='<div style="font-size:11px;color:var(--muted)">Transfers between your accounts are skipped automatically.</div></div>';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--muted)">'+transfers.length+' transfer'+(transfers.length>1?'s':'')+' detected ('+transfersOut.length+' out, '+transfersIn.length+' in)</div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:2px">Zelle payments, internal moves — shown separately above, not counted as spending.</div></div>';
   }
 
   // Transaction list — scrollable
