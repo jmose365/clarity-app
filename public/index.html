@@ -5890,7 +5890,9 @@ function showCSVReview(rows,filename){
   var debits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount<0;});
   var credits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount>0;});
 
-  // Calculate ending balance effect
+  // Net change = only non-transfer, non-paycheck transactions (actual spending/credits)
+  var spendingNet=debits.reduce(function(s,r){return s+(r.amount||0);},0);
+  var paycheckTotal=paychecks.reduce(function(s,r){return s+(r.amount||0);},0);
   var netChange=rows.filter(function(r){return !r.is_transfer;}).reduce(function(s,r){return s+(r.amount||0);},0);
   var currentBal=acct?acct.balance:0;
   var endingBal=currentBal+netChange;
@@ -5906,9 +5908,9 @@ function showCSVReview(rows,filename){
 
   // Summary bar
   h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">';
-  [{l:'Transactions',v:debits.length+credits.length,c:'var(--primary)'},
-   {l:'Transfers',v:transfers.length,c:'var(--muted)'},
-   {l:'Net Change',v:(netChange>=0?'+':'')+fmt(netChange),c:netChange>=0?'var(--green)':'var(--red)'}
+  [{l:'Transactions',v:(debits.length+credits.length),c:'var(--primary)'},
+   {l:'Paychecks',v:paychecks.length,c:'var(--green)'},
+   {l:'Spending',v:fmt(Math.abs(spendingNet)),c:'var(--red)'}
   ].forEach(function(t){
     h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
     h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">'+t.l+'</div>';
@@ -5951,17 +5953,13 @@ function showCSVReview(rows,filename){
   });
   h+='</div>';
 
-  // Ending balance
+  // Ending balance — ask user to confirm rather than auto-calculate
   h+='<div style="background:var(--surface);border:1px solid var(--glass-border);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
-  h+='<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
-  h+='<span style="font-size:12px;color:var(--text2)">Current balance ('+(acct?acct.name:'account')+')</span>';
-  h+='<span style="font-size:12px;font-weight:700">'+fmt(currentBal)+'</span></div>';
-  h+='<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
-  h+='<span style="font-size:12px;color:var(--text2)">Net change from import</span>';
-  h+='<span style="font-size:12px;font-weight:700;color:'+(netChange>=0?'var(--green)':'var(--red)')+'">'+(netChange>=0?'+':'')+fmt(netChange)+'</span></div>';
-  h+='<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--bl)">';
-  h+='<span style="font-size:13px;font-weight:700">Updated balance</span>';
-  h+='<span style="font-size:14px;font-weight:900;color:'+(endingBal<0?'var(--red)':'var(--primary)')+'">'+fmt(endingBal)+'</span></div></div>';
+  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Update Account Balance</div>';
+  h+='<div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5">What does your '+(acct?acct.name:'account')+' actually show right now? We will update the balance to match.</div>';
+  h+='<div style="display:flex;align-items:center;gap:8px">';
+  h+='<span style="font-size:1rem;font-weight:700;color:var(--muted)">$</span>';
+  h+='<input class="inp" type="tel" inputmode="decimal" id="csv-ending-bal" placeholder="Enter current account balance" style="font-size:1rem;font-weight:700"/></div></div>';
 
   h+='<div style="display:flex;gap:8px">';
   h+='<button onclick="confirmCSVImport()" class="btn btn-p" style="flex:1">Import '+importable.length+' Transactions</button>';
@@ -6015,11 +6013,13 @@ async function confirmCSVImport(){
     if(!pR.error){PAYLOG.push(pR.data);paycheckCount++;}
   }
 
-  // Update account balance
+  // Update account balance with manually entered value
+  var endingBalInput=document.getElementById('csv-ending-bal');
+  var endingBalRaw=endingBalInput?(endingBalInput.value||'').replace(/[^0-9.\-]/g,''):'';
+  var endingBal=endingBalRaw!==''?parseFloat(endingBalRaw):null;
   var acct=ACCOUNTS.find(function(a){return a.id===acctId;});
-  if(acct){
-    var newBal=acct.balance+d.netChange;
-    await updateAccountBalance(acctId,newBal);
+  if(acct&&endingBal!==null){
+    await updateAccountBalance(acctId,endingBal);
   }
 
   // Log import
