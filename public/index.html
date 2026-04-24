@@ -5927,34 +5927,52 @@ function showCSVReview(rows,filename){
   var totalOut=Math.abs(spendingNet)+Math.abs(transfersOutTotal);
   var totalIn=paycheckTotal2+otherInTotal;
 
-  // 6 tiles — 2 columns
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">';
-  [
-    {l:'Transactions',v:debits.length+credits.length,c:'var(--primary)',sub:null},
-    {l:'Paychecks',v:paychecks.length,c:'var(--green)',sub:null},
-    {l:'Spending',v:fmt(Math.abs(spendingNet)),c:'var(--red)',sub:debits.length+' debits'},
-    {l:'Transfers Out',v:fmt(Math.abs(transfersOutTotal)),c:'var(--amber)',sub:transfersOut.length+' transfers'},
-    {l:'Income',v:fmt(paycheckTotal2),c:'var(--green)',sub:paychecks.length+' paychecks'},
-    {l:'Other Money In',v:fmt(otherInTotal),c:'var(--primary)',sub:otherIn.length+' credits'},
-  ].forEach(function(t){
-    h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
-    h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">'+t.l+'</div>';
-    h+='<div style="font-size:13px;font-weight:800;color:'+t.c+'">'+t.v+'</div>';
-    if(t.sub)h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+t.sub+'</div>';
-    h+='</div>';
-  });
+  // Tiles organized as Out (left) vs In (right) — reads like a ledger
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">';
+
+  // Column headers
+  h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--red);text-align:center;padding:4px 0">Money Out</div>';
+  h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--green);text-align:center;padding:4px 0">Money In</div>';
+
+  // Row 1: Spending | Income
+  h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Spending</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--red)">'+fmt(Math.abs(spendingNet))+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+debits.length+' transactions</div></div>';
+
+  h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Income</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--green)">'+fmt(paycheckTotal2)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+paychecks.length+' paychecks</div></div>';
+
+  // Row 2: Transfers Out | Other Money In
+  h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Transfers Out</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--amber)">'+fmt(Math.abs(transfersOutTotal))+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+transfersOut.length+' transfers</div></div>';
+
+  h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Other Money In</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--primary)">'+fmt(otherInTotal)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+otherIn.length+' credits</div></div>';
+
   h+='</div>';
 
-  // Total row
+  // Divider with = sign
+  h+='<div style="display:flex;align-items:center;gap:8px;margin:4px 0 6px">';
+  h+='<div style="flex:1;height:1px;background:var(--bl)"></div>';
+  h+='<div style="font-size:11px;font-weight:800;color:var(--muted)">=</div>';
+  h+='<div style="flex:1;height:1px;background:var(--bl)"></div></div>';
+
+  // Totals row
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">';
   h+='<div style="background:var(--rl);border:1px solid rgba(220,38,38,0.15);border-radius:12px;padding:10px 12px;text-align:center">';
-  h+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--red);margin-bottom:2px">Total Money Out</div>';
-  h+='<div style="font-size:14px;font-weight:900;color:var(--red)">'+fmt(totalOut)+'</div>';
-  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">Spending + Transfers</div></div>';
+  h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--red);margin-bottom:2px">Total Money Out</div>';
+  h+='<div style="font-size:16px;font-weight:900;color:var(--red)">'+fmt(totalOut)+'</div></div>';
+
   h+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.15);border-radius:12px;padding:10px 12px;text-align:center">';
-  h+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:2px">Total Money In</div>';
-  h+='<div style="font-size:14px;font-weight:900;color:var(--green)">'+fmt(totalIn)+'</div>';
-  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">Income + Other Credits</div></div>';
+  h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:2px">Total Money In</div>';
+  h+='<div style="font-size:16px;font-weight:900;color:var(--green)">'+fmt(totalIn)+'</div></div>';
   h+='</div>';
   // Transaction list — scrollable
   h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Transactions to Import</div>';
