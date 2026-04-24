@@ -4766,12 +4766,13 @@ function buildTrendsChart(dm,numMonths,txArr){
   // Lines
   sortedCats.forEach(function(cat,ci){
     var color=TCOLORS[ci%TCOLORS.length];
+    // Area fill
     var areaD='M '+xp(0)+','+(pT+plH)+' '+months.map(function(m,i){return 'L '+xp(i)+' '+yp(m.cats[cat]||0);}).join(' ')+' L '+xp(nM-1)+','+(pT+plH)+' Z';
-    svg+='<path d="'+areaD+'" fill="'+color+'" fill-opacity="0.06" stroke="none"/>';
+    svg+='<path class="trend-area" data-cat="'+cat+'" d="'+areaD+'" fill="'+color+'" fill-opacity="0.06" stroke="none"/>';
     var pts=months.map(function(m,i){return xp(i)+','+yp(m.cats[cat]||0);}).join(' ');
-    svg+='<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    svg+='<polyline class="trend-line" data-cat="'+cat+'" points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
     months.forEach(function(m,i){
-      if((m.cats[cat]||0)>0)svg+='<circle cx="'+xp(i)+'" cy="'+yp(m.cats[cat]||0)+'" r="3" fill="'+color+'" stroke="white" stroke-width="1.5"/>';
+      if((m.cats[cat]||0)>0)svg+='<circle class="trend-dot" data-cat="'+cat+'" cx="'+xp(i)+'" cy="'+yp(m.cats[cat]||0)+'" r="3" fill="'+color+'" stroke="white" stroke-width="1.5"/>';
     });
   });
   svg+='</svg>';
@@ -4806,9 +4807,27 @@ function buildTrendsChart(dm,numMonths,txArr){
 
 function isolateTrendCat(cat,color){
   var dd=document.getElementById('trend-drilldown');if(!dd)return;
-  // If already showing this cat, clear
-  if(window._isolatedCat===cat){window._isolatedCat=null;dd.innerHTML='';return;}
+  if(window._isolatedCat===cat){
+    window._isolatedCat=null;
+    dd.innerHTML='';
+    // Restore all lines
+    document.querySelectorAll('.trend-line,.trend-dot,.trend-area').forEach(function(el){
+      el.style.opacity='1';el.style.strokeWidth='2';
+    });
+    return;
+  }
   window._isolatedCat=cat;
+
+  // Dim non-selected lines, highlight selected
+  document.querySelectorAll('.trend-line,.trend-dot,.trend-area').forEach(function(el){
+    var elCat=el.getAttribute('data-cat');
+    if(elCat===cat){
+      el.style.opacity='1';
+      if(el.tagName==='polyline')el.style.strokeWidth='3';
+    } else {
+      el.style.opacity='0.1';
+    }
+  });
 
   var dm=window._trendDM||'all';
   var filtered=dm==='all'?TX:TX.filter(function(t){return t.decision_maker===dm;});
@@ -6001,19 +6020,34 @@ function cleanMerchantName(payee,memo){
 
 function inferCategoryFromName(name,memo){
   var s=(name+' '+memo).toUpperCase();
-  if(s.match(/RENT|MORTGAGE|HOA/))return 'Housing';
-  if(s.match(/ELECTRIC|GAS|WATER|UTILITY|UTILITIES|XCEL|CONSUMERS|DUKE/))return 'Utilities';
-  if(s.match(/GROCERY|FOOD|RESTAURANT|MCDONALD|STARBUCKS|SUBWAY|CHIPOTLE|PIZZA|WALMART|KROGER|ALDI|WHOLE FOODS|PANERA|TACO|BURGER|WENDY|CHICK-FIL/))return 'Food & Drinks';
-  if(s.match(/GAS STATION|SHELL|BP |EXXON|CHEVRON|SPEEDWAY|MEIJER GAS|MARATHON/))return 'Transportation';
-  if(s.match(/UBER|LYFT|TRANSIT|BUS |TRAIN|PARKING|TOLL/))return 'Transportation';
-  if(s.match(/DOCTOR|HOSPITAL|PHARMACY|CVS|WALGREEN|MEDICAL|DENTAL|VISION|HEALTH/))return 'Healthcare';
-  if(s.match(/NETFLIX|HULU|SPOTIFY|APPLE|DISNEY|HBO|AMAZON PRIME|YOUTUBE/))return 'Subscriptions';
-  if(s.match(/T-MOBILE|TMOBILE|AT&T|VERIZON|SPRINT|CRICKET|BOOST/))return 'Subscriptions';
-  if(s.match(/AMAZON|EBAY|ETSY|TARGET|WALMART|COSTCO|BEST BUY|HOME DEPOT|LOWES/))return 'Household Supplies';
-  if(s.match(/SALON|BARBER|SPA|BEAUTY|NAIL/))return 'Personal Care';
-  if(s.match(/GYM|FITNESS|PLANET FITNESS|LA FITNESS/))return 'Healthcare';
-  if(s.match(/LOAN|CREDIT CARD|CAPITAL ONE|CHASE|DISCOVER|BANK OF AMERICA|WELLS FARGO|HUNTINGTON/))return 'Debt & Retirement';
-  if(s.match(/INSURANCE|GEICO|STATE FARM|ALLSTATE|PROGRESSIVE/))return 'Debt & Retirement';
+  // Food first — broad merchant matching before generic terms
+  if(s.match(/MCDONALD|STARBUCKS|SUBWAY|CHIPOTLE|PIZZA|TACO|BURGER|WENDY|CHICK.FIL|PANERA|CULVER|ARBY|POPEYE|DOMINO|FIVE GUYS|APPLEBEE|OLIVE GARDEN|DENNY|IHOP|WAFFLE|SONIC|DAIRY QUEEN|BUFFALO WILD/))return 'Food & Drinks';
+  if(s.match(/DOORDASH|UBER.EATS|GRUBHUB|DOORSTEP|DD \*|PY \*/))return 'Food & Drinks';
+  if(s.match(/GROCERY|MEIJER|KROGER|ALDI|WHOLE FOODS|TRADER JOE|FOOD LION|PUBLIX|SAFEWAY|JEWEL|SPROUTS/))return 'Food & Drinks';
+  // Housing
+  if(s.match(/RENT|MORTGAGE|HOA|APARTMENT|REALTY/))return 'Housing';
+  // Utilities — specific to avoid GAS matching gas stations
+  if(s.match(/ELECTRIC|CONSUMERS ENERGY|XCEL|DUKE ENERGY|SEMCO|NICOR|PEOPLES GAS|WATER BILL|UTILITY/))return 'Utilities';
+  // Transportation — parking before generic
+  if(s.match(/PSPT |PARKING|GARAGE|METER|TOLL|AAA |AUTO REPAIR|JIFFY LUBE|MIDAS|FIRESTONE|OIL CHANGE/))return 'Transportation';
+  if(s.match(/SHELL|BP |EXXON|CHEVRON|SPEEDWAY|MARATHON|SUNOCO|CITGO|MOBIL|VALERO/))return 'Transportation';
+  if(s.match(/UBER(?!.*EATS)|LYFT|TRANSIT/))return 'Transportation';
+  // Subscriptions — software/streaming
+  if(s.match(/NETFLIX|HULU|SPOTIFY|DISNEY|HBO|YOUTUBE PREMIUM|PEACOCK|PARAMOUNT|SLING|FUBO/))return 'Subscriptions';
+  if(s.match(/PRIME VIDEO|PRIME CHANNEL|AMAZON PRIME/))return 'Subscriptions';
+  if(s.match(/T.MOBILE|TMOBILE|AT&T|VERIZON|SPRINT|CRICKET|BOOST|METRO PCS/))return 'Subscriptions';
+  if(s.match(/SUPABASE|GITHUB|GOOGLE ONE|DROPBOX|ADOBE|MICROSOFT|ZOOM|NOTION|FIGMA|HEROKU|VERCEL|RAILWAY|OPENAI|ANTHROPIC|APPLE.COM/))return 'Subscriptions';
+  // Healthcare
+  if(s.match(/DOCTOR|HOSPITAL|PHARMACY|CVS|WALGREEN|MEDICAL|DENTAL|VISION|URGENT CARE|CLINIC/))return 'Healthcare';
+  if(s.match(/GYM|FITNESS|PLANET FITNESS|LA FITNESS|CRUNCH|YMCA/))return 'Healthcare';
+  // Household Supplies
+  if(s.match(/AMAZON(?!.*PRIME)|TARGET|WALMART|COSTCO|BEST BUY|HOME DEPOT|LOWES|IKEA|WAYFAIR|KOHLS|MARSHALLS|TJ MAXX|ROSS /))return 'Household Supplies';
+  // Personal Care
+  if(s.match(/SALON|BARBER|SPA|BEAUTY|NAIL|GREAT CLIPS|SUPERCUTS|ULTA|SEPHORA/))return 'Personal Care';
+  // Debt — only specific loan/insurance companies
+  if(s.match(/STUDENT LOAN|NAVIENT|NELNET|MOHELA|SALLIE MAE|ALLY FINANCIAL|CAR PAYMENT/))return 'Debt & Retirement';
+  if(s.match(/GEICO|STATE FARM|ALLSTATE|PROGRESSIVE|LIBERTY MUTUAL|NATIONWIDE|FARMERS INS/))return 'Debt & Retirement';
+  // Income/Transfer
   if(s.match(/DIRECT DEP|PAYROLL|SALARY|EMPLOYER/))return 'Income';
   if(s.match(/TFR|TRANSFER|ZELLE|VENMO/))return 'Transfer';
   return 'Other';
