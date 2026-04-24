@@ -5858,7 +5858,7 @@ async function parseCSVWithClaude(csvText,filename){
     showCSVReview(parsed,filename);
 
   }catch(e){
-    if(status)status.innerHTML='<div style="color:var(--red);font-size:13px;padding:12px 0">Parse error: '+e.message+'</div>';
+    if(status)status.innerHTML='<div style="color:var(--red);font-size:13px;padding:12px 0">Parse error: '+e.message+'<br><small style="color:var(--muted)">Line 1: '+csvText.split('\n')[0].substring(0,100)+'</small></div>';
     console.error('CSV parse error:',e);
   }
 }
@@ -5926,7 +5926,11 @@ function showCSVReview(rows,filename){
     h+='<div style="flex:1;min-width:0">';
     h+='<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.clean_name+'</div>';
     h+='<div style="font-size:10px;color:var(--muted)">'+fmtD(r.date,true)+(r.is_paycheck?' · <span style="color:var(--green);font-weight:600">Paycheck</span>':'')+(matchedBill?' · <span style="color:var(--primary);font-weight:600">Matches '+matchedBill.name+'</span>':'')+'</div></div>';
-    h+='<div style="font-size:12px;font-weight:700;color:'+(r.amount>=0?'var(--green)':'var(--text)')+';flex-shrink:0">'+(r.amount>=0?'+':'')+fmt(Math.abs(r.amount))+'</div></div>';
+    // Amount — green for credits (money in), red for debits (money out)
+    var isCredit=r.amount>0;
+    h+='<div style="text-align:right;flex-shrink:0">';
+    h+='<div style="font-size:12px;font-weight:700;color:'+(isCredit?'var(--green)':'var(--red)')+'">'+( isCredit?'+':'-')+fmt(Math.abs(r.amount))+'</div>';
+    h+='<div style="font-size:9px;color:var(--muted)">'+(isCredit?'IN':'OUT')+'</div></div></div>';
   });
   h+='</div>';
 
@@ -5968,9 +5972,17 @@ async function confirmCSVImport(){
 
   // Bulk insert transactions
   var txInserts=toImport.filter(function(r){return !r.is_paycheck;}).map(function(r){
-    return {household_id:HID,logged_by:CU.id,name:r.clean_name,amount:Math.abs(r.amount),
-      category:r.category||'Other',transaction_date:r.date,notes:r.memo||null,
-      decision_maker:selectedIndices.size>0?'joint':'joint',account_id:acctId};
+    var isDebit=r.amount<0;
+    return {
+      household_id:HID,logged_by:CU.id,
+      name:r.clean_name,
+      amount:Math.abs(r.amount), // always stored positive
+      category:r.category||'Other',
+      transaction_date:r.date,
+      notes:(isDebit?'Debit':'Credit')+' · '+( r.memo||''),
+      decision_maker:'joint',
+      account_id:acctId
+    };
   });
 
   if(txInserts.length>0){
