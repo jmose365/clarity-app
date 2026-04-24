@@ -694,14 +694,23 @@ function getConsequenceSeverity(cons){
   return order[cons]||0;
 }
 function calcPos(){
-  var c=calcAvailable();if(c<0)return 'behind';
-  // Critical past due = eviction or repossession consequence
-  var criticalPD=EX.filter(function(e){return e.is_past_due&&getConsequenceSeverity(e.consequence)>=4;});
-  if(criticalPD.length>0)return 'behind';
-  // Any past due where total due now exceeds spendable
-  var totalPD=EX.filter(function(e){return e.is_past_due;}).reduce(function(s,e){return s+calcTotalDueNow(e);},0);
-  if(totalPD>calcSpendable()&&totalPD>0)return 'behind';
-  if(totalPD>0)return 'current'; // Has past due but can cover it
+  var available=calcAvailable();
+  var pd=EX.filter(function(e){return e.is_past_due;});
+  var totalPD=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+
+  if(pd.length>0){
+    // Check if balance can cover all past due
+    var canCover=available>=totalPD;
+    if(!canCover){
+      // Behind — balance insufficient to cover past due
+      return 'behind';
+    }
+    // Has past due but balance covers it — Current (amber)
+    // Still needs action but not in crisis
+    return 'current';
+  }
+
+  // No past due — check spendable for position
   var sp=calcSpendable();
   if(sp>=(SET.ahead_threshold||1000))return 'ahead';
   if(sp>=(SET.ontrack_threshold||600))return 'ontrack';
@@ -1355,11 +1364,13 @@ function renderHome(){
     html+='<div style="margin-top:12px;background:rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;font-size:12px;color:rgba(255,255,255,0.8)">'+fmt(pendingEarmarked)+' pending — activates when next paycheck is logged</div>';
   }
   // Position context line
+  var totalPD=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+  var canCoverPD=available>=totalPD&&totalPD>0;
   var posCtx={
-    behind: pd.length>0?'You\'re Behind — clear past due bills to move up. Tap the pill above for details.':'Log your paycheck to update your balance and move off Behind.',
-    current:'You\'re Current — all bills paid. Need '+fmt((SET.ontrack_threshold||600)-spendable)+' more Spendable to reach On Track.',
-    ontrack:'You\'re On Track — '+fmt(spendable)+' Spendable. Need '+fmt((SET.ahead_threshold||1000)-spendable)+' more to reach Ahead.',
-    ahead:'You\'re Ahead — great position. Focus on goals and building your cushion.'
+    behind:'You are Behind — balance of '+fmt(available)+' is short of the '+fmt(totalPD)+' past due. Focus on the highest-consequence bills first.',
+    current:pd.length>0&&canCoverPD?'You have '+fmt(totalPD)+' past due but your balance can cover it. Pay those bills now to move forward.':pd.length>0?'Past due bills exist — clear them to move up.':'You are Current — all bills paid. Need '+fmt((SET.ontrack_threshold||600)-spendable)+' more Spendable to reach On Track.',
+    ontrack:'You are On Track — '+fmt(spendable)+' Spendable. Need '+fmt((SET.ahead_threshold||1000)-spendable)+' more to reach Ahead.',
+    ahead:'You are Ahead — great position. Focus on goals and building your cushion.'
   }[p];
   html+='<div style="margin-top:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.5">'+posCtx+'</div>';
   html+='</div></div>'; // close hero-inner + hero
