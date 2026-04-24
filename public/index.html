@@ -5918,38 +5918,43 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Review Import</div>';
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:14px">'+rows.length+' transactions from '+filename+'</div>';
 
-  var transfersOut=transfers.filter(function(r){return r.amount<0;});
+  var transfersIn=transfers.filter(function(r){return r.amount>0;});
   var transfersOutTotal=transfersOut.reduce(function(s,r){return s+r.amount;},0);
+  var paycheckTotal2=paychecks.reduce(function(s,r){return s+(r.amount||0);},0);
+  var otherIn=credits.filter(function(r){return !r.is_paycheck;});
+  var otherInTotal=otherIn.reduce(function(s,r){return s+(r.amount||0);},0);
+  var totalOut=Math.abs(spendingNet)+Math.abs(transfersOutTotal);
+  var totalIn=paycheckTotal2+otherInTotal;
 
-  // Summary bar — 4 tiles
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">';
-  [{l:'Transactions',v:debits.length+credits.length,c:'var(--primary)'},
-   {l:'Paychecks',v:paychecks.length,c:'var(--green)'},
-   {l:'Spending',v:fmt(Math.abs(spendingNet)),c:'var(--red)'},
-   {l:'Transfers Out',v:fmt(Math.abs(transfersOutTotal)),c:'var(--amber)'}
+  // 6 tiles — 2 columns
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">';
+  [
+    {l:'Transactions',v:debits.length+credits.length,c:'var(--primary)',sub:null},
+    {l:'Paychecks',v:paychecks.length,c:'var(--green)',sub:null},
+    {l:'Spending',v:fmt(Math.abs(spendingNet)),c:'var(--red)',sub:debits.length+' debits'},
+    {l:'Transfers Out',v:fmt(Math.abs(transfersOutTotal)),c:'var(--amber)',sub:transfersOut.length+' transfers'},
+    {l:'Income',v:fmt(paycheckTotal2),c:'var(--green)',sub:paychecks.length+' paychecks'},
+    {l:'Other Money In',v:fmt(otherInTotal),c:'var(--primary)',sub:otherIn.length+' credits'},
   ].forEach(function(t){
     h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
     h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">'+t.l+'</div>';
-    h+='<div style="font-size:13px;font-weight:800;color:'+t.c+'">'+t.v+'</div></div>';
+    h+='<div style="font-size:13px;font-weight:800;color:'+t.c+'">'+t.v+'</div>';
+    if(t.sub)h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+t.sub+'</div>';
+    h+='</div>';
   });
   h+='</div>';
 
-  // Paycheck alert
-  if(paychecks.length>0){
-    h+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.2);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:center">';
-    h+='<span style="font-size:18px">💰</span>';
-    h+='<div><div style="font-size:12px;font-weight:700;color:var(--green)">'+paychecks.length+' paycheck'+(paychecks.length>1?'s':'')+' detected</div>';
-    h+='<div style="font-size:11px;color:var(--text2)">Will be logged to your paycheck history</div></div></div>';
-  }
-
-  // Transfer info
-  if(transfers.length>0){
-    var transfersIn=transfers.filter(function(r){return r.amount>0;});
-    h+='<div style="background:rgba(200,210,240,0.15);border-radius:12px;padding:10px 14px;margin-bottom:12px">';
-    h+='<div style="font-size:12px;font-weight:700;color:var(--muted)">'+transfers.length+' transfer'+(transfers.length>1?'s':'')+' detected ('+transfersOut.length+' out, '+transfersIn.length+' in)</div>';
-    h+='<div style="font-size:11px;color:var(--muted);margin-top:2px">Zelle payments, internal moves — shown separately above, not counted as spending.</div></div>';
-  }
-
+  // Total row
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">';
+  h+='<div style="background:var(--rl);border:1px solid rgba(220,38,38,0.15);border-radius:12px;padding:10px 12px;text-align:center">';
+  h+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--red);margin-bottom:2px">Total Money Out</div>';
+  h+='<div style="font-size:14px;font-weight:900;color:var(--red)">'+fmt(totalOut)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">Spending + Transfers</div></div>';
+  h+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.15);border-radius:12px;padding:10px 12px;text-align:center">';
+  h+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:2px">Total Money In</div>';
+  h+='<div style="font-size:14px;font-weight:900;color:var(--green)">'+fmt(totalIn)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">Income + Other Credits</div></div>';
+  h+='</div>';
   // Transaction list — scrollable
   h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Transactions to Import</div>';
   h+='<div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;margin-bottom:14px">';
