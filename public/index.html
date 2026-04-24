@@ -5784,7 +5784,14 @@ function detectTransactionType(payee,memo,amount){
   if(combined.match(/ZELLE|VENMO|CASHAPP|PAYPAL.*TRANSFER/))return 'transfer';
   // Paycheck detection
   if(combined.match(/DIRECT DEP|DIR DEP|PAYROLL|ACH CR|EMPLOYER|SALARY/))return 'paycheck';
-  // Credit/Debit
+  // ACH credits that look like income
+  if(amount>0&&combined.match(/ACH CC|ASI ACH/))return 'paycheck';
+  // Refunds — positive amounts from merchants
+  if(amount>0&&combined.match(/MERCHANDISE RET|REFUND|RETURN|CREDIT ADJ/))return 'refund';
+  // Mobile/check deposits
+  if(amount>0&&combined.match(/MOBILE CHECK|CHECK DEPOSIT|MOBILE DEP/))return 'deposit';
+  // Provisional credits and fee waivers are real positive activity — keep as credits
+  // If reversed they show back as negative debits naturally
   return parseFloat(amount||0)>=0?'credit':'debit';
 }
 
@@ -5857,6 +5864,12 @@ async function parseCSVWithClaude(csvText,filename){
       var category=bankCat||inferCategoryFromName(cleanName,memo);
       var isPaycheck=txType==='paycheck';
       var isTransfer=txType==='transfer';
+      var isRefund=txType==='refund';
+      var isDeposit=txType==='deposit';
+
+      // Refunds and deposits treated as credits, not transfers
+      if(isRefund)category='Other';
+      if(isDeposit)category='Income';
 
       parsed.push({
         date:dateISO,
@@ -5888,11 +5901,10 @@ function showCSVReview(rows,filename){
   var transfers=rows.filter(function(r){return r.is_transfer;});
   var paychecks=rows.filter(function(r){return r.is_paycheck&&!r.is_transfer;});
   var debits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount<0;});
-  var credits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount>0;});
-
-  // Net change = only non-transfer, non-paycheck transactions (actual spending/credits)
+  var credits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount>=0;});
   var spendingNet=debits.reduce(function(s,r){return s+(r.amount||0);},0);
   var paycheckTotal=paychecks.reduce(function(s,r){return s+(r.amount||0);},0);
+  // True net = paychecks + credits + spending (negative)
   var netChange=rows.filter(function(r){return !r.is_transfer;}).reduce(function(s,r){return s+(r.amount||0);},0);
   var currentBal=acct?acct.balance:0;
   var endingBal=currentBal+netChange;
