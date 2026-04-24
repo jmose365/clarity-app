@@ -5899,6 +5899,8 @@ function showCSVReview(rows,filename){
 
   // Separate transfers, paychecks, and regular transactions
   var transfers=rows.filter(function(r){return r.is_transfer;});
+  var transfersOut=transfers.filter(function(r){return r.amount<0;});
+  var transfersIn=transfers.filter(function(r){return r.amount>0;});
   var paychecks=rows.filter(function(r){return r.is_paycheck&&!r.is_transfer;});
   var debits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount<0;});
   var credits=rows.filter(function(r){return !r.is_transfer&&!r.is_paycheck&&r.amount>=0;});
@@ -5918,7 +5920,6 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Review Import</div>';
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:14px">'+rows.length+' transactions from '+filename+'</div>';
 
-  var transfersIn=transfers.filter(function(r){return r.amount>0;});
   var transfersOutTotal=transfersOut.reduce(function(s,r){return s+r.amount;},0);
   var paycheckTotal2=paychecks.reduce(function(s,r){return s+(r.amount||0);},0);
   var otherIn=credits.filter(function(r){return !r.is_paycheck;});
