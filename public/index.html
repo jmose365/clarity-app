@@ -624,9 +624,8 @@ function calcAvailable(){
   if(jointAccounts.length>0){
     return jointAccounts.reduce(function(s,a){return s+(a.balance||0);},0);
   }
-  // Fallback: non-private spending accounts
-  var shared=ACCOUNTS.filter(function(a){return a.is_spending&&a.is_active&&!a.is_private;});
-  if(shared.length>0)return shared.reduce(function(s,a){return s+(a.balance||0);},0);
+  // Only fall back to cash_on_hand — don't use spending accounts without explicit purpose
+  // This prevents stale $0 accounts from masking the manual cash entry
   return SET.cash_on_hand||0;
 }
 
@@ -2038,10 +2037,17 @@ async function saveCashModal(){
   var modal=document.getElementById('cashModal');if(modal)modal.remove();
 }
 async function updateCash(amt){
-  var old=SET.cash_on_hand||0;
-  await sb.from('household_settings').update({cash_on_hand:amt}).eq('household_id',HID);
-  SET.cash_on_hand=amt;
-  await logAct('cash_updated','Cash updated from '+fmt(old)+' to '+fmt(amt),'profile',null,{old:old,new:amt});
+  var old=calcAvailable();
+  var jointAcct=getJointAccount();
+  if(jointAcct){
+    // Update the joint account balance directly
+    await updateAccountBalance(jointAcct.id,amt);
+  } else {
+    // Fall back to cash_on_hand
+    await sb.from('household_settings').update({cash_on_hand:amt}).eq('household_id',HID);
+    SET.cash_on_hand=amt;
+  }
+  await logAct('cash_updated','Balance updated from '+fmt(old)+' to '+fmt(amt),'profile',null,{old:old,new:amt});
   sendNotification('cash_updated','Available updated to '+fmt(amt));
   updateTopBar();renderHome();
 }
