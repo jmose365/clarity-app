@@ -3381,6 +3381,13 @@ function openTxDetail(txId){
   var ic=t.notes&&t.notes.indexOf('Credit')>=0;
   var it=t.category==='Transfer';
   var CATS2=CATS.concat(['Transfer','Income','Other Money In']);
+
+  // Count matching transactions (same name prefix, different category)
+  var sameName=TX.filter(function(x){
+    return x.id!==t.id&&x.name&&t.name&&
+      x.name.substring(0,8).toLowerCase()===t.name.substring(0,8).toLowerCase();
+  });
+
   var h='<div class="modal"><div class="modal-handle"></div>';
   h+='<div style="font-size:18px;margin-bottom:4px">'+getCatEmoji(t.category)+'</div>';
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">'+t.name+'</div>';
@@ -3388,6 +3395,16 @@ function openTxDetail(txId){
   h+='<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">';
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="txd-date" value="'+(t.transaction_date||'')+'"/></div>';
   h+='<div><label class="lbl">Category</label><select class="sel" id="txd-cat">'+CATS2.map(function(c){return '<option'+(c===t.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+
+  // Bulk recategorize option — only show if similar transactions exist
+  if(sameName.length>0){
+    h+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.15);border-radius:12px;padding:10px 12px">';
+    h+='<div style="display:flex;align-items:center;gap:10px">';
+    h+='<input type="checkbox" id="txd-bulk" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0"/>';
+    h+='<div><div style="font-size:12px;font-weight:700;color:var(--primary)">Apply to all similar transactions</div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:1px">'+sameName.length+' other transaction'+(sameName.length>1?'s':'')+' from this merchant will also be recategorized</div></div></div></div>';
+  }
+
   h+='<div><label class="lbl">Type</label><select class="sel" id="txd-type">';
   ['Debit','Credit','Transfer'].forEach(function(tp){
     var sel=(it&&tp==='Transfer')||(ic&&!it&&tp==='Credit')||(!ic&&!it&&tp==='Debit');
@@ -3397,22 +3414,44 @@ function openTxDetail(txId){
   h+='<div><label class="lbl">Notes</label><input class="inp" id="txd-notes" value="'+(t.notes||'').replace(/^(Debit|Credit|Transfer) · /,'')+'"/></div>';
   h+='</div>';
   h+='<div style="display:flex;gap:8px">';
-  h+='<button onclick="saveTxEdit(\x27'+txId+'\x27)" class="btn btn-p" style="flex:1">Save</button>';
+  h+='<button onclick="saveTxEdit(\x27'+txId+'\x27,\x27'+t.name.substring(0,8)+'\x27)" class="btn btn-p" style="flex:1">Save</button>';
   h+='<button onclick="deleteTx(\x27'+txId+'\x27,'+t.amount+');document.getElementById(\x27txDetailModal\x27).remove()" class="btn btn-red" style="flex:1">Delete</button>';
   h+='<button onclick="document.getElementById(\x27txDetailModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
 
-async function saveTxEdit(txId){
+async function saveTxEdit(txId,namePrefix){
   var date=document.getElementById('txd-date').value;
   var cat=document.getElementById('txd-cat').value;
   var type=document.getElementById('txd-type').value;
   var notes=(document.getElementById('txd-notes').value||'').trim();
+  var bulkEl=document.getElementById('txd-bulk');
+  var doBulk=bulkEl&&bulkEl.checked;
   var notePrefix=type==='Credit'?'Credit':type==='Transfer'?'Transfer':'Debit';
+
+  // Save this transaction
   var r=await sb.from('transactions').update({transaction_date:date,category:cat,notes:notePrefix+' · '+notes}).eq('id',txId).select('*').single();
   if(r.error){alert('Error: '+r.error.message);return;}
   var idx=TX.findIndex(function(x){return x.id===txId;});if(idx>=0)TX[idx]=r.data;
+
+  // Bulk recategorize matching transactions
+  if(doBulk&&namePrefix&&namePrefix.length>0){
+    var toUpdate=TX.filter(function(x){
+      return x.id!==txId&&x.name&&x.name.substring(0,8).toLowerCase()===namePrefix.toLowerCase();
+    });
+    if(toUpdate.length>0){
+      // Update in Supabase — batch by IDs
+      var ids=toUpdate.map(function(x){return x.id;});
+      await sb.from('transactions').update({category:cat}).in('id',ids);
+      // Update local state
+      TX=TX.map(function(x){
+        return ids.indexOf(x.id)>=0?Object.assign({},x,{category:cat}):x;
+      });
+      await logAct('bulk_recategorize',toUpdate.length+' transactions from "'+namePrefix+'..." recategorized to '+cat,'transaction',null,{count:toUpdate.length,category:cat});
+    }
+  }
+
   document.getElementById('txDetailModal').remove();
   renderLedger();
 }
@@ -6094,7 +6133,7 @@ function inferCategoryFromName(name,memo){
   if(s.match(/DOORDASH|UBER.EATS|GRUBHUB|DOORSTEP|DD \*|PY \*/))return 'Food & Drinks';
   if(s.match(/GROCERY|MEIJER|KROGER|ALDI|WHOLE FOODS|TRADER JOE|FOOD LION|PUBLIX|SAFEWAY|JEWEL|SPROUTS/))return 'Food & Drinks';
   // Housing
-  if(s.match(/RENT|MORTGAGE|HOA|APARTMENT|REALTY/))return 'Housing';
+  if(s.match(/RENT|MORTGAGE|HOA|APARTMENT|REALTY|STORAGE|1.800.STORAGE|EXTRA SPACE|PUBLIC STORAGE|LIFE STORAGE|CUBESMART|UHAUL STORAGE/))return 'Housing';
   // Utilities — specific to avoid GAS matching gas stations
   if(s.match(/ELECTRIC|CONSUMERS ENERGY|XCEL|DUKE ENERGY|SEMCO|NICOR|PEOPLES GAS|WATER BILL|UTILITY/))return 'Utilities';
   // Transportation — parking before generic
