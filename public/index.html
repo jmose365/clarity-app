@@ -6317,23 +6317,23 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:2px">Total Money In</div>';
   h+='<div style="font-size:16px;font-weight:900;color:var(--green)">'+fmt(totalIn)+'</div></div>';
   h+='</div>';
-  // Transaction list — scrollable
-  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Transactions to Import</div>';
+  // Transaction list — ALL rows, scrollable
+  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">All Transactions to Import ('+rows.length+')</div>';
   h+='<div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;margin-bottom:14px">';
-  var importable=rows.filter(function(r){return !r.is_transfer;});
-  importable.forEach(function(r,i){
-    // Match against existing bills
+  rows.forEach(function(r,i){
     var matchedBill=EX.find(function(e){return r.clean_name&&e.name&&r.clean_name.toLowerCase().includes(e.name.toLowerCase().substring(0,6));});
+    var isCredit=r.amount>0;
+    var typeTag=r.is_paycheck?'<span style="font-size:9px;font-weight:700;background:var(--gl);color:var(--green);border-radius:4px;padding:1px 5px">PAYCHECK</span>':
+                r.is_transfer?'<span style="font-size:9px;font-weight:700;background:rgba(200,210,240,0.3);color:var(--muted);border-radius:4px;padding:1px 5px">TRANSFER</span>':
+                isCredit?'<span style="font-size:9px;font-weight:700;background:var(--gl);color:var(--green);border-radius:4px;padding:1px 5px">IN</span>':
+                '<span style="font-size:9px;font-weight:700;background:rgba(220,38,38,0.08);color:var(--red);border-radius:4px;padding:1px 5px">OUT</span>';
     h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(200,210,240,0.2)">';
-    h+='<input type="checkbox" data-idx="'+i+'" checked style="width:14px;height:14px;accent-color:var(--primary);flex-shrink:0"/>';
     h+='<div style="flex:1;min-width:0">';
     h+='<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.clean_name+'</div>';
-    h+='<div style="font-size:10px;color:var(--muted)">'+fmtD(r.date,true)+(r.is_paycheck?' · <span style="color:var(--green);font-weight:600">Paycheck</span>':'')+(matchedBill?' · <span style="color:var(--primary);font-weight:600">Matches '+matchedBill.name+'</span>':'')+'</div></div>';
-    // Amount — green for credits (money in), red for debits (money out)
-    var isCredit=r.amount>0;
+    h+='<div style="font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:2px">'+fmtD(r.date,true)+' '+typeTag+(matchedBill?' · <span style="color:var(--primary);font-weight:600">Matches '+matchedBill.name+'</span>':'')+'</div></div>';
     h+='<div style="text-align:right;flex-shrink:0">';
     h+='<div style="font-size:12px;font-weight:700;color:'+(isCredit?'var(--green)':'var(--red)')+'">'+( isCredit?'+':'-')+fmt(Math.abs(r.amount))+'</div>';
-    h+='<div style="font-size:9px;color:var(--muted)">'+(isCredit?'IN':'OUT')+'</div></div></div>';
+    h+='</div></div>';
   });
   h+='</div>';
 
@@ -6362,7 +6362,7 @@ function showCSVReview(rows,filename){
   h+='<input type="hidden" id="csv-net-all" value="'+netAll+'"/>';
 
   h+='<div style="display:flex;gap:8px">';
-  h+='<button onclick="confirmCSVImport()" class="btn btn-p" style="flex:1">Import '+importable.length+' Transactions</button>';
+  h+='<button onclick="confirmCSVImport()" class="btn btn-p" style="flex:1">Import All '+rows.length+' Transactions</button>';
   h+='<button onclick="document.getElementById(\x27csvImportModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button></div>';
   h+='</div></div>';
   m.innerHTML=h;
