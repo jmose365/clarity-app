@@ -6467,6 +6467,24 @@ function openImportHistory(){
   var h='<div class="modal"><div class="modal-handle"></div>';
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Import History</div>';
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Tap Undo to reverse an import — removes transactions and reverses the balance change.</div>';
+
+  // Sync paychecks button — fixes missing income transactions from old imports
+  var paycheckTxCount=TX.filter(function(t){return t.category==='Income'&&t.notes&&t.notes.indexOf('Paycheck')>=0;}).length;
+  var unsynced=PAYLOG.filter(function(pl){
+    var plDate=pl.actual_date||pl.scheduled_date||pl.pay_date;
+    return !TX.some(function(t){
+      return t.category==='Income'&&t.notes&&t.notes.indexOf('Paycheck')>=0&&
+             (t.transaction_date===plDate||Math.abs(t.amount-(pl.amount||0))<1);
+    });
+  });
+  if(unsynced.length>0){
+    h+='<div style="background:rgba(67,97,238,0.06);border:1px solid rgba(67,97,238,0.2);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:4px">'+unsynced.length+' paycheck'+(unsynced.length>1?'s':'')+' missing from Transactions</div>';
+    h+='<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">These were imported before income was tracked as transactions. Tap to add them now.</div>';
+    h+='<button onclick="syncPaycheckTransactions()" class="btn btn-p btn-sm" style="width:auto;padding:8px 16px">Sync '+unsynced.length+' Paychecks to Transactions</button>';
+    h+='</div>';
+  }
+
   if(IMPORTS.length===0){
     h+='<div style="text-align:center;color:var(--muted);padding:20px 0;font-size:13px">No imports yet.</div>';
   } else {
@@ -6483,6 +6501,58 @@ function openImportHistory(){
   h+='<button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\x27importHistModal\x27).remove()">Close</button>';
   h+='</div></div>';
   m.innerHTML=h;document.body.appendChild(m);
+}
+
+async function syncPaycheckTransactions(){
+  var btn=document.querySelector('#importHistModal .btn-p');
+  if(btn){btn.textContent='Syncing...';btn.disabled=true;}
+
+  // Find paychecks not already in transactions
+  var unsynced=PAYLOG.filter(function(pl){
+    var plDate=pl.actual_date||pl.scheduled_date||pl.pay_date;
+    return !TX.some(function(t){
+      return t.category==='Income'&&t.notes&&t.notes.indexOf('Paycheck')>=0&&
+             (t.transaction_date===plDate||Math.abs(t.amount-(pl.amount||0))<1);
+    });
+  });
+
+  if(unsynced.length===0){
+    alert('All paychecks are already in Transactions.');
+    return;
+  }
+
+  // Get the joint account for linking
+  var jointAcct=getJointAccount();
+  var acctId=jointAcct?jointAcct.id:null;
+
+  var inserts=unsynced.map(function(pl){
+    var plDate=pl.actual_date||pl.scheduled_date||pl.pay_date||today();
+    return {
+      household_id:HID,
+      logged_by:CU.id,
+      name:'Direct Deposit — Paycheck',
+      amount:pl.amount||0,
+      category:'Income',
+      transaction_date:plDate,
+      notes:'Credit · PAYROLL (Paycheck)',
+      decision_maker:'joint',
+      account_id:acctId
+    };
+  });
+
+  var r=await sb.from('transactions').insert(inserts).select('*');
+  if(r.error){alert('Error: '+r.error.message);return;}
+  TX=TX.concat(r.data||[]);
+
+  document.getElementById('importHistModal').remove();
+
+  var toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+  toast.textContent='✅ '+unsynced.length+' paycheck'+(unsynced.length>1?'s':'')+' added to Transactions';
+  document.body.appendChild(toast);
+  setTimeout(function(){toast.remove();},3500);
+
+  renderLedger();
 }
 
 async function undoImport(importId,acctId,importedAt){
