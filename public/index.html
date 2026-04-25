@@ -878,7 +878,7 @@ function populatePosPop(){
     var need2=ah-sp;
     nextMsg='You need '+fmt(need2)+' more Spendable to reach Ahead. Keep paying down bills on time.';
   } else {
-    nextMsg='You\'re in the best position. Focus on goals and building passive income.';
+    nextMsg='You\x27re in the best position. Focus on goals and building passive income.';
   }
   document.getElementById('posPopNext').textContent=nextMsg;
 }
@@ -1141,12 +1141,12 @@ function getThreeCheckSuggestion(p,goals){
   var topGoal=needGoals[0]||wantGoals[0]||dreamGoals[0]||null;
 
   if(p==='behind'){
-    return {msg:'You\'re currently behind on bills. Use this check to clear past due balances first, then put any remainder toward goals.',action:null,actionLabel:null};}
+    return {msg:'You\x27re currently behind on bills. Use this check to clear past due balances first, then put any remainder toward goals.',action:null,actionLabel:null};}
   if(p==='current'){
-    return {msg:'You\'re current on bills — nice. This extra check is a real opportunity. Put it toward '+(topGoal?topGoal.name:'your top goal')+' and make meaningful progress.',action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
+    return {msg:'You\x27re current on bills — nice. This extra check is a real opportunity. Put it toward '+(topGoal?topGoal.name:'your top goal')+' and make meaningful progress.',action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
   if(p==='ontrack'){
-    return {msg:'You\'re on track. Route '+(topGoal?fmt(Math.min(paycheck,topGoal.target_amount-topGoal.current_amount))+' toward '+topGoal.name:'this full check toward your top goal')+' — you won\'t miss it.',action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
-  return {msg:'You\'re ahead — this is exactly what this check is for. Go full goal mode. '+(topGoal?topGoal.name+' is '+Math.round(topGoal.current_amount/topGoal.target_amount*100)+'% funded — one more push could get you there.':'Set a goal and fund it now.'),action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
+    return {msg:'You\x27re on track. Route '+(topGoal?fmt(Math.min(paycheck,topGoal.target_amount-topGoal.current_amount))+' toward '+topGoal.name:'this full check toward your top goal')+' — you won\x27t miss it.',action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
+  return {msg:'You\x27re ahead — this is exactly what this check is for. Go full goal mode. '+(topGoal?topGoal.name+' is '+Math.round(topGoal.current_amount/topGoal.target_amount*100)+'% funded — one more push could get you there.':'Set a goal and fund it now.'),action:topGoal?topGoal.id:null,actionLabel:topGoal?'Allocate to '+topGoal.name:null};}
 
 function buildRecoveryRoadmap(pos,pd,available,spendable,paycheck,monthly,activeGoals){
   var aheadThreshold=SET.ahead_threshold||1000;
@@ -1174,7 +1174,7 @@ function buildRecoveryRoadmap(pos,pd,available,spendable,paycheck,monthly,active
       done:false,
       label:'Clear '+e.name+' past due',
       sub:fmt(totalDue)+' total due — '+sevLabel,
-      action:'openMarkPaid(\''+e.id+'\')',
+      action:'openMarkPaid(\x27'+e.id+'\x27)',
       actionLabel:'Pay Now',
       urgent:true,
       checksNeeded:checksNeeded,
@@ -1345,7 +1345,7 @@ function renderHome(){
     var byName=getUName(e.earmarked_by);
     html+='<div class="alert alert-amber" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">';
     html+='<div><strong>'+byName+'</strong> earmarked <strong>'+e.name+'</strong> — '+fmt(e.amount)+'</div>';
-    html+='<button onclick="ackEarmarkNotif(\''+e.id+'\')" style="background:var(--amber);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-left:10px">Got it</button>';
+    html+='<button onclick="ackEarmarkNotif(\x27'+e.id+'\x27)" style="background:var(--amber);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-left:10px">Got it</button>';
     html+='</div>';
   });
 
@@ -1444,7 +1444,7 @@ function renderHome(){
   if(isCheckinDay&&!todayCheckin){
     var dayLabel=checkinType==='wednesday'?'Wednesday':checkinType==='friday'?'Friday':'Sunday';
     var dayMsg=checkinType==='friday'?'Weekend prep — know your balance before Saturday.':checkinType==='sunday'?'Week reset — start fresh and set your intentions.':'Mid-week sync — catch up on what has moved since Monday.';
-    html+='<div style="background:var(--gp);border-radius:18px;padding:16px 18px;margin-bottom:14px;cursor:pointer" onclick="openCheckin(\''+checkinType+'\')">';
+    html+='<div style="background:var(--gp);border-radius:18px;padding:16px 18px;margin-bottom:14px;cursor:pointer" onclick="openCheckin(\x27'+checkinType+'\x27)">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center">';
     html+='<div><div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">'+dayLabel+' Check-In</div>';
     html+='<div style="font-size:14px;font-weight:700;color:#fff;line-height:1.4">'+dayMsg+'</div></div>';
@@ -1459,12 +1459,12 @@ function renderHome(){
 
   // Health score — tappable, Claude-powered
   var healthExplId='healthExpl_'+Date.now();
-  html+='<div class="card" style="cursor:pointer" onclick="loadHealthExplanation(\''+healthExplId+'\')">';
+  html+='<div class="card" style="cursor:pointer" onclick="loadHealthExplanation(\x27'+healthExplId+'\x27)">';
   html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
   html+='<span style="font-size:13px;font-weight:600;color:var(--text2)">Financial Health Score</span>';
   html+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;font-weight:700;color:'+hc+'">'+health+'/100</span><span style="font-size:11px;color:var(--muted)">Tap for breakdown</span></div></div>';
   html+='<div class="hbar"><div class="hbar-bg"></div><div class="hbar-mask" style="width:'+(100-health)+'%"></div></div>';
-  html+='<div id="'+healthExplId+'" style="margin-top:10px;font-size:12px;color:var(--text2);line-height:1.6">'+(health>=80?'Strong position. Tap to see full breakdown.':health>=50?'Manageable. Tap to see what\'s dragging your score and how to improve it.':'Needs attention. Tap to see exactly what Clarity recommends.')+'</div>';
+  html+='<div id="'+healthExplId+'" style="margin-top:10px;font-size:12px;color:var(--text2);line-height:1.6">'+(health>=80?'Strong position. Tap to see full breakdown.':health>=50?'Manageable. Tap to see what\x27s dragging your score and how to improve it.':'Needs attention. Tap to see exactly what Clarity recommends.')+'</div>';
   html+='</div>';
 
   // Three-paycheck month banner
@@ -1481,7 +1481,7 @@ function renderHome(){
     html+='<div style="font-size:13px;color:var(--text2);line-height:1.55;margin-bottom:10px">'+tcSugg.msg+'</div>';
     if(tcNext)html+='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Next check: <strong style="color:var(--primary)">'+fmtD(tcNext,true)+'</strong> — '+fmt(UP.paycheck_amount||0)+'</div>';
     if(tcSugg.action){
-      html+='<button onclick="openAllocateThirdCheck(\''+tcSugg.action+'\')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">'+tcSugg.actionLabel+' →</button>';
+      html+='<button onclick="openAllocateThirdCheck(\x27'+tcSugg.action+'\x27)" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">'+tcSugg.actionLabel+' →</button>';
     }
     html+='</div>';
   }
@@ -1546,7 +1546,7 @@ function renderHome(){
       html+='</div>';
     });
     html+='</div>';
-    if(activeGoals.length>3)html+='<button onclick="goTab(\'goals\')" class="btn btn-ghost btn-sm" style="margin-bottom:12px">View all '+activeGoals.length+' goals</button>';
+    if(activeGoals.length>3)html+='<button onclick="goTab(\x27goals\x27)" class="btn btn-ghost btn-sm" style="margin-bottom:12px">View all '+activeGoals.length+' goals</button>';
   }
 
   // Quick actions
@@ -1626,7 +1626,7 @@ function renderHome(){
       html+='</div></div>';
     }
 
-    html+='<button onclick="goTab(\'ledger\');setLV(\'transactions\')" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">View All Transactions →</button>';
+    html+='<button onclick="goTab(\x27ledger\x27);setLV(\x27transactions\x27)" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer">View All Transactions →</button>';
     html+='</div>';
   }
 
@@ -1687,11 +1687,11 @@ function renderHome(){
       // Right: amount + pay button
       html+='<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
       html+='<div style="text-align:right"><div style="font-size:14px;font-weight:800;color:var(--text)">'+fmt(exp.amount)+'</div></div>';
-      html+='<button onclick="openMarkPaid(\''+exp.id+'\')" style="background:var(--gp);border:none;border-radius:10px;padding:6px 12px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(67,97,238,0.25)">Pay</button>';
+      html+='<button onclick="openMarkPaid(\x27'+exp.id+'\x27)" style="background:var(--gp);border:none;border-radius:10px;padding:6px 12px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(67,97,238,0.25)">Pay</button>';
       html+='</div></div>';
     });
     if(upcomingBills.length>5){
-      html+='<div style="font-size:12px;color:var(--muted);text-align:center;padding:4px 0">+'+(upcomingBills.length-5)+' more due this week — <span style="color:var(--primary);cursor:pointer;font-weight:600" onclick="showTab(\'ledger\')">see all</span></div>';
+      html+='<div style="font-size:12px;color:var(--muted);text-align:center;padding:4px 0">+'+(upcomingBills.length-5)+' more due this week — <span style="color:var(--primary);cursor:pointer;font-weight:600" onclick="showTab(\x27ledger\x27)">see all</span></div>';
     }
   }
 
@@ -1730,7 +1730,7 @@ function renderCheckinModal(){
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
   h+='<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">'+typeLabel+'</div>';
   h+='<div style="font-size:16px;font-weight:800;margin-top:2px">Step '+step+' of '+total+'</div></div>';
-  h+='<button onclick="document.getElementById(\'checkinModal\').remove()" style="background:var(--bg);border:none;border-radius:10px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer">Skip</button></div>';
+  h+='<button onclick="document.getElementById(\x27checkinModal\x27).remove()" style="background:var(--bg);border:none;border-radius:10px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer">Skip</button></div>';
 
   // Progress dots
   h+='<div style="display:flex;gap:5px;margin-bottom:20px">';
@@ -1796,8 +1796,8 @@ function checkinStep2(){
     h+='<div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">';
     h+='A paycheck of <strong>'+fmt(paycheck)+'</strong> was scheduled for <strong>'+fmtD(unlogged[0],true)+'</strong>. Did it arrive?</div>';
     h+='<div style="display:flex;flex-direction:column;gap:8px">';
-    h+='<button onclick="checkinLogPaycheck(\''+unlogged[0]+'\')" class="btn btn-g">Yes — Log it now</button>';
-    h+='<button onclick="checkinPartialPaycheck(\''+unlogged[0]+'\')" class="btn btn-amber" style="background:var(--al);color:var(--amber);border:1px solid rgba(217,119,6,0.2)">Partial / Different amount</button>';
+    h+='<button onclick="checkinLogPaycheck(\x27'+unlogged[0]+'\x27)" class="btn btn-g">Yes — Log it now</button>';
+    h+='<button onclick="checkinPartialPaycheck(\x27'+unlogged[0]+'\x27)" class="btn btn-amber" style="background:var(--al);color:var(--amber);border:1px solid rgba(217,119,6,0.2)">Partial / Different amount</button>';
     h+='<button onclick="checkinSkipStep()" class="btn btn-ghost">Not yet — skip</button>';
     h+='</div>';
   }
@@ -1827,7 +1827,7 @@ function checkinStep3(){
       h+='<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+e.name+'</div>';
       h+='<div style="font-size:11px;color:var(--muted)">'+fmt(e.past_due_amount||e.amount)+' past due</div></div>';
       if(isAcked){h+='<span style="font-size:12px;font-weight:700;color:var(--green)">✓ Acknowledged</span>';}
-      else{h+='<button onclick="ackBill(\''+e.id+'\',\'past_due\')" style="background:var(--red);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Acknowledge</button>';}
+      else{h+='<button onclick="ackBill(\x27'+e.id+'\x27,\x27past_due\x27)" style="background:var(--red);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Acknowledge</button>';}
       h+='</div>';
     });
   }
@@ -1841,7 +1841,7 @@ function checkinStep3(){
       h+='<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+u.exp.name+'</div>';
       h+='<div style="font-size:11px;color:var(--muted)">'+fmt(u.exp.amount)+' · '+daysLbl+'</div></div>';
       if(isAcked){h+='<span style="font-size:12px;font-weight:700;color:var(--green)">✓ Got it</span>';}
-      else{h+='<button onclick="ackBill(\''+u.exp.id+'\',\'upcoming\')" style="background:var(--primary);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Got it</button>';}
+      else{h+='<button onclick="ackBill(\x27'+u.exp.id+'\x27,\x27upcoming\x27)" style="background:var(--primary);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Got it</button>';}
       h+='</div>';
     });
   }
@@ -1876,7 +1876,7 @@ function checkinStep4Friday(){
   var lastFriday=CHECKINS.find(function(c){return c.checkin_type==='friday';});
   var myExisting=CU.id===HM[0]?.id?lastFriday?.weekend_budget_jay:lastFriday?.weekend_budget_chari;
 
-  h+='<div><label class="lbl">'+UP.first_name+'\'s Weekend Budget</label>';
+  h+='<div><label class="lbl">'+UP.first_name+'\x27s Weekend Budget</label>';
   h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
   h+='<span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
   h+='<input class="inp" type="tel" inputmode="decimal" id="ci-wknd" placeholder="e.g. 150" style="font-size:1.1rem;font-weight:700" value="'+(myExisting||'')+'"/></div></div>';
@@ -1884,7 +1884,7 @@ function checkinStep4Friday(){
   // Quick amounts
   h+='<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">';
   [50,100,150,200,250].forEach(function(amt){
-    h+='<button onclick="document.getElementById(\'ci-wknd\').value=\''+amt+'\'" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer">$'+amt+'</button>';
+    h+='<button onclick="document.getElementById(\x27ci-wknd\x27).value=\x27'+amt+'\x27" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer">$'+amt+'</button>';
   });
   h+='</div>';
   h+='<button onclick="checkinFinishFriday()" class="btn btn-p">Set Budget & Finish</button>';
@@ -2031,7 +2031,7 @@ function openCashModal(){
   h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem;font-weight:700;color:var(--muted)">$</span>';
   h+='<input class="inp" type="tel" id="cash-inp" inputmode="decimal" placeholder="e.g. 1250 or -45 if overdrawn" style="font-size:1.1rem;font-weight:700"/></div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveCashModal()">Update</button>';
-  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'cashModal\').remove()">Cancel</button></div>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27cashModal\x27).remove()">Cancel</button></div>';
   h+='<div id="cash-msg" style="font-size:13px;font-weight:500"></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
@@ -2083,17 +2083,17 @@ function openPrealloc(expId){
   var h='<div class="modal"><div class="modal-handle"></div>';
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Pre-Allocate Funds</div>';
   h+='<div style="font-size:13px;color:var(--text2);margin-bottom:6px">'+exp.name+' — '+fmt(exp.amount)+'</div>';
-  h+='<div style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.5">Money you\'ve already set aside for this bill. Reduces the earmark impact — only the remaining gap is held against Spendable.</div>';
+  h+='<div style="font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.5">Money you\x27ve already set aside for this bill. Reduces the earmark impact — only the remaining gap is held against Spendable.</div>';
   h+='<div style="display:flex;flex-direction:column;gap:12px">';
   HM.forEach(function(m2){
     var key=m2.first_name.toLowerCase();
     var existing=preallocBy[key]||0;
-    h+='<div><label class="lbl" style="color:'+(m2.avatar_color||'var(--primary)')+'">'+m2.first_name+'\'s Pre-Allocation</label>';
+    h+='<div><label class="lbl" style="color:'+(m2.avatar_color||'var(--primary)')+'">'+m2.first_name+'\x27s Pre-Allocation</label>';
     h+='<input class="inp" type="number" id="pa-'+key+'" value="'+existing+'" placeholder="$0"/></div>';
   });
   h+='<div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.5">When you log side income separately, it adds to Available. The pre-allocation here tells Clarity how much of that Available is already spoken for this bill — so Spendable only reflects the true gap.</div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="savePrealloc(\''+expId+'\')">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'preallocModal\').remove()">Cancel</button></div>';
-  if(exp.preallocated_amount>0)h+='<button class="btn btn-red" onclick="clearPrealloc(\''+expId+'\')">Clear Pre-Allocation</button>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="savePrealloc(\x27'+expId+'\x27)">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27preallocModal\x27).remove()">Cancel</button></div>';
+  if(exp.preallocated_amount>0)h+='<button class="btn btn-red" onclick="clearPrealloc(\x27'+expId+'\x27)">Clear Pre-Allocation</button>';
   h+='<div id="pa-msg" style="font-size:13px;font-weight:500"></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
@@ -2112,7 +2112,7 @@ async function savePrealloc(expId){
     total+=val;
   });
   // Validate — can't pre-allocate more than the bill
-  if(total>exp.amount){msg.style.color='var(--red)';msg.textContent='Pre-allocation can\'t exceed the bill amount ('+fmt(exp.amount)+').';return;}
+  if(total>exp.amount){msg.style.color='var(--red)';msg.textContent='Pre-allocation can\x27t exceed the bill amount ('+fmt(exp.amount)+').';return;}
   var updates={preallocated_amount:total,preallocated_by:newBy};
   var r=await sb.from('expenses').update(updates).eq('id',expId);
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
@@ -2186,7 +2186,7 @@ function checkProactiveClarityBanner(){
     var tdn=calcTotalDueNow(exp);
     var shortfall=tdn-spendable;
     var conseqLabel={eviction:'Eviction risk',repossession:'Repossession risk'}[exp.consequence]||'Critical';
-    var shortMsg=shortfall>0?'You\'re '+fmt(shortfall)+' short.':' You can cover this in full right now.';
+    var shortMsg=shortfall>0?'You\x27re '+fmt(shortfall)+' short.':' You can cover this in full right now.';
     var nextCheck=UP.next_pay_date?'Your next check ('+fmtD(UP.next_pay_date,true)+') will cover the gap.':'Log your next paycheck to cover the gap.';
     window._proactiveBanner={
       type:'critical',
@@ -2203,7 +2203,7 @@ function checkProactiveClarityBanner(){
     if(aggShortfall>0){
       window._proactiveBanner={
         type:'warning',
-        msg:'Past due bills total '+fmt(totalAllPD)+'. Your Spendable is '+fmt(spendable)+'. You\'re '+fmt(aggShortfall)+' short — tap for a plan.',
+        msg:'Past due bills total '+fmt(totalAllPD)+'. Your Spendable is '+fmt(spendable)+'. You\x27re '+fmt(aggShortfall)+' short — tap for a plan.',
         shortfall:aggShortfall,canCover:false
       };
     }
@@ -2217,9 +2217,9 @@ function renderProactiveBanner(){
   html+='<div style="font-size:13px;font-weight:600;line-height:1.55;margin-bottom:10px">'+b.msg+'</div>';
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
   if(b.canCover&&b.expId){
-    html+='<button onclick="openMarkPaid(\''+b.expId+'\',\'full\','+b.totalDue+')" style="background:'+(b.type==='critical'?'var(--red)':'var(--amber)')+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Pay '+fmt(b.totalDue)+' Now</button>';
+    html+='<button onclick="openMarkPaid(\x27'+b.expId+'\x27,\x27full\x27,'+b.totalDue+')" style="background:'+(b.type==='critical'?'var(--red)':'var(--amber)')+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Pay '+fmt(b.totalDue)+' Now</button>';
   }
-  html+='<button onclick="openAdvisorWithContext(\''+b.msg.replace(/'/g,'')+'\',\'critical\')" style="background:var(--gp);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Get a Plan from Clarity</button>';
+  html+='<button onclick="openAdvisorWithContext(\x27'+b.msg.replace(/'/g,'')+'\x27,\x27critical\x27)" style="background:var(--gp);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Get a Plan from Clarity</button>';
   html+='</div></div>';
   return html;
 }
@@ -2373,7 +2373,7 @@ function openAllocateThirdCheck(goalId){
   h+='</select></div>';
   h+='<div><label class="lbl">Amount to allocate</label><div class="hint">Your 3rd check is '+fmt(paycheck)+'. Suggested: '+fmt(suggested)+' toward this goal.</div><input class="inp" type="number" id="atc-amt" value="'+suggested+'"/></div>';
   h+='<div><label class="lbl">Notes</label><input class="inp" id="atc-notes" value="3rd paycheck allocation"/></div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmAllocateThirdCheck()">Allocate Now</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'allocTCModal\').remove()">Cancel</button></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmAllocateThirdCheck()">Allocate Now</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27allocTCModal\x27).remove()">Cancel</button></div>';
   h+='<div id="atc-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -2412,7 +2412,7 @@ async function loadHealthExplanation(elId){
   var available=calcAvailable();var earmarked=calcEarmarked();var spendable=calcSpendable();
   var activeGoals=GOALS.filter(function(g){return !g.is_complete;});
   var paycheck=UP.paycheck_amount||0;
-  var sys='You are Clarity, a financial coach. Analyze this household\'s finances and return ONLY this exact format:\n\nSCORE: [0-100]\n\nWORKING:\n[emoji] [specific thing working in their favor — 1 sentence, reference actual numbers]\n[repeat 2-3 items]\n\nHURTING:\n[emoji] [specific thing dragging the score — 1 sentence, reference actual numbers]\n[repeat 2-3 items]\n\nMOVE:\n• [single most impactful action right now, specific dollar amount, estimated score gain]\n• [second action, optional]\n\nMax 140 words. Be direct. No generic advice. Reference their real bills and numbers.';
+  var sys='You are Clarity, a financial coach. Analyze this household\x27s finances and return ONLY this exact format:\n\nSCORE: [0-100]\n\nWORKING:\n[emoji] [specific thing working in their favor — 1 sentence, reference actual numbers]\n[repeat 2-3 items]\n\nHURTING:\n[emoji] [specific thing dragging the score — 1 sentence, reference actual numbers]\n[repeat 2-3 items]\n\nMOVE:\n• [single most impactful action right now, specific dollar amount, estimated score gain]\n• [second action, optional]\n\nMax 140 words. Be direct. No generic advice. Reference their real bills and numbers.';
   var prompt='Household finances:\n'
     +'- Available: '+fmt(available)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
     +'- Monthly bills: '+fmt(monthly)+' | Paycheck: '+fmt(paycheck)+' biweekly\n'
@@ -2517,7 +2517,7 @@ async function checkGoalFeasibility(name,amount,saved,date,imp){
   var el=document.getElementById('ng-feasibility');if(!el)return;
   if(!amount||amount<=0){el.innerHTML='';return;}
   var remaining=amount-(saved||0);
-  if(remaining<=0){el.innerHTML='<div class="alert alert-green" style="margin-top:8px">You\'ve already saved enough for this goal!</div>';return;}
+  if(remaining<=0){el.innerHTML='<div class="alert alert-green" style="margin-top:8px">You\x27ve already saved enough for this goal!</div>';return;}
   el.innerHTML='<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:8px"><div class="spinner"></div> Checking feasibility...</div>';
   var spendable=calcSpendable();var paycheck=UP.paycheck_amount||0;
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
@@ -2747,7 +2747,7 @@ function renderFlow(){
     var dom=new Date(d.date+'T12:00:00').getDate();
     var bills=d.events.filter(function(e){return e.type==='expense';}).map(function(e){return e.label;}).slice(0,2).join(', ');
     var tip=fmtD(d.date,true)+(d.outflow>0?'|'+fmt(d.outflow)+' out'+(bills?' - '+bills:''):'')+(d.inflow>0?'|+'+fmt(d.inflow)+' pay':'');
-    html+='<div onclick="showCalTip(event,\''+tip+'\')" style="width:36px;height:36px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(isPay||pressure==='high'?'800':'600')+';color:'+fc+';cursor:'+(d.outflow>0||d.inflow>0?'pointer':'default')+';flex-shrink:0">'+dom+'</div>';
+    html+='<div onclick="showCalTip(event,\x27'+tip+'\x27)" style="width:36px;height:36px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:'+(isPay||pressure==='high'?'800':'600')+';color:'+fc+';cursor:'+(d.outflow>0||d.inflow>0?'pointer':'default')+';flex-shrink:0">'+dom+'</div>';
   });
   html+='</div>';
   html+='<div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">';
@@ -2823,7 +2823,7 @@ function renderLedger(){
   var html='<div class="ph"><div class="ph-eye">Ledger</div><div class="ph-title">Bills & Income</div><div class="ph-sub">Earmark, pay, and manage every expense. Synced for both of you.</div></div>';
   html+='<div style="display:flex;gap:8px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:18px">';
   ['expenses','income','transactions'].forEach(function(v){
-    html+='<button onclick="setLV(\''+v+'\')" style="flex:1;padding:10px 0;border-radius:8px;font-size:12px;font-weight:600;border:none;background:'+(ledgerView===v?'var(--surface)':'transparent')+';color:'+(ledgerView===v?'var(--primary)':'var(--muted)')+';box-shadow:'+(ledgerView===v?'var(--shadow)':'none')+';cursor:pointer;text-transform:capitalize">'+v+'</button>';
+    html+='<button onclick="setLV(\x27'+v+'\x27)" style="flex:1;padding:10px 0;border-radius:8px;font-size:12px;font-weight:600;border:none;background:'+(ledgerView===v?'var(--surface)':'transparent')+';color:'+(ledgerView===v?'var(--primary)':'var(--muted)')+';box-shadow:'+(ledgerView===v?'var(--shadow)':'none')+';cursor:pointer;text-transform:capitalize">'+v+'</button>';
   });
   html+='</div>';
 
@@ -2834,7 +2834,7 @@ function renderLedger(){
     html+='<div class="mc" style="background:var(--al);border-color:rgba(245,158,11,0.2)"><div class="lbl" style="margin-bottom:4px">Earmarked</div><div style="font-size:1.2rem;font-weight:800;color:var(--amber)">'+(emCount>0?emCount:'—')+'</div></div>';
     html+='</div>';
     html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
-    ['All'].concat(CATS).forEach(function(cat){html+='<button onclick="setCF(\''+cat+'\')" class="fp'+(filterCat===cat?' on':'')+'">'+cat+'</button>';});
+    ['All'].concat(CATS).forEach(function(cat){html+='<button onclick="setCF(\x27'+cat+'\x27)" class="fp'+(filterCat===cat?' on':'')+'">'+cat+'</button>';});
     html+='</div>';
     filtered.forEach(function(exp){html+=renderExpRow(exp);});
     html+='<button onclick="showAddExp()" class="btn btn-ghost" style="margin-top:8px">+ Add Expense</button>';
@@ -2897,7 +2897,7 @@ function renderExpRow(exp){
   html+='<div style="font-size:1rem;font-weight:800;color:var(--muted);text-decoration:line-through">'+(exp.is_past_due?fmt(exp.amount):'')+'</div>';
   html+='<div style="font-size:1rem;font-weight:800;color:'+(exp.is_past_due?'var(--red)':isEM&&emState==='active'?'var(--amber)':'var(--text)')+'">'+fmt(exp.amount)+'</div>';
   html+='<div style="font-size:11px;color:var(--muted)">/mo</div></div>';
-  html+='<button onclick="openEditExp(\''+exp.id+'\')" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Edit</button>';
+  html+='<button onclick="openEditExp(\x27'+exp.id+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Edit</button>';
   html+='</div>';
 
   // Past Due + Late Charge breakdown
@@ -2931,7 +2931,7 @@ function renderExpRow(exp){
     html+='</div>';
     html+='<div style="display:flex;align-items:center;gap:6px">';
     if(hasPrealloc)html+='<span style="font-size:1rem;font-weight:800;color:var(--green)">'+fmt(prealloc)+'</span>';
-    html+='<button onclick="openPrealloc(\''+exp.id+'\')" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">+'+(hasPrealloc?'Edit':'Add')+'</button>';
+    html+='<button onclick="openPrealloc(\x27'+exp.id+'\x27)" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">+'+(hasPrealloc?'Edit':'Add')+'</button>';
     html+='</div></div>';
     if(hasPrealloc){
       var remaining=Math.max(0,exp.amount-prealloc);
@@ -2946,7 +2946,7 @@ function renderExpRow(exp){
   // Earmark toggle
   var emActive=exp.is_earmarked&&(exp.earmark_state==='active'||exp.earmark_state_2==='active');
   var emPending=exp.is_earmarked&&(exp.earmark_state==='pending'||exp.earmark_state_2==='pending');
-  html+='<button onclick="toggleEarmark(\''+exp.id+'\')" style="display:flex;align-items:center;gap:6px;background:'+(exp.is_earmarked?'var(--al)':'var(--bg)')+';border:1.5px solid '+(exp.is_earmarked?'var(--amber)':'var(--border)')+';border-radius:8px;padding:7px 12px;color:'+(exp.is_earmarked?'var(--amber)':'var(--muted)')+';font-size:12px;font-weight:600;cursor:pointer">';
+  html+='<button onclick="toggleEarmark(\x27'+exp.id+'\x27)" style="display:flex;align-items:center;gap:6px;background:'+(exp.is_earmarked?'var(--al)':'var(--bg)')+';border:1.5px solid '+(exp.is_earmarked?'var(--amber)':'var(--border)')+';border-radius:8px;padding:7px 12px;color:'+(exp.is_earmarked?'var(--amber)':'var(--muted)')+';font-size:12px;font-weight:600;cursor:pointer">';
   html+='<span style="font-size:14px">🏷</span>'+(exp.is_earmarked?'Earmarked':'Earmark')+'</button>';
 
   // Biweekly occurrences
@@ -2965,7 +2965,7 @@ function renderExpRow(exp){
     html+='<div style="display:flex;align-items:center;gap:8px">';
     html+='<span style="font-size:13px;font-weight:700">'+fmt(occ1Amt)+'</span>';
     if(pc1){html+='<span class="tag tag-paid">Paid ✓</span>';}
-    else{html+='<button onclick="markPaid(\''+exp.id+'\',false,1,true)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:5px 12px;color:var(--green);font-size:11px;font-weight:700;cursor:pointer">Mark Paid</button>';}
+    else{html+='<button onclick="markPaid(\x27'+exp.id+'\x27,false,1,true)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:5px 12px;color:var(--green);font-size:11px;font-weight:700;cursor:pointer">Mark Paid</button>';}
     html+='</div></div>';
     // Occurrence 2
     html+='<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);border-radius:10px;padding:8px 12px">';
@@ -2974,7 +2974,7 @@ function renderExpRow(exp){
     html+='<div style="display:flex;align-items:center;gap:8px">';
     html+='<span style="font-size:13px;font-weight:700">'+fmt(occ2Amt)+'</span>';
     if(pc2){html+='<span class="tag tag-paid">Paid ✓</span>';}
-    else{html+='<button onclick="markPaid(\''+exp.id+'\',false,2,true)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:5px 12px;color:var(--green);font-size:11px;font-weight:700;cursor:pointer">Mark Paid</button>';}
+    else{html+='<button onclick="markPaid(\x27'+exp.id+'\x27,false,2,true)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:5px 12px;color:var(--green);font-size:11px;font-weight:700;cursor:pointer">Mark Paid</button>';}
     html+='</div></div>';
     html+='<div style="font-size:11px;color:var(--muted);padding:2px 4px">Monthly total: '+fmt(exp.amount)+(prealloc>0?' · After pre-allocation: '+fmt(Math.max(0,exp.amount-prealloc)):'')+'</div>';
     html+='</div>';
@@ -2984,18 +2984,18 @@ function renderExpRow(exp){
     // Non-biweekly — existing logic
     if(!paidThisCycle){
       if(exp.is_past_due&&totalDueNow>0){
-        if(requiresFull){html+='<button onclick="markPaidFull(\''+exp.id+'\','+totalDueNow+')" style="background:var(--rl);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:7px 12px;color:var(--red);font-size:12px;font-weight:700;cursor:pointer">Pay Full '+fmt(totalDueNow)+'</button>';}
+        if(requiresFull){html+='<button onclick="markPaidFull(\x27'+exp.id+'\x27,'+totalDueNow+')" style="background:var(--rl);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:7px 12px;color:var(--red);font-size:12px;font-weight:700;cursor:pointer">Pay Full '+fmt(totalDueNow)+'</button>';}
         else{
-          if(hasPastDue)html+='<button onclick="markPaidPastDue(\''+exp.id+'\')" style="background:var(--al);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:7px 12px;color:var(--amber);font-size:12px;font-weight:600;cursor:pointer">Pay Past Due '+fmt(pastDueAmt+(hasLateCharge?lateCharge:0))+'</button>';
-          html+='<button onclick="markPaid(\''+exp.id+'\')" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Pay Month '+fmt(exp.amount)+'</button>';
+          if(hasPastDue)html+='<button onclick="markPaidPastDue(\x27'+exp.id+'\x27)" style="background:var(--al);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:7px 12px;color:var(--amber);font-size:12px;font-weight:600;cursor:pointer">Pay Past Due '+fmt(pastDueAmt+(hasLateCharge?lateCharge:0))+'</button>';
+          html+='<button onclick="markPaid(\x27'+exp.id+'\x27)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Pay Month '+fmt(exp.amount)+'</button>';
         }
       } else if(strategy==='split'){
-        if(!exp.split_paid_1)html+='<button onclick="markPaid(\''+exp.id+'\',true,1)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Pay Half 1 '+fmt(exp.split_amount_1||exp.amount/2)+'</button>';
-        if(!exp.split_paid_2)html+='<button onclick="markPaid(\''+exp.id+'\',true,2)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Pay Half 2 '+fmt(exp.split_amount_2||exp.amount/2)+'</button>';
-        if(!exp.split_paid_1)html+='<button onclick="skipSplitHalf(\''+exp.id+'\',1)" style="background:var(--al);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:7px 10px;color:var(--amber);font-size:11px;font-weight:600;cursor:pointer">Skip →</button>';
+        if(!exp.split_paid_1)html+='<button onclick="markPaid(\x27'+exp.id+'\x27,true,1)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Pay Half 1 '+fmt(exp.split_amount_1||exp.amount/2)+'</button>';
+        if(!exp.split_paid_2)html+='<button onclick="markPaid(\x27'+exp.id+'\x27,true,2)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Pay Half 2 '+fmt(exp.split_amount_2||exp.amount/2)+'</button>';
+        if(!exp.split_paid_1)html+='<button onclick="skipSplitHalf(\x27'+exp.id+'\x27,1)" style="background:var(--al);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:7px 10px;color:var(--amber);font-size:11px;font-weight:600;cursor:pointer">Skip →</button>';
       } else {
         var payBtnAmt=Math.max(0,exp.amount-prealloc);
-        html+='<button onclick="markPaid(\''+exp.id+'\')" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Mark Paid '+fmt(exp.amount)+(prealloc>0?' ('+fmt(payBtnAmt)+' due)':'')+'</button>';
+        html+='<button onclick="markPaid(\x27'+exp.id+'\x27)" style="background:var(--gl);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:7px 12px;color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Mark Paid '+fmt(exp.amount)+(prealloc>0?' ('+fmt(payBtnAmt)+' due)':'')+'</button>';
       }
     }
     if(usePayLink&&payLink){html+='<a href="'+payLink+'" target="_blank" style="background:var(--pl);border:1px solid var(--pm);border-radius:8px;padding:7px 12px;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none">Pay Now ↗</a>';}
@@ -3005,10 +3005,10 @@ function renderExpRow(exp){
   // Use Pay Link toggle
   html+='<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--bl)">';
   html+='<span style="font-size:12px;color:var(--muted);font-weight:500">Use Pay Link</span>';
-  html+='<div onclick="togglePayLink(\''+exp.id+'\')" style="width:40px;height:22px;border-radius:99px;background:'+(usePayLink?'var(--primary)':'var(--border)')+';position:relative;cursor:pointer;transition:background .2s">';
+  html+='<div onclick="togglePayLink(\x27'+exp.id+'\x27)" style="width:40px;height:22px;border-radius:99px;background:'+(usePayLink?'var(--primary)':'var(--border)')+';position:relative;cursor:pointer;transition:background .2s">';
   html+='<div style="position:absolute;top:3px;left:'+(usePayLink?'21px':'3px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div></div>';
   if(usePayLink){
-    html+='<input placeholder="Payment URL" value="'+(payLink||'')+'" onchange="savePayLink(\''+exp.id+'\',this.value)" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;outline:none"/>';
+    html+='<input placeholder="Payment URL" value="'+(payLink||'')+'" onchange="savePayLink(\x27'+exp.id+'\x27,this.value)" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;outline:none"/>';
   }
   html+='</div>';
   html+='</div>';
@@ -3040,7 +3040,7 @@ function openEditExp(id){
   h+='<div style="display:flex;gap:8px"><div style="flex:1"><label class="lbl">Due Day</label><input class="inp" type="number" id="ee-due" value="'+(exp.due_day||1)+'"/></div><div style="flex:1" id="ee-due2-wrap" style="display:'+(exp.pay_cycle==='biweekly'?'block':'none')+'"><label class="lbl">Due Day 2 <span style="color:var(--muted)">(biweekly)</span></label><input class="inp" type="number" id="ee-due2" value="'+(exp.due_day_2||15)+'"/></div></div>';
   h+='<div style="display:flex;gap:8px"><div style="flex:1"><label class="lbl">Category</label><select class="sel" id="ee-cat">'+CATS.map(function(c){return '<option'+(exp.category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div><div style="flex:1"><label class="lbl">Type</label><select class="sel" id="ee-type"><option'+(exp.type==='Fixed'?' selected':'')+'>Fixed</option><option'+(exp.type==='Variable'?' selected':'')+'>Variable</option></select></div></div>';
   h+='<div style="display:flex;gap:8px"><div style="flex:1"><label class="lbl">Pay Cycle</label><select class="sel" id="ee-cycle" onchange="toggleDue2(this.value)">'+CYCLES.map(function(c){return '<option value="'+c+'"'+(exp.pay_cycle===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div><div style="flex:1"><label class="lbl">Consequence</label><select class="sel" id="ee-cons">'+CONS.map(function(c){return '<option value="'+c+'"'+(exp.consequence===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div></div>';
-  h+='<div><label class="lbl">Payment Strategy</label><div class="tog-wrap"><button class="tog-btn'+(strategy==='full'?' on':'')+'" onclick="eeStrat(\'full\',this)">Full</button><button class="tog-btn'+(strategy==='split'?' on':'')+'" onclick="eeStrat(\'split\',this)">Split</button><button class="tog-btn'+(strategy==='flexible'?' on':'')+'" onclick="eeStrat(\'flexible\',this)">Flexible</button></div></div>';
+  h+='<div><label class="lbl">Payment Strategy</label><div class="tog-wrap"><button class="tog-btn'+(strategy==='full'?' on':'')+'" onclick="eeStrat(\x27full\x27,this)">Full</button><button class="tog-btn'+(strategy==='split'?' on':'')+'" onclick="eeStrat(\x27split\x27,this)">Split</button><button class="tog-btn'+(strategy==='flexible'?' on':'')+'" onclick="eeStrat(\x27flexible\x27,this)">Flexible</button></div></div>';
   h+='<div id="ee-split-wrap" style="display:'+(strategy==='split'?'flex':'none')+';gap:8px"><div style="flex:1"><label class="lbl">Half 1 Amount</label><input class="inp" type="number" id="ee-split1" value="'+(exp.split_amount_1||Math.round(exp.amount/2))+'"/></div><div style="flex:1"><label class="lbl">Half 2 Amount</label><input class="inp" type="number" id="ee-split2" value="'+(exp.split_amount_2||Math.round(exp.amount/2))+'"/></div></div>';
   h+='<div><label class="lbl">Past Due?</label><div class="tog-wrap"><button class="tog-btn'+(pdOn?'':' on')+'" onclick="eePD(false,this)">Current</button><button class="tog-btn'+(pdOn?' on':'')+'" onclick="eePD(true,this)">Past Due</button></div></div>';
   h+='<div id="ee-pd-fields" style="display:'+(pdOn?'flex':'none')+';flex-direction:column;gap:10px">';
@@ -3071,8 +3071,8 @@ function openEditExp(id){
   h+='<div><label class="lbl">Expires</label><div class="hint">When normal billing resumes</div>';
   h+='<input class="inp" type="date" id="ee-arr-exp" value="'+(exp.arrangement_expires?exp.arrangement_expires.split('T')[0]:'')+'"/></div>';
   h+='</div></div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveExpEdit(\''+id+'\')">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'editExpModal\').remove()">Cancel</button></div>';
-  h+='<button class="btn btn-red" onclick="removeExp(\''+id+'\')">Remove Expense</button>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveExpEdit(\x27'+id+'\x27)">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27editExpModal\x27).remove()">Cancel</button></div>';
+  h+='<button class="btn btn-red" onclick="removeExp(\x27'+id+'\x27)">Remove Expense</button>';
   h+='<div id="ee-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._eeState={pd:pdOn,partial:partOn,strategy:strategy,rfp:exp.requires_full_payment||false};
@@ -3145,7 +3145,7 @@ function showAddExp(){
     +'<div style="display:flex;gap:8px"><input class="inp" type="number" id="ae-amt" placeholder="Amount" style="flex:1"/><input class="inp" type="number" id="ae-due" placeholder="Due day" style="width:100px"/></div>'
     +'<div style="display:flex;gap:8px"><select class="sel" id="ae-cat" style="flex:1">'+CATS.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select><select class="sel" id="ae-type" style="width:110px"><option>Fixed</option><option>Variable</option></select></div>'
     +'<select class="sel" id="ae-cycle">'+CYCLES.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select>'
-    +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addExp()">Add</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addExpForm\').innerHTML=\'\'">Cancel</button></div>'
+    +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addExp()">Add</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27addExpForm\x27).innerHTML=\x27\x27">Cancel</button></div>'
     +'<div id="ae-msg" style="font-size:13px;font-weight:500"></div></div></div>';
 }
 async function addExp(){
@@ -3174,7 +3174,7 @@ function renderIncView(){
       html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">';
       html+='<div><div style="font-size:13px;font-weight:500">'+inc.source+'</div><div style="font-size:11px;color:var(--muted)">'+(inc.is_recurring?inc.frequency:'One-time')+' · <span style="color:'+cc[inc.certainty]+';font-weight:600">'+inc.certainty+'</span></div></div>';
       html+='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:1rem;font-weight:800;color:var(--green)">'+fmt(inc.amount)+'</span>';
-      if(m.id===CU.id)html+='<button onclick="removeInc(\''+inc.id+'\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px">×</button>';
+      if(m.id===CU.id)html+='<button onclick="removeInc(\x27'+inc.id+'\x27)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px">×</button>';
       html+='</div></div>';
     });}
     if(m.id===CU.id){html+='<button onclick="showAddInc()" class="btn btn-ghost btn-sm" style="margin-top:12px">+ Add Income</button><div id="addIncForm"></div>';}
@@ -3188,7 +3188,7 @@ function showAddInc(){
     +'<input class="inp" id="ai-src" placeholder="Source (e.g. Side hustle, Refund)"/>'
     +'<div style="display:flex;gap:8px"><input class="inp" type="number" id="ai-amt" placeholder="Amount" style="flex:1"/><input class="inp" type="date" id="ai-date" style="flex:1"/></div>'
     +'<select class="sel" id="ai-cert"><option value="confirmed">Confirmed</option><option value="likely">Likely</option><option value="possible">Possible</option></select>'
-    +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addInc()">Add</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addIncForm\').innerHTML=\'\'">Cancel</button></div>'
+    +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addInc()">Add</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27addIncForm\x27).innerHTML=\x27\x27">Cancel</button></div>'
     +'<div id="ai-msg" style="font-size:13px;font-weight:500"></div></div>';
 }
 async function addInc(){
@@ -3204,24 +3204,28 @@ async function removeInc(id){await sb.from('additional_income').delete().eq('id'
 
 // TRANSACTIONS VIEW
 function setTxCat(el){window._txCat=el.getAttribute('data-cat');renderLedger();}
+function setTxPeriod(el){window._txPeriod=el.getAttribute('data-period');renderLedger();}
+function setTxType(el){window._txType=el.getAttribute('data-type');renderLedger();}
+function setTxMin(v){window._txMinAmt=v;renderLedger();}
+function setTxMax(v){window._txMaxAmt=v;renderLedger();}
+function setTxFrom(v){window._txFrom=v;renderLedger();}
+function setTxTo(v){window._txTo=v;renderLedger();}
+function setTxSearch(v){window._txSearch=v;renderLedger();}
 
 function renderTxView(){
-  // Filters
   var txSearch=window._txSearch||'';
   var txCat=window._txCat||'All';
-  var txType=window._txType||'All';   // All / Debit / Credit / Transfer
+  var txType=window._txType||'All';
   var txPeriod=window._txPeriod||'6mo';
   var txFrom=window._txFrom||'';
   var txTo=window._txTo||'';
   var txMinAmt=parseFloat(window._txMinAmt||0)||0;
   var txMaxAmt=parseFloat(window._txMaxAmt||0)||0;
 
-  // Build cutoff from period
-  var now=new Date();
-  var cutoffStr='';
+  var now=new Date();var cutoffStr='';
   if(txPeriod!=='custom'&&txPeriod!=='all'){
-    var months={'1mo':1,'3mo':3,'6mo':6,'12mo':12};
-    var mo=months[txPeriod]||6;
+    var moMap={'1mo':1,'3mo':3,'6mo':6,'12mo':12};
+    var mo=moMap[txPeriod]||6;
     var co=new Date(now.getFullYear(),now.getMonth()-mo,now.getDate());
     cutoffStr=co.toISOString().split('T')[0];
   }
@@ -3232,100 +3236,79 @@ function renderTxView(){
 
   var filtered=allTX.filter(function(t){
     var d=t.transaction_date||t.created_at.split('T')[0];
-    // Period filter
-    if(txPeriod==='custom'){
-      if(txFrom&&d<txFrom)return false;
-      if(txTo&&d>txTo)return false;
-    } else if(txPeriod!=='all'&&cutoffStr&&d<cutoffStr)return false;
-    // Category
+    if(txPeriod==='custom'){if(txFrom&&d<txFrom)return false;if(txTo&&d>txTo)return false;}
+    else if(txPeriod!=='all'&&cutoffStr&&d<cutoffStr)return false;
     if(txCat!=='All'&&t.category!==txCat)return false;
-    // Type
     if(txType!=='All'){
-      var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;
-      var isTransfer=t.category==='Transfer';
-      if(txType==='Debit'&&(isCredit||isTransfer))return false;
-      if(txType==='Credit'&&(!isCredit||isTransfer))return false;
-      if(txType==='Transfer'&&!isTransfer)return false;
+      var ic=t.notes&&t.notes.indexOf('Credit')>=0;
+      var it=t.category==='Transfer';
+      if(txType==='Debit'&&(ic||it))return false;
+      if(txType==='Credit'&&(!ic||it))return false;
+      if(txType==='Transfer'&&!it)return false;
     }
-    // Price range
     if(txMinAmt>0&&t.amount<txMinAmt)return false;
     if(txMaxAmt>0&&t.amount>txMaxAmt)return false;
-    // Search
-    if(txSearch){
-      var s=txSearch.toLowerCase();
-      if((t.name||'').toLowerCase().indexOf(s)<0&&
-         (t.category||'').toLowerCase().indexOf(s)<0&&
-         (t.notes||'').toLowerCase().indexOf(s)<0)return false;
-    }
+    if(txSearch){var s=txSearch.toLowerCase();if((t.name||'').toLowerCase().indexOf(s)<0&&(t.category||'').toLowerCase().indexOf(s)<0&&(t.notes||'').toLowerCase().indexOf(s)<0)return false;}
     return true;
   });
 
-  var totalSpend=filtered.filter(function(t){var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;return !isCredit&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
-  var totalIn=filtered.filter(function(t){var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;return isCredit&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
+  var totalSpend=filtered.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return !ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
+  var totalIn=filtered.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
+
+  function pill(label,active,dataAttr,dataVal,fn){
+    return '<button onclick="'+fn+'(this)" data-'+dataAttr+'="'+dataVal+'" style="flex-shrink:0;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid '+(active?'var(--primary)':'var(--border)')+';background:'+(active?'var(--primary)':'transparent')+';color:'+(active?'#fff':'var(--muted)')+';cursor:pointer;white-space:nowrap">'+label+'</button>';
+  }
 
   var html='';
 
-  // Search bar
-  html+='<div style="position:relative;margin-bottom:10px">';
-  html+='<input class="inp" type="text" id="tx-search" placeholder="Search merchant, category..." value="'+(txSearch)+'" oninput="window._txSearch=this.value;renderLedger()" style="padding-left:36px;font-size:13px"/>';
-  html+='<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px">🔍</span></div>';
+  // Search
+  html+='<div style="position:relative;margin-bottom:10px"><input class="inp" type="text" id="tx-search" placeholder="Search merchant, category..." value="'+txSearch+'" oninput="setTxSearch(this.value)" style="padding-left:36px;font-size:13px"/><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px">🔍</span></div>';
 
-  // Time period filter
+  // Time period
   html+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">Time Period</div>';
   html+='<div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">';
   [{v:'1mo',l:'1 Mo'},{v:'3mo',l:'3 Mo'},{v:'6mo',l:'6 Mo'},{v:'12mo',l:'12 Mo'},{v:'all',l:'All'},{v:'custom',l:'Custom'}].forEach(function(tp){
-    var on=txPeriod===tp.v;
-    html+='<button onclick="window._txPeriod=\''+tp.v+'\';renderLedger()" style="flex-shrink:0;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid '+(on?'var(--primary)':\'var(--border)\')+';background:'+(on?'var(--primary)':\'transparent\')+';color:'+(on?'#fff':\'var(--muted)\')+';cursor:pointer">'+tp.l+'</button>';
+    html+=pill(tp.l,txPeriod===tp.v,'period',tp.v,'setTxPeriod');
   });
   html+='</div>';
 
-  // Custom date range
   if(txPeriod==='custom'){
     html+='<div style="display:flex;gap:8px;margin-bottom:10px">';
-    html+='<div style="flex:1"><label class="lbl">From</label><input class="inp" type="date" value="'+txFrom+'" oninput="window._txFrom=this.value;renderLedger()" style="font-size:12px"/></div>';
-    html+='<div style="flex:1"><label class="lbl">To</label><input class="inp" type="date" value="'+txTo+'" oninput="window._txTo=this.value;renderLedger()" style="font-size:12px"/></div>';
+    html+='<div style="flex:1"><label class="lbl">From</label><input class="inp" type="date" value="'+txFrom+'" oninput="setTxFrom(this.value)" style="font-size:12px"/></div>';
+    html+='<div style="flex:1"><label class="lbl">To</label><input class="inp" type="date" value="'+txTo+'" oninput="setTxTo(this.value)" style="font-size:12px"/></div>';
     html+='</div>';
   }
 
-  // Category filter
+  // Category
   html+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">Category</div>';
   html+='<div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none">';
   ['All'].concat(CATS.concat(['Transfer','Income'])).forEach(function(cat){
-    var on=txCat===cat;
-    html+='<button onclick="setTxCat(this)" data-cat="'+cat+'" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid '+(on?'var(--primary)':\'var(--border)\')+';background:'+(on?'rgba(67,97,238,0.1)':\'transparent\')+';color:'+(on?'var(--primary)':\'var(--muted)\')+';cursor:pointer;white-space:nowrap">'+cat+'</button>';
+    html+='<button onclick="setTxCat(this)" data-cat="'+cat+'" style="flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid '+(txCat===cat?'var(--primary)':'var(--border)')+';background:'+(txCat===cat?'rgba(67,97,238,0.1)':'transparent')+';color:'+(txCat===cat?'var(--primary)':'var(--muted)')+';cursor:pointer;white-space:nowrap">'+cat+'</button>';
   });
   html+='</div>';
 
-  // Type + Amount filters
+  // Type + Amount
   html+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-  // Type
-  html+='<div style="flex:1"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">Type</div>';
-  html+='<div style="display:flex;gap:4px">';
+  html+='<div style="flex:1"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">Type</div><div style="display:flex;gap:3px">';
   ['All','Debit','Credit','Transfer'].forEach(function(tp){
-    var on=txType===tp;
-    html+='<button onclick="window._txType=\''+tp+'\';renderLedger()" style="flex:1;padding:5px 0;border-radius:8px;font-size:10px;font-weight:700;border:1.5px solid '+(on?'var(--primary)':\'var(--border)\')+';background:'+(on?'var(--primary)':\'transparent\')+';color:'+(on?'#fff':\'var(--muted)\')+';cursor:pointer">'+tp+'</button>';
+    html+='<button onclick="setTxType(this)" data-type="'+tp+'" style="flex:1;padding:5px 0;border-radius:8px;font-size:9px;font-weight:700;border:1.5px solid '+(txType===tp?'var(--primary)':'var(--border)')+';background:'+(txType===tp?'var(--primary)':'transparent')+';color:'+(txType===tp?'#fff':'var(--muted)')+';cursor:pointer">'+tp+'</button>';
   });
   html+='</div></div>';
-  // Amount range
-  html+='<div style="flex:1"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">Amount Range</div>';
-  html+='<div style="display:flex;gap:4px;align-items:center">';
-  html+='<input class="inp" type="tel" inputmode="decimal" placeholder="Min" value="'+( txMinAmt||'')+'" oninput="window._txMinAmt=this.value;renderLedger()" style="flex:1;font-size:11px;padding:6px 8px"/>';
-  html+='<span style="color:var(--muted);font-size:11px">–</span>';
-  html+='<input class="inp" type="tel" inputmode="decimal" placeholder="Max" value="'+( txMaxAmt||'')+'" oninput="window._txMaxAmt=this.value;renderLedger()" style="flex:1;font-size:11px;padding:6px 8px"/>';
-  html+='</div></div>';
+  html+='<div style="flex:1"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px">Amount ($)</div>';
+  html+='<div style="display:flex;gap:4px;align-items:center"><input class="inp" type="tel" inputmode="decimal" placeholder="Min" value="'+(txMinAmt||'')+'" oninput="setTxMin(this.value)" style="flex:1;font-size:11px;padding:6px 8px"/><span style="color:var(--muted);font-size:11px">–</span><input class="inp" type="tel" inputmode="decimal" placeholder="Max" value="'+(txMaxAmt||'')+'" oninput="setTxMax(this.value)" style="flex:1;font-size:11px;padding:6px 8px"/></div></div>';
   html+='</div>';
 
-  // Summary strip
+  // Summary
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">';
-  html+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Transactions</div><div style="font-size:1rem;font-weight:800">'+filtered.length+'</div></div>';
+  html+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Results</div><div style="font-size:1rem;font-weight:800">'+filtered.length+'</div></div>';
   html+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Spent</div><div style="font-size:1rem;font-weight:800;color:var(--red)">'+fmt(totalSpend)+'</div></div>';
   html+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Received</div><div style="font-size:1rem;font-weight:800;color:var(--green)">'+fmt(totalIn)+'</div></div>';
   html+='</div>';
 
-  // Action bar
+  // Actions
   html+='<div style="display:flex;gap:8px;margin-bottom:12px">';
   html+='<button onclick="exportTxCSV()" style="flex:1;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text)">Export CSV</button>';
-  html+='<button onclick="goTab(\'settings\')" style="flex:1;background:var(--pl);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer">Import CSV</button>';
+  html+='<button onclick="goTab(\x27settings\x27)" style="flex:1;background:var(--pl);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer">Import CSV</button>';
   html+='</div>';
 
   if(filtered.length===0){
@@ -3347,47 +3330,34 @@ function renderTxView(){
     var txs=byMonth[key];
     var monthSpend=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return !ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
     var d2=new Date(key+'-01T12:00:00');
-    var monthLabel=d2.toLocaleString('default',{month:'long',year:'numeric'});
+    var mLabel=d2.toLocaleString('default',{month:'long',year:'numeric'});
 
-    // Month header
     html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(67,97,238,0.04);border-radius:10px;margin-bottom:2px;border-left:3px solid var(--primary)">';
-    html+='<span style="font-size:11px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.06em">'+monthLabel+'</span>';
+    html+='<span style="font-size:11px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.06em">'+mLabel+'</span>';
     html+='<span style="font-size:11px;font-weight:700;color:var(--red)">'+fmt(monthSpend)+'</span></div>';
 
-    // Ledger header row
-    html+='<div style="display:grid;grid-template-columns:60px 1fr 70px 60px 28px;gap:0;padding:4px 10px;margin-bottom:1px">';
+    html+='<div style="display:grid;grid-template-columns:60px 1fr 70px 55px 24px;gap:0;padding:4px 10px;margin-bottom:1px">';
     ['DATE','MERCHANT','AMOUNT','TYPE',''].forEach(function(h2){html+='<div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">'+h2+'</div>';});
     html+='</div>';
 
     txs.forEach(function(t,i){
       var d3=t.transaction_date||t.created_at.split('T')[0];
-      var parts=d3.split('-');
-      var dayLabel=parseInt(parts[1])+'/'+parseInt(parts[2]);
-      var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;
-      var isTransfer=t.category==='Transfer';
-      var typeLabel=isTransfer?'TFR':isCredit?'IN':'OUT';
-      var typeColor=isTransfer?'var(--muted)':isCredit?'var(--green)':'var(--red)';
-      var typeBg=isTransfer?'rgba(200,210,240,0.2)':isCredit?'var(--gl)':'rgba(220,38,38,0.08)';
-      var isLast=i===txs.length-1;
+      var pts=d3.split('-');
+      var dayLabel=parseInt(pts[1])+'/'+parseInt(pts[2]);
+      var ic=t.notes&&t.notes.indexOf('Credit')>=0;
+      var it=t.category==='Transfer';
+      var typeLabel=it?'TFR':ic?'IN':'OUT';
+      var typeColor=it?'var(--muted)':ic?'var(--green)':'var(--red)';
+      var typeBg=it?'rgba(200,210,240,0.2)':ic?'var(--gl)':'rgba(220,38,38,0.08)';
+      var amtColor=ic?'var(--green)':it?'var(--muted)':'var(--text)';
 
-      html+='<div style="display:grid;grid-template-columns:60px 1fr 70px 60px 28px;gap:0;padding:8px 10px;border-bottom:'+(isLast?'none':'1px solid rgba(200,210,240,0.15)')+';align-items:center;cursor:pointer" onclick="openTxDetail(\''+t.id+'\')">';
-
-      // Date
+      html+='<div id="txrow-'+t.id+'" style="display:grid;grid-template-columns:60px 1fr 70px 55px 24px;gap:0;padding:8px 10px;border-bottom:'+(i===txs.length-1?'none':'1px solid rgba(200,210,240,0.15)')+';align-items:center;cursor:pointer" onclick="openTxDetail(\x27'+t.id+'\x27)">';
       html+='<div style="font-size:11px;font-weight:700;color:var(--text)">'+dayLabel+'</div>';
-
-      // Merchant + category
       html+='<div style="min-width:0;padding-right:6px"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+t.name+'</div>';
       html+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+getCatEmoji(t.category)+' '+(t.category||'Other')+'</div></div>';
-
-      // Amount
-      html+='<div style="font-size:12px;font-weight:800;color:'+(isCredit?'var(--green)':isTransfer?'var(--muted)':'var(--text)')+';text-align:right">'+(isCredit?'+':'')+fmt(t.amount)+'</div>';
-
-      // Type badge
+      html+='<div style="font-size:12px;font-weight:800;color:'+amtColor+';text-align:right">'+(ic?'+':'')+fmt(t.amount)+'</div>';
       html+='<div style="text-align:right"><span style="font-size:9px;font-weight:800;background:'+typeBg+';color:'+typeColor+';border-radius:4px;padding:2px 5px">'+typeLabel+'</span></div>';
-
-      // Edit pencil
-      html+='<div style="text-align:right"><button onclick="event.stopPropagation();openTxDetail(\''+t.id+'\')" style="background:none;border:none;font-size:14px;color:var(--muted);cursor:pointer;padding:0">›</button></div>';
-
+      html+='<div style="text-align:right;font-size:16px;color:var(--muted)">›</div>';
       html+='</div>';
     });
   });
@@ -3400,43 +3370,28 @@ function openTxDetail(txId){
   var t=TX.find(function(x){return x.id===txId;});if(!t)return;
   var m=document.createElement('div');m.className='modal-ov';m.id='txDetailModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
-  var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;
-  var isTransfer=t.category==='Transfer';
-  var CATS2=CATS.concat(['Transfer','Income','Other']);
+  var ic=t.notes&&t.notes.indexOf('Credit')>=0;
+  var it=t.category==='Transfer';
+  var CATS2=CATS.concat(['Transfer','Income','Other Money In']);
   var h='<div class="modal"><div class="modal-handle"></div>';
   h+='<div style="font-size:18px;margin-bottom:4px">'+getCatEmoji(t.category)+'</div>';
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">'+t.name+'</div>';
-  h+='<div style="font-size:2rem;font-weight:900;color:'+(isCredit?'var(--green)':isTransfer?'var(--muted)':'var(--red)')+';margin-bottom:20px">'+(isCredit?'+':'')+fmt(t.amount)+'</div>';
-
-  // Editable fields
+  h+='<div style="font-size:2rem;font-weight:900;color:'+(ic?'var(--green)':it?'var(--muted)':'var(--red)')+';margin-bottom:20px">'+(ic?'+':'')+fmt(t.amount)+'</div>';
   h+='<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">';
-
-  // Date
-  h+='<div><label class="lbl">Date</label>';
-  h+='<input class="inp" type="date" id="txd-date" value="'+(t.transaction_date||'')+'"/></div>';
-
-  // Category
-  h+='<div><label class="lbl">Category</label>';
-  h+='<select class="sel" id="txd-cat">'+ CATS2.map(function(c){return '<option'+(c===t.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
-
-  // Type
-  h+='<div><label class="lbl">Type</label>';
-  h+='<select class="sel" id="txd-type">';
+  h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="txd-date" value="'+(t.transaction_date||'')+'"/></div>';
+  h+='<div><label class="lbl">Category</label><select class="sel" id="txd-cat">'+CATS2.map(function(c){return '<option'+(c===t.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div><label class="lbl">Type</label><select class="sel" id="txd-type">';
   ['Debit','Credit','Transfer'].forEach(function(tp){
-    var sel=(isTransfer&&tp==='Transfer')||(isCredit&&!isTransfer&&tp==='Credit')||(!isCredit&&!isTransfer&&tp==='Debit');
+    var sel=(it&&tp==='Transfer')||(ic&&!it&&tp==='Credit')||(!ic&&!it&&tp==='Debit');
     h+='<option'+(sel?' selected':'')+'>'+tp+'</option>';
   });
   h+='</select></div>';
-
-  // Notes
-  h+='<div><label class="lbl">Notes</label>';
-  h+='<input class="inp" id="txd-notes" value="'+(t.notes||'')+'"/></div>';
+  h+='<div><label class="lbl">Notes</label><input class="inp" id="txd-notes" value="'+(t.notes||'').replace(/^(Debit|Credit|Transfer) · /,'')+'"/></div>';
   h+='</div>';
-
   h+='<div style="display:flex;gap:8px">';
-  h+='<button onclick="saveTxEdit(\''+t.id+'\')" class="btn btn-p" style="flex:1">Save</button>';
-  h+='<button onclick="deleteTx(\''+t.id+'\','+t.amount+');document.getElementById(\'txDetailModal\').remove()" class="btn btn-red" style="flex:1">Delete</button>';
-  h+='<button onclick="document.getElementById(\'txDetailModal\').remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
+  h+='<button onclick="saveTxEdit(\x27'+txId+'\x27)" class="btn btn-p" style="flex:1">Save</button>';
+  h+='<button onclick="deleteTx(\x27'+txId+'\x27,'+t.amount+');document.getElementById(\x27txDetailModal\x27).remove()" class="btn btn-red" style="flex:1">Delete</button>';
+  h+='<button onclick="document.getElementById(\x27txDetailModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -3445,9 +3400,9 @@ async function saveTxEdit(txId){
   var date=document.getElementById('txd-date').value;
   var cat=document.getElementById('txd-cat').value;
   var type=document.getElementById('txd-type').value;
-  var notes=document.getElementById('txd-notes').value;
+  var notes=(document.getElementById('txd-notes').value||'').trim();
   var notePrefix=type==='Credit'?'Credit':type==='Transfer'?'Transfer':'Debit';
-  var r=await sb.from('transactions').update({transaction_date:date,category:cat,notes:notePrefix+' · '+(notes.replace(/^(Debit|Credit|Transfer) · /,'')||'')} ).eq('id',txId).select('*').single();
+  var r=await sb.from('transactions').update({transaction_date:date,category:cat,notes:notePrefix+' · '+notes}).eq('id',txId).select('*').single();
   if(r.error){alert('Error: '+r.error.message);return;}
   var idx=TX.findIndex(function(x){return x.id===txId;});if(idx>=0)TX[idx]=r.data;
   document.getElementById('txDetailModal').remove();
@@ -3457,9 +3412,8 @@ async function saveTxEdit(txId){
 function exportTxCSV(){
   var rows=['Date,Merchant,Amount,Category,Type,Notes'];
   TX.slice().sort(function(a,b){return (b.transaction_date||'').localeCompare(a.transaction_date||'');}).forEach(function(t){
-    var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;
-    var isTransfer=t.category==='Transfer';
-    rows.push([t.transaction_date||'',('"'+( t.name||'')+'"'),(isCredit?'+':isTransfer?'~':'-')+t.amount,t.category||'Other',isTransfer?'Transfer':isCredit?'Credit':'Debit',('"'+( t.notes||'')+'"')].join(','));
+    var ic=t.notes&&t.notes.indexOf('Credit')>=0;var it=t.category==='Transfer';
+    rows.push([t.transaction_date||'','"'+(t.name||'')+'"',(ic?'+':it?'~':'-')+t.amount,t.category||'Other',it?'Transfer':ic?'Credit':'Debit','"'+(t.notes||'')+'"'].join(','));
   });
   var blob=new Blob([rows.join('\n')],{type:'text/csv'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='clarity_transactions.csv';a.click();
@@ -3478,11 +3432,11 @@ function openEditTx(id){
   h+='<div><label class="lbl">Category</label><select class="sel" id="et-cat">'+CATS.map(function(c){return '<option'+(t.category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
   h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap">';
   ['jay','chari','joint'].forEach(function(dm){
-    h+='<button class="tog-btn'+(t.decision_maker===dm?' on':'')+'" onclick="etDM(\''+dm+'\',this)">'+dm.charAt(0).toUpperCase()+dm.slice(1)+'</button>';
+    h+='<button class="tog-btn'+(t.decision_maker===dm?' on':'')+'" onclick="etDM(\x27'+dm+'\x27,this)">'+dm.charAt(0).toUpperCase()+dm.slice(1)+'</button>';
   });
   h+='</div></div>';
   h+='<div><label class="lbl">Notes</label><input class="inp" id="et-notes" value="'+(t.notes||'')+'"/></div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveEditTx(\''+id+'\')">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'editTxModal\').remove()">Cancel</button></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveEditTx(\x27'+id+'\x27)">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27editTxModal\x27).remove()">Cancel</button></div>';
   h+='<div id="et-msg" style="font-size:13px;font-weight:500"></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
@@ -3547,7 +3501,7 @@ function toggleTxDetail(tid){
       try{imgData=localStorage.getItem(imgKey);}catch(e){}
       if(imgData){
         imgSlot.innerHTML='<div style="margin-bottom:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Receipt Image</div>'
-          +'<img src="'+imgData+'" onclick="showFullReceipt(\''+imgKey+'\')" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid var(--border);cursor:pointer;margin-bottom:12px"/>';
+          +'<img src="'+imgData+'" onclick="showFullReceipt(\x27'+imgKey+'\x27)" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid var(--border);cursor:pointer;margin-bottom:12px"/>';
       }
     }
   }
@@ -3746,8 +3700,8 @@ function renderGoalCard(g){
 
   // Actions
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  html+='<button onclick="openLogContrib(\''+g.id+'\')" style="background:'+imp+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Log Contribution</button>';
-  html+='<button onclick="openEditGoal(\''+g.id+'\')" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2)">Edit</button>';
+  html+='<button onclick="openLogContrib(\x27'+g.id+'\x27)" style="background:'+imp+';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Log Contribution</button>';
+  html+='<button onclick="openEditGoal(\x27'+g.id+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2)">Edit</button>';
   html+='</div></div>';
   return html;
 }
@@ -3760,11 +3714,11 @@ function showAddGoal(nestEgg){
     +'<div id="ng-other-wrap" style="display:none"><label class="lbl">Describe your goal</label><input class="inp" id="ng-other" placeholder="e.g. Pay off credit card"/></div>'
     +'<div><label class="lbl">Goal Name</label><input class="inp" id="ng-name" placeholder="e.g. Disney Trip 2027" value="'+(nestEgg?'Nest Egg':'')+'" oninput="debounceFeasibility()"/></div>'
     +'<div style="display:flex;gap:8px"><div style="flex:1"><label class="lbl">Target Amount</label><input class="inp" type="number" id="ng-amt" placeholder="$0" oninput="debounceFeasibility()"/></div><div style="flex:1"><label class="lbl">Target Date</label><input class="inp" type="date" id="ng-date" onchange="debounceFeasibility()"/></div></div>'
-    +'<div><label class="lbl">Importance</label><div class="tog-wrap"><button class="tog-btn on" data-imp="need" onclick="setImp(\'need\',this)">Need</button><button class="tog-btn" data-imp="want" onclick="setImp(\'want\',this)">Want</button><button class="tog-btn" data-imp="dream" onclick="setImp(\'dream\',this)">Dream</button></div></div>'
+    +'<div><label class="lbl">Importance</label><div class="tog-wrap"><button class="tog-btn on" data-imp="need" onclick="setImp(\x27need\x27,this)">Need</button><button class="tog-btn" data-imp="want" onclick="setImp(\x27want\x27,this)">Want</button><button class="tog-btn" data-imp="dream" onclick="setImp(\x27dream\x27,this)">Dream</button></div></div>'
     +'<div><label class="lbl">Starting Amount Already Saved</label><input class="inp" type="number" id="ng-saved" placeholder="$0" value="0" oninput="debounceFeasibility()"/></div>'
     +'<div><label class="lbl">Contribution per Paycheck</label><div id="ng-contrib-hint" class="hint">Enter amount and date above — Clarity will suggest a realistic contribution.</div><input class="inp" type="number" id="ng-contrib" value="0"/></div>'
     +'<div id="ng-feasibility"></div>'
-    +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addGoal()">Create Goal</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addGoalForm\').innerHTML=\'\'">Cancel</button></div>'
+    +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addGoal()">Create Goal</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27addGoalForm\x27).innerHTML=\x27\x27">Cancel</button></div>'
     +'<div id="ng-msg" style="font-size:13px;font-weight:500"></div></div></div>';
   window._ngImp='need';
   window._feasibilityTimer=null;
@@ -3817,7 +3771,7 @@ function openLogContrib(goalId){
   h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="contrib-amt" value="'+(g.contribution_per_paycheck||0)+'"/></div>';
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="contrib-date" value="'+today()+'"/></div>';
   h+='<div><label class="lbl">Notes (optional)</label><input class="inp" id="contrib-notes" placeholder="e.g. April check contribution"/></div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="logContrib(\''+goalId+'\')">Log It</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'contribModal\').remove()">Cancel</button></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="logContrib(\x27'+goalId+'\x27)">Log It</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27contribModal\x27).remove()">Cancel</button></div>';
   h+='<div id="contrib-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -3856,8 +3810,8 @@ function openEditGoal(goalId){
   h+='<div style="display:flex;gap:8px"><div style="flex:1"><label class="lbl">Target Amount</label><input class="inp" type="number" id="eg-amt" value="'+g.target_amount+'"/></div><div style="flex:1"><label class="lbl">Current Saved</label><input class="inp" type="number" id="eg-cur" value="'+g.current_amount+'"/></div></div>';
   h+='<div><label class="lbl">Target Date</label><input class="inp" type="date" id="eg-date" value="'+(g.target_date||'')+'"/></div>';
   h+='<div><label class="lbl">Contribution per Paycheck</label><input class="inp" type="number" id="eg-contrib" value="'+g.contribution_per_paycheck+'"/></div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveGoalEdit(\''+goalId+'\')">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'editGoalModal\').remove()">Cancel</button></div>';
-  h+='<button class="btn btn-red" onclick="deleteGoal(\''+goalId+'\')">Delete Goal</button>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveGoalEdit(\x27'+goalId+'\x27)">Save</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27editGoalModal\x27).remove()">Cancel</button></div>';
+  h+='<button class="btn btn-red" onclick="deleteGoal(\x27'+goalId+'\x27)">Delete Goal</button>';
   h+='<div id="eg-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -4022,9 +3976,9 @@ function renderPlanCard(p,cf){
 
   // Action buttons
   h+='<div style="display:flex;gap:8px">';
-  h+='<button onclick="openClarityPlanAdvice(\''+p.id+'\')" style="flex:1;background:var(--gp);border:none;border-radius:12px;padding:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Get Budget Plan</button>';
-  h+='<button onclick="openLogPlanSaving(\''+p.id+'\')" style="flex:1;background:var(--gl);border:none;border-radius:12px;padding:10px;color:var(--green);font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(22,163,74,0.3)">Log Saving</button>';
-  h+='<button onclick="openEditPlan(\''+p.id+'\')" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer">Edit</button>';
+  h+='<button onclick="openClarityPlanAdvice(\x27'+p.id+'\x27)" style="flex:1;background:var(--gp);border:none;border-radius:12px;padding:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Get Budget Plan</button>';
+  h+='<button onclick="openLogPlanSaving(\x27'+p.id+'\x27)" style="flex:1;background:var(--gl);border:none;border-radius:12px;padding:10px;color:var(--green);font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(22,163,74,0.3)">Log Saving</button>';
+  h+='<button onclick="openEditPlan(\x27'+p.id+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer">Edit</button>';
   h+='</div></div></div>';
   return h;
 }
@@ -4114,7 +4068,7 @@ function buildForecastCalendar(cf,yr,mo){
     var billNames=d?d.events.map(function(ev){return ev.label;}).slice(0,2).join(', '):'';
     var tip=fmtD(dateStr,true)+'|Balance: '+fmt(d?d.bal:0)+(d&&d.inflow>0?'|+'+fmt(d.inflow)+' paycheck':'')+(d&&d.outflow>0?'|-'+fmt(d.outflow)+' out':'')+(billNames?'|'+billNames:'');
 
-    html+='<div onclick="showCalTip(event,\''+tip.replace(/'/g,'`')+'\')" style="height:38px;border-radius:8px;background:'+bg+';border:'+border+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:'+(d?'pointer':'default')+';position:relative">';
+    html+='<div onclick="showCalTip(event,\x27'+tip.replace(/'/g,'`')+'\x27)" style="height:38px;border-radius:8px;background:'+bg+';border:'+border+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:'+(d?'pointer':'default')+';position:relative">';
     html+='<span style="font-size:12px;font-weight:'+(isPay||hasPlan||isToday?'800':'600')+';color:'+fc+'">'+day+'</span>';
     // Small dot indicators
     if(d&&!isPast){
@@ -4193,13 +4147,13 @@ function openAddPlan(){
   h+='<div><label class="lbl">Category</label><select class="sel" id="np-cat">'+cats.map(function(c){return'<option>'+c+'</option>';}).join('')+'</select></div>';
   h+='<div><label class="lbl">Target Date</label><input class="inp" type="date" id="np-date"/></div>';
   h+='<div><label class="lbl">Total Estimated Cost</label><input class="inp" type="tel" inputmode="decimal" id="np-amt" placeholder="0"/></div>';
-  h+='<div><label class="lbl">Who is this for</label><div class="tog-wrap"><button class="tog-btn on" onclick="setPlanDM(this,\'joint\')">Joint</button><button class="tog-btn" onclick="setPlanDM(this,\'jay\')">Jay</button><button class="tog-btn" onclick="setPlanDM(this,\'chari\')">Chari</button></div></div>';
+  h+='<div><label class="lbl">Who is this for</label><div class="tog-wrap"><button class="tog-btn on" onclick="setPlanDM(this,\x27joint\x27)">Joint</button><button class="tog-btn" onclick="setPlanDM(this,\x27jay\x27)">Jay</button><button class="tog-btn" onclick="setPlanDM(this,\x27chari\x27)">Chari</button></div></div>';
   h+='<div><label class="lbl">Budget Breakdown <span style="font-weight:400;color:var(--muted)">(optional — break into sub-items)</span></label>';
   h+='<div id="np-subs"></div>';
   h+='<button onclick="addPlanSubItem()" style="background:transparent;border:1px dashed var(--border);border-radius:10px;padding:7px 14px;font-size:12px;color:var(--muted);cursor:pointer;width:100%;margin-top:4px">+ Add Line Item</button></div>';
   h+='<div><label class="lbl">Notes</label><input class="inp" id="np-notes" placeholder="e.g. Chicago trip June 14-17"/></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="savePlan()">Add Plan</button>';
-  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addPlanModal\').remove()">Cancel</button></div>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27addPlanModal\x27).remove()">Cancel</button></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._planDM='joint';
@@ -4265,7 +4219,7 @@ async function openClarityPlanAdvice(pid){
   h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Budget Plan — '+p.name+'</div>';
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Clarity is building your saving strategy...</div>';
   h+='<div id="plan-advice-content"><div style="display:flex;align-items:center;gap:10px;color:var(--muted);padding:20px 0"><div class="spinner"></div> Analyzing your finances...</div></div>';
-  h+='<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'planAdviceModal\').remove()">Close</button>';
+  h+='<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\x27planAdviceModal\x27).remove()">Close</button>';
   h+='</div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 
@@ -4321,8 +4275,8 @@ function openLogPlanSaving(pid){
   h+='<div><label class="lbl">Amount</label><input class="inp" type="tel" inputmode="decimal" id="lps-amt" placeholder="0"/></div>';
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="lps-date" value="'+today()+'"/></div>';
   h+='<div><label class="lbl">Note</label><input class="inp" id="lps-note" placeholder="e.g. From May 2nd paycheck"/></div>';
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-g" style="flex:1" onclick="savePlanSaving(\''+pid+'\')">Log Saving</button>';
-  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'logPlanSavingModal\').remove()">Cancel</button></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-g" style="flex:1" onclick="savePlanSaving(\x27'+pid+'\x27)">Log Saving</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27logPlanSavingModal\x27).remove()">Cancel</button></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -4356,9 +4310,9 @@ function openEditPlan(pid){
   h+='<div><label class="lbl">Estimated Amount</label><input class="inp" type="tel" inputmode="decimal" id="ep-amt" value="'+p.estimated_amount+'"/></div>';
   h+='<div><label class="lbl">Notes</label><input class="inp" id="ep-notes" value="'+(p.notes||'')+'" placeholder="Notes"/></div>';
   h+='<div style="display:flex;gap:10px">';
-  h+='<button class="btn btn-p" style="flex:1" onclick="saveEditPlan(\''+pid+'\')">Save</button>';
-  h+='<button class="btn btn-red" style="flex:1" onclick="deletePlan(\''+pid+'\')">Delete</button></div>';
-  h+='<button class="btn btn-ghost" onclick="document.getElementById(\'editPlanModal\').remove()">Cancel</button>';
+  h+='<button class="btn btn-p" style="flex:1" onclick="saveEditPlan(\x27'+pid+'\x27)">Save</button>';
+  h+='<button class="btn btn-red" style="flex:1" onclick="deletePlan(\x27'+pid+'\x27)">Delete</button></div>';
+  h+='<button class="btn btn-ghost" onclick="document.getElementById(\x27editPlanModal\x27).remove()">Cancel</button>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -4386,7 +4340,7 @@ async function deletePlan(pid){
 
 function renderActivity(){
   var filtered=getByTime(ACT,'created_at');
-  var html='<div class="ph"><div class="ph-eye">Activity</div><div class="ph-title">What\'s been happening</div><div class="ph-sub">Every action logged by who did it and when.</div></div>';
+  var html='<div class="ph"><div class="ph-eye">Activity</div><div class="ph-title">What\x27s been happening</div><div class="ph-sub">Every action logged by who did it and when.</div></div>';
   html+=renderTimeFil();
   html+='<div class="g2" style="margin-bottom:16px">';
   html+='<div class="mc"><div class="lbl" style="margin-bottom:4px">Total Actions</div><div style="font-size:1.3rem;font-weight:800">'+filtered.length+'</div></div>';
@@ -4398,7 +4352,7 @@ function renderActivity(){
     html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:13px;font-weight:600">'+m.first_name+'</span><span style="font-size:13px;font-weight:700">'+count+' actions ('+pct+'%)</span></div>';
     html+='<div style="height:6px;background:var(--bg);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(m.avatar_color||'#4361ee')+';border-radius:99px"></div></div></div>';
   });
-  html+='<button onclick="exportCSV(\'activity\')" class="btn btn-ghost" style="margin-bottom:14px">Export Activity CSV</button>';
+  html+='<button onclick="exportCSV(\x27activity\x27)" class="btn btn-ghost" style="margin-bottom:14px">Export Activity CSV</button>';
   if(filtered.length===0){html+='<div style="text-align:center;color:var(--muted);font-size:14px;padding:30px 0">No activity in this period.</div>';}
   else{
     html+='<div class="card" style="padding:0">';
@@ -4628,7 +4582,7 @@ function renderInsights(){
 
   // Time to Ahead
   if(spendable<(SET.ahead_threshold||1000)){
-    velH+='<div style="background:var(--pl);border:1px solid var(--pm);border-radius:12px;padding:12px 14px;cursor:pointer" onclick="loadTimeToAhead(\''+ttaId+'\')">';
+    velH+='<div style="background:var(--pl);border:1px solid var(--pm);border-radius:12px;padding:12px 14px;cursor:pointer" onclick="loadTimeToAhead(\x27'+ttaId+'\x27)">';
     velH+='<div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--primary)">Time to Ahead</div>';
     velH+='<div id="'+ttaId+'" style="margin-top:4px;font-size:12px;color:var(--primary);font-weight:600">Tap to calculate →</div></div>';
     velH+='<span style="font-size:20px">→</span></div></div>';
@@ -4730,7 +4684,7 @@ function renderInsights(){
 
   // Clarity analysis button
   rbH+='<div id="'+recoveryBudgetId+'" style="margin-top:14px">';
-  rbH+='<button onclick="loadRecoveryBudgetAnalysis(\''+recoveryBudgetId+'\','+committed+','+pdTotal3+','+goalsAmt+','+lifeAmt+','+monthlyPay+')" style="width:100%;background:var(--gp);color:#fff;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Get Clarity\'s Recovery Plan →</button>';
+  rbH+='<button onclick="loadRecoveryBudgetAnalysis(\x27'+recoveryBudgetId+'\x27,'+committed+','+pdTotal3+','+goalsAmt+','+lifeAmt+','+monthlyPay+')" style="width:100%;background:var(--gp);color:#fff;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">Get Clarity\x27s Recovery Plan →</button>';
   rbH+='</div>';
 
   html+=iCard(5,'Recovery Budget',rbH);
@@ -4752,7 +4706,7 @@ function renderInsights(){
   html+='<div style="display:flex;gap:4px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:16px" id="trend-dm-wrap">';
   ['All','Jay','Chari'].forEach(function(dm){
     var isAll=dm==='All';
-    html+='<button onclick="setTrendDM(\''+dm.toLowerCase()+'\')" id="tdm-'+dm.toLowerCase()+'" style="flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:600;border:none;background:'+(isAll?'var(--surface-solid)':'transparent')+';color:'+(isAll?'var(--primary)':'var(--muted)')+';box-shadow:'+(isAll?'var(--shadow)':'none')+';cursor:pointer">'+dm+'</button>';
+    html+='<button onclick="setTrendDM(\x27'+dm.toLowerCase()+'\x27)" id="tdm-'+dm.toLowerCase()+'" style="flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:600;border:none;background:'+(isAll?'var(--surface-solid)':'transparent')+';color:'+(isAll?'var(--primary)':'var(--muted)')+';box-shadow:'+(isAll?'var(--shadow)':'none')+';cursor:pointer">'+dm+'</button>';
   });
   html+='</div>';
 
@@ -4868,7 +4822,7 @@ function buildTrendsChart(dm,numMonths,txArr){
   sortedCats.forEach(function(cat,ci){
     var total=activeCats[cat]||0;
     var color=TCOLORS[ci%TCOLORS.length];
-    legend+='<div onclick="isolateTrendCat(\''+cat.replace(/'/g,'')+'\',\''+color+'\')" style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 8px;border-radius:20px;border:1px solid rgba(200,210,240,0.3);background:var(--bg)">';
+    legend+='<div onclick="isolateTrendCat(\x27'+cat.replace(/'/g,'')+'\x27,\x27'+color+'\x27)" style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 8px;border-radius:20px;border:1px solid rgba(200,210,240,0.3);background:var(--bg)">';
     legend+='<div style="width:10px;height:3px;border-radius:99px;background:'+color+'"></div>';
     legend+='<span style="font-size:11px;color:var(--text2)">'+cat+'</span>';
     legend+='<span style="font-size:11px;color:var(--muted)">'+fmt(total)+'</span>';
@@ -4881,7 +4835,7 @@ function buildTrendsChart(dm,numMonths,txArr){
   var totalsRow='<div style="display:flex;gap:2px;margin-top:10px;border-top:1px solid var(--bl);padding-top:8px">';
   months.forEach(function(m){
     var tot=sortedCats.reduce(function(s,c){return s+(m.cats[c]||0);},0);
-    totalsRow+='<div onclick="drillTrendMonth(\''+m.year+'-'+String(m.month+1).padStart(2,'0')+'\')" style="flex:1;text-align:center;cursor:pointer;padding:4px 2px;border-radius:6px" onmouseover="this.style.background=\'rgba(67,97,238,0.08)\'" onmouseout="this.style.background=\'transparent\'">';
+    totalsRow+='<div onclick="drillTrendMonth(\x27'+m.year+'-'+String(m.month+1).padStart(2,'0')+'\x27)" style="flex:1;text-align:center;cursor:pointer;padding:4px 2px;border-radius:6px" onmouseover="this.style.background=\x27rgba(67,97,238,0.08)\x27" onmouseout="this.style.background=\x27transparent\x27">';
     totalsRow+='<div style="font-size:9px;color:var(--muted);font-weight:600">'+(tot>0?'$'+(tot>=1000?(tot/1000).toFixed(1)+'k':Math.round(tot)):'—')+'</div>';
     totalsRow+='<div style="font-size:8px;color:var(--muted);margin-top:1px">'+m.label+'</div></div>';
   });
@@ -4923,7 +4877,7 @@ function isolateTrendCat(cat,color){
   html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
   html+='<div><div style="font-size:12px;font-weight:800;color:var(--text)">'+cat+'</div>';
   html+='<div style="font-size:11px;color:var(--muted)">'+catTx.length+' transactions · '+fmt(catTx.reduce(function(s,t){return s+t.amount;},0))+'</div></div>';
-  html+='<button onclick="window._isolatedCat=null;document.getElementById(\'trend-drilldown\').innerHTML=\'\'" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer">×</button></div>';
+  html+='<button onclick="window._isolatedCat=null;document.getElementById(\x27trend-drilldown\x27).innerHTML=\x27\x27" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer">×</button></div>';
 
   // Top 10 transactions
   html+='<div style="display:flex;flex-direction:column;gap:0">';
@@ -4962,7 +4916,7 @@ function drillTrendMonth(yearMonth){
   html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
   html+='<div><div style="font-size:12px;font-weight:800;color:var(--text)">'+label+'</div>';
   html+='<div style="font-size:11px;color:var(--muted)">'+monthTx.length+' transactions · '+fmt(total)+'</div></div>';
-  html+='<button onclick="window._isolatedMonth=null;document.getElementById(\'trend-drilldown\').innerHTML=\'\'" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer">×</button></div>';
+  html+='<button onclick="window._isolatedMonth=null;document.getElementById(\x27trend-drilldown\x27).innerHTML=\x27\x27" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer">×</button></div>';
 
   // Category breakdown
   html+='<div style="margin-bottom:10px">';
@@ -5030,7 +4984,7 @@ function renderSettings(){
   // History & Logs section
   html+='<div class="sec-t">History & Logs</div>';
   html+='<div class="card" style="padding:0;margin-bottom:12px">';
-  [{label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\'activity\')'},
+  [{label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\x27activity\x27)'},
    {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
    {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
   ].forEach(function(item,i,arr){
@@ -5060,7 +5014,7 @@ function renderSettings(){
       html+='</div>';
       html+='<div style="font-size:12px;color:var(--muted)">'+acc.account_type+(acc.last_four?' ····'+acc.last_four:'')+' · '+(acc.is_spending?'Included in Available':'Not in Available')+'</div></div>';
       html+='<div style="text-align:right"><div style="font-size:15px;font-weight:800;color:'+balColor+';filter:'+(isOwner?'none':'blur(6px)')+';user-select:'+(isOwner?'auto':'none')+'">'+balDisplay+'</div>';
-      if(isOwner)html+='<button onclick="openEditAccount(\''+acc.id+'\')" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0">Edit</button>';
+      if(isOwner)html+='<button onclick="openEditAccount(\x27'+acc.id+'\x27)" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0">Edit</button>';
       html+='</div></div>';
     });
     html+='<button onclick="openAddAccount()" class="btn btn-ghost btn-sm" style="align-self:flex-start">+ Add Account</button>';
@@ -5110,16 +5064,16 @@ function renderSettings(){
   html+='<button class="btn btn-p" onclick="saveThr()">Save Thresholds</button></div></div>';
 
   html+='<div class="card"><div class="sec-t">Export Data</div><div style="display:flex;flex-direction:column;gap:10px">';
-  ['expenses','transactions','activity'].forEach(function(t){html+='<button onclick="exportCSV(\''+t+'\')" class="btn btn-ghost">Export '+t.charAt(0).toUpperCase()+t.slice(1)+' CSV</button>';});
+  ['expenses','transactions','activity'].forEach(function(t){html+='<button onclick="exportCSV(\x27'+t+'\x27)" class="btn btn-ghost">Export '+t.charAt(0).toUpperCase()+t.slice(1)+' CSV</button>';});
   html+='</div></div>';
   html+='<button class="btn btn-red" onclick="signOut()" style="margin-top:8px">Sign Out</button>';
 
   // DANGER ZONE
   html+='<div class="sec-t" style="color:var(--red);margin-top:20px">Danger Zone</div>';
   html+='<div class="card" style="padding:0;border-color:rgba(220,38,38,0.2)">';
-  [{label:'Clear All Transactions',sub:'Removes all imported and manually logged transactions',icon:'🗑️',fn:'confirmReset(\'transactions\')'},
-   {label:'Clear Activity Log',sub:'Removes all activity history entries',icon:'📋',fn:'confirmReset(\'activity\')'},
-   {label:'Clear Everything',sub:'Removes all transactions, activity, paychecks, and imports. Bills and settings stay.',icon:'⚠️',fn:'confirmReset(\'all\')'},
+  [{label:'Clear All Transactions',sub:'Removes all imported and manually logged transactions',icon:'🗑️',fn:'confirmReset(\x27transactions\x27)'},
+   {label:'Clear Activity Log',sub:'Removes all activity history entries',icon:'📋',fn:'confirmReset(\x27activity\x27)'},
+   {label:'Clear Everything',sub:'Removes all transactions, activity, paychecks, and imports. Bills and settings stay.',icon:'⚠️',fn:'confirmReset(\x27all\x27)'},
   ].forEach(function(item,i,arr){
     html+='<div onclick="'+item.fn+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:'+(i<arr.length-1?'1px solid var(--bl)':'none')+'">';
     html+='<div style="width:36px;height:36px;border-radius:10px;background:var(--rl);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+item.icon+'</div>';
@@ -5407,7 +5361,7 @@ var SCAN_PHRASES={
   total:['Crunching the Numbers','Tallying the Tab','Doing the Math Magic','Counting Every Penny (Yes, Even That One)'],
   category:['Putting Things in Their Lanes','Making Sense of the Spend','Filing Under: You Spent Money'],
   save:['Locking It In','Receipt Successfully Tamed','Almost There...','Saving the Evidence'],
-  error:['Receipt Rebelled — Try Again','Scanner Needs Glasses 👓','We Lost the Plot (Retry?)','Let\'s Give That Another Shot']
+  error:['Receipt Rebelled — Try Again','Scanner Needs Glasses 👓','We Lost the Plot (Retry?)','Let\x27s Give That Another Shot']
 };
 function randPhrase(stage){var arr=SCAN_PHRASES[stage];return arr[Math.floor(Math.random()*arr.length)];}
 
@@ -5441,7 +5395,7 @@ function showScanProgress(file){
     +'<div id="scanBar" style="height:100%;width:0%;background:linear-gradient(90deg,#4361ee,#7c3aed);border-radius:99px;transition:width .6s ease"></div></div>'
     +'<div style="font-size:12px;color:rgba(255,255,255,0.4)" id="scanPct">0%</div>'
     +'<div id="scanError" style="margin-top:16px;display:none">'
-    +'<button onclick="document.getElementById(\'scanProgressOv\').remove();document.getElementById(\'receiptScanModal\').style.display=\'flex\'" style="background:white;color:#0f172a;border:none;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Try Again</button>'
+    +'<button onclick="document.getElementById(\x27scanProgressOv\x27).remove();document.getElementById(\x27receiptScanModal\x27).style.display=\x27flex\x27" style="background:white;color:#0f172a;border:none;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Try Again</button>'
     +'</div>'
     +'</div>';
   document.body.appendChild(ov);
@@ -5459,7 +5413,7 @@ function showScanProgress(file){
     if(errEl){
       errEl.style.display='block';
       errEl.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:12px">'+msg+'</div>'
-        +'<button onclick="document.getElementById(\'scanProgressOv\').remove();document.getElementById(\'receiptScanModal\').style.display=\'flex\'" style="background:white;color:#0f172a;border:none;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer">Try Again</button>';
+        +'<button onclick="document.getElementById(\x27scanProgressOv\x27).remove();document.getElementById(\x27receiptScanModal\x27).style.display=\x27flex\x27" style="background:white;color:#0f172a;border:none;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer">Try Again</button>';
     }
   }
 
@@ -5478,7 +5432,7 @@ function showScanProgress(file){
 
       setTimeout(function(){setStage('📋','Parsing Line Items',randPhrase('parse'),65);},300);
 
-      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (the transaction date printed ON THE RECEIPT in YYYY-MM-DD format — look for a date/time line near the top, this is NOT today\'s date, it is the date the purchase was made), "category" (one of: Housing, Utilities, Food & Drinks, Transportation, Healthcare, Entertainment, Subscriptions, Personal Care, Clothing, Education & Childcare, Household Supplies, Debt & Retirement, Gifts & Donations, Travel, Pets, Miscellaneous — determine by looking at BOTH the store name AND line items together), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields.';
+      var sys='You are reading a receipt image. Return ONLY a valid JSON object with EXACTLY these fields: "name" (business name from top of receipt), "amount" (final total paid as number), "date" (the transaction date printed ON THE RECEIPT in YYYY-MM-DD format — look for a date/time line near the top, this is NOT today\x27s date, it is the date the purchase was made), "category" (one of: Housing, Utilities, Food & Drinks, Transportation, Healthcare, Entertainment, Subscriptions, Personal Care, Clothing, Education & Childcare, Household Supplies, Debt & Retirement, Gifts & Donations, Travel, Pets, Miscellaneous — determine by looking at BOTH the store name AND line items together), "items" (array of up to 6 objects with "name" string and "price" number). No markdown, no explanation, just the JSON object. Include ALL fields.';
 
       var payload={
         model:'claude-sonnet-4-20250514',
@@ -5658,14 +5612,14 @@ function showReceiptConfirm(data){
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="rc-date" value="'+(txDate&&txDate.match(/^\d{4}-\d{2}-\d{2}/)?txDate:today())+'"/></div>';
   h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+CATS.map(function(c){return '<option'+(category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
   var defaultDM=CU&&UP?UP.first_name.toLowerCase():'jay';
-  h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn'+(defaultDM==='jay'?' on':'')+'" data-dm="jay" onclick="setReceiptDM(\'jay\',this)">Jay</button><button class="tog-btn'+(defaultDM==='chari'?' on':'')+'" data-dm="chari" onclick="setReceiptDM(\'chari\',this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\'joint\',this)">Joint</button></div></div>';
+  h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn'+(defaultDM==='jay'?' on':'')+'" data-dm="jay" onclick="setReceiptDM(\x27jay\x27,this)">Jay</button><button class="tog-btn'+(defaultDM==='chari'?' on':'')+'" data-dm="chari" onclick="setReceiptDM(\x27chari\x27,this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\x27joint\x27,this)">Joint</button></div></div>';
   h+='<div><label class="lbl">Match to existing bill? (optional)</label><select class="sel" id="rc-exp"><option value="">— Not a bill payment —</option>'+EX.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+'</select></div>';
   if(items.length>0){
     h+='<div style="background:var(--bg);border-radius:10px;padding:12px"><div class="lbl" style="margin-bottom:8px">Line Items</div>';
     items.forEach(function(item){h+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span>'+item.name+'</span><span style="font-weight:600">'+fmt(item.price)+'</span></div>';});
     h+='</div>';
   }
-  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmReceipt()">Log Transaction</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'receiptModal\').remove()">Cancel</button></div>';
+  h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="confirmReceipt()">Log Transaction</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27receiptModal\x27).remove()">Cancel</button></div>';
   h+='<div id="rc-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._receiptDM=CU&&UP?UP.first_name.toLowerCase():'jay';
@@ -5727,7 +5681,7 @@ async function confirmReceipt(){
 function renderTimeFil(){
   var ps=[{id:'week',l:'This Week'},{id:'month',l:'This Month'},{id:'last_month',l:'Last Month'},{id:'q',l:'3 Months'},{id:'ytd',l:'YTD'},{id:'all',l:'All'}];
   var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
-  ps.forEach(function(p){html+='<button onclick="setTP(\''+p.id+'\')" class="tb'+(timePeriod===p.id?' on':'')+'">'+p.l+'</button>';});
+  ps.forEach(function(p){html+='<button onclick="setTP(\x27'+p.id+'\x27)" class="tb'+(timePeriod===p.id?' on':'')+'">'+p.l+'</button>';});
   html+='</div>';return html;
 }
 // ══════════════════════════════════════════════
@@ -5746,7 +5700,7 @@ function openAddAccount(){
   h+='<div><label class="lbl">Last 4 Digits</label><input class="inp" type="tel" id="aa-last4" placeholder="1234" maxlength="4"/></div></div>';
   h+='<div><label class="lbl">Current Balance</label><input class="inp" type="tel" inputmode="decimal" id="aa-bal" placeholder="e.g. 1250 or -45 if overdrawn"/></div>';
   h+='<div><label class="lbl">Color</label><div style="display:flex;gap:6px;flex-wrap:wrap">';
-  colors.forEach(function(c){h+='<div onclick="setAcctColor(this,\''+c+'\')" style="width:28px;height:28px;border-radius:8px;background:'+c+';cursor:pointer;border:2px solid transparent" data-color="'+c+'"></div>';});
+  colors.forEach(function(c){h+='<div onclick="setAcctColor(this,\x27'+c+'\x27)" style="width:28px;height:28px;border-radius:8px;background:'+c+';cursor:pointer;border:2px solid transparent" data-color="'+c+'"></div>';});
   h+='</div></div>';
   h+='<div><label class="lbl">Account Purpose</label><div style="display:flex;flex-direction:column;gap:6px" id="aa-purpose-wrap">';
   var partner=HM.find(function(m){return m.id!==CU.id;})||{first_name:'Partner'};
@@ -5757,14 +5711,14 @@ function openAddAccount(){
     {v:'personal_'+partnerName.toLowerCase(),label:'Personal — '+partnerName,sub:partnerName+"'s personal account. Balance blurred for you. Excluded from household Available.",icon:'👥'},
   ];
   purposes.forEach(function(p,i){
-    h+='<div onclick="setPurpose(this,\''+p.v+'\')" data-purpose="'+p.v+'" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1.5px solid '+(i===0?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(i===0?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer;margin-bottom:2px">';
+    h+='<div onclick="setPurpose(this,\x27'+p.v+'\x27)" data-purpose="'+p.v+'" style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1.5px solid '+(i===0?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(i===0?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer;margin-bottom:2px">';
     h+='<span style="font-size:18px;flex-shrink:0;margin-top:1px">'+p.icon+'</span>';
     h+='<div><div style="font-size:13px;font-weight:700">'+p.label+'</div>';
     h+='<div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4">'+p.sub+'</div></div></div>';
   });
   h+='</div></div>';
   h+='<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="saveNewAccount()">Add Account</button>';
-  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'addAcctModal\').remove()">Cancel</button></div>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27addAcctModal\x27).remove()">Cancel</button></div>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   window._acctColor='#4361ee';
@@ -5842,7 +5796,7 @@ function openMarkPaid(expId,payType,extra){
     var canSee=isJoint||isMyPersonal||!acc.is_private;
     if(!canSee)return; // hide other person's private accounts
     var balColor=acc.balance<0?'var(--red)':acc.balance>0?'var(--green)':'var(--muted)';
-    h+='<div onclick="selectPaidFrom(this,\''+acc.id+'\')" data-acct="'+acc.id+'" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:1.5px solid '+(isJoint?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(isJoint?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer">';
+    h+='<div onclick="selectPaidFrom(this,\x27'+acc.id+'\x27)" data-acct="'+acc.id+'" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:1.5px solid '+(isJoint?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(isJoint?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer">';
     h+='<div style="width:36px;height:36px;border-radius:10px;background:'+acc.color+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">';
     h+=(acc.account_type==='savings'?'🏦':acc.account_type==='credit'?'💳':'🏛️')+'</div>';
     h+='<div style="flex:1"><div style="font-size:13px;font-weight:700">'+acc.name+'</div>';
@@ -5855,8 +5809,8 @@ function openMarkPaid(expId,payType,extra){
   h+='<div style="background:rgba(67,97,238,0.05);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">';
   h+='Only Joint account payments reduce household Available. Personal account payments update your personal balance only.</div>';
   h+='<div style="display:flex;gap:8px">';
-  h+='<button onclick="confirmPaidFrom(\''+expId+'\',\''+( payType||'')+'\',\''+( extra||'')+'\')" class="btn btn-p" style="flex:1">Confirm Payment</button>';
-  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'paidFromModal\').remove()">Cancel</button>';
+  h+='<button onclick="confirmPaidFrom(\x27'+expId+'\x27,\x27'+( payType||'')+'\x27,\x27'+( extra||'')+'\x27)" class="btn btn-p" style="flex:1">Confirm Payment</button>';
+  h+='<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27paidFromModal\x27).remove()">Cancel</button>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
   // Pre-select joint account
@@ -5959,15 +5913,15 @@ function openEditAccount(acctId){
   ];
   eaPurposes.forEach(function(p){
     var isSel=(acc.account_purpose||'joint')===p.v;
-    h+='<div onclick="setEditPurpose(this,\''+p.v+'\')" data-purpose="'+p.v+'" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;border:1.5px solid '+(isSel?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(isSel?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer;margin-bottom:2px">';
+    h+='<div onclick="setEditPurpose(this,\x27'+p.v+'\x27)" data-purpose="'+p.v+'" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;border:1.5px solid '+(isSel?'var(--primary)':'rgba(200,210,240,0.4)')+';background:'+(isSel?'rgba(67,97,238,0.05)':'transparent')+';cursor:pointer;margin-bottom:2px">';
     h+='<span style="font-size:16px">'+p.icon+'</span>';
     h+='<div style="font-size:13px;font-weight:600">'+p.label+'</div></div>';
   });
   h+='</div></div>';
   h+='<div style="display:flex;gap:8px">';
-  h+='<button class="btn btn-p" style="flex:1" onclick="saveEditAccount(\''+acctId+'\')">Save</button>';
-  h+='<button class="btn btn-red" style="flex:1" onclick="deleteAccount(\''+acctId+'\')">Remove</button></div>';
-  h+='<button class="btn btn-ghost" onclick="document.getElementById(\'editAcctModal\').remove()">Cancel</button>';
+  h+='<button class="btn btn-p" style="flex:1" onclick="saveEditAccount(\x27'+acctId+'\x27)">Save</button>';
+  h+='<button class="btn btn-red" style="flex:1" onclick="deleteAccount(\x27'+acctId+'\x27)">Remove</button></div>';
+  h+='<button class="btn btn-ghost" onclick="document.getElementById(\x27editAcctModal\x27).remove()">Cancel</button>';
   h+='</div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -6038,7 +5992,7 @@ function openCSVImport(){
 
   // File upload
   h+='<div style="margin-bottom:16px"><label class="lbl">CSV File</label>';
-  h+='<div style="border:2px dashed rgba(67,97,238,0.3);border-radius:14px;padding:24px;text-align:center;background:rgba(67,97,238,0.03);cursor:pointer" onclick="document.getElementById(\'csv-file-input\').click()">';
+  h+='<div style="border:2px dashed rgba(67,97,238,0.3);border-radius:14px;padding:24px;text-align:center;background:rgba(67,97,238,0.03);cursor:pointer" onclick="document.getElementById(\x27csv-file-input\x27).click()">';
   h+='<div style="font-size:2rem;margin-bottom:8px">📄</div>';
   h+='<div style="font-size:13px;font-weight:600;color:var(--primary)">Tap to select CSV file</div>';
   h+='<div style="font-size:11px;color:var(--muted);margin-top:4px">Exported from your bank — .csv format</div>';
@@ -6046,7 +6000,7 @@ function openCSVImport(){
   h+='</div></div>';
 
   h+='<div id="csv-status"></div>';
-  h+='<button class="btn btn-ghost" onclick="document.getElementById(\'csvImportModal\').remove()">Cancel</button>';
+  h+='<button class="btn btn-ghost" onclick="document.getElementById(\x27csvImportModal\x27).remove()">Cancel</button>';
   h+='</div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -6342,12 +6296,12 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:11px;color:var(--muted);line-height:1.5">Transfers are included in the balance calculation since they reflect real money movement in this account. They are categorized as Transfer in your transaction history.</div>';
   h+='</div>';
 
-  // Store net for calculation
-  h+='<script>window._csvNetAll='+netAll+';</script>';
+  // Store net for calculation via hidden input
+  h+='<input type="hidden" id="csv-net-all" value="'+netAll+'"/>';
 
   h+='<div style="display:flex;gap:8px">';
   h+='<button onclick="confirmCSVImport()" class="btn btn-p" style="flex:1">Import '+importable.length+' Transactions</button>';
-  h+='<button onclick="document.getElementById(\'csvImportModal\').remove()" class="btn btn-ghost" style="flex:1">Cancel</button></div>';
+  h+='<button onclick="document.getElementById(\x27csvImportModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button></div>';
   h+='</div></div>';
   m.innerHTML=h;
 }
@@ -6356,10 +6310,12 @@ function calcCsvEndingBal(){
   var inp=document.getElementById('csv-start-bal');
   var startEl=document.getElementById('csv-calc-start');
   var endEl=document.getElementById('csv-calc-end');
+  var netInp=document.getElementById('csv-net-all');
   if(!inp||!startEl||!endEl)return;
   var start=parseFloat(inp.value||'');
+  var netAll=netInp?parseFloat(netInp.value||0):0;
   if(isNaN(start)){startEl.textContent='$—';endEl.textContent='Enter starting balance →';return;}
-  var ending=start+(window._csvNetAll||0);
+  var ending=start+netAll;
   startEl.textContent=fmt(start);
   endEl.textContent=fmt(ending);
   endEl.style.color=ending<0?'var(--red)':'var(--primary)';
@@ -6448,10 +6404,10 @@ function openImportHistory(){
       h+='<div><div style="font-size:13px;font-weight:700;color:var(--text)">'+imp.filename+'</div>';
       h+='<div style="font-size:11px;color:var(--muted)">'+fmtD(imp.created_at.split('T')[0],true)+' · '+(acct?acct.name:'Unknown account')+'</div>';
       h+='<div style="font-size:11px;color:var(--muted)">'+imp.imported_count+' transactions imported</div></div>';
-      h+='<button onclick="undoImport(\''+imp.id+'\',\''+imp.account_id+'\',\''+imp.created_at+'\')" style="background:var(--rl);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--red);cursor:pointer;flex-shrink:0">Undo</button></div></div>';
+      h+='<button onclick="undoImport(\x27'+imp.id+'\x27,\x27'+imp.account_id+'\x27,\x27'+imp.created_at+'\x27)" style="background:var(--rl);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--red);cursor:pointer;flex-shrink:0">Undo</button></div></div>';
     });
   }
-  h+='<button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'importHistModal\').remove()">Close</button>';
+  h+='<button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\x27importHistModal\x27).remove()">Close</button>';
   h+='</div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
@@ -6569,7 +6525,7 @@ function openCheckinHistory(){
       h+='</div></div>';
     });
   }
-  h+='<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'checkinHistModal\').remove()">Close</button>';
+  h+='<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\x27checkinHistModal\x27).remove()">Close</button>';
   h+='</div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 }
