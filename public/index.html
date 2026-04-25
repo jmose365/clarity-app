@@ -3337,12 +3337,17 @@ function renderTxView(){
   monthKeys.forEach(function(key){
     var txs=byMonth[key];
     var monthSpend=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return !ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
+    var monthIn=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
     var d2=new Date(key+'-01T12:00:00');
     var mLabel=d2.toLocaleString('default',{month:'long',year:'numeric'});
 
     html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(67,97,238,0.04);border-radius:10px;margin-bottom:2px;border-left:3px solid var(--primary)">';
     html+='<span style="font-size:11px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.06em">'+mLabel+'</span>';
-    html+='<span style="font-size:11px;font-weight:700;color:var(--red)">'+fmt(monthSpend)+'</span></div>';
+    html+='<div style="display:flex;gap:8px">';
+    if(monthIn>0)html+='<span style="font-size:11px;font-weight:700;color:var(--green)">+'+fmt(monthIn)+'</span>';
+    if(monthSpend>0)html+='<span style="font-size:11px;font-weight:700;color:var(--red)">-'+fmt(monthSpend)+'</span>';
+    if(monthIn===0&&monthSpend===0)html+='<span style="font-size:11px;color:var(--muted)">Transfers only</span>';
+    html+='</div></div>';
 
     html+='<div style="display:grid;grid-template-columns:60px 1fr 70px 55px 24px;gap:0;padding:4px 10px;margin-bottom:1px">';
     ['DATE','MERCHANT','AMOUNT','TYPE',''].forEach(function(h2){html+='<div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">'+h2+'</div>';});
