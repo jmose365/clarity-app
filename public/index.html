@@ -3338,6 +3338,8 @@ function renderTxView(){
     var txs=byMonth[key];
     var monthSpend=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return !ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
     var monthIn=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
+    var monthTfrOut=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return t.category==='Transfer'&&!ic;}).reduce(function(s,t){return s+t.amount;},0);
+    var monthTfrIn=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return t.category==='Transfer'&&ic;}).reduce(function(s,t){return s+t.amount;},0);
     var d2=new Date(key+'-01T12:00:00');
     var mLabel=d2.toLocaleString('default',{month:'long',year:'numeric'});
 
@@ -3346,7 +3348,8 @@ function renderTxView(){
     html+='<div style="display:flex;gap:8px">';
     if(monthIn>0)html+='<span style="font-size:11px;font-weight:700;color:var(--green)">+'+fmt(monthIn)+'</span>';
     if(monthSpend>0)html+='<span style="font-size:11px;font-weight:700;color:var(--red)">-'+fmt(monthSpend)+'</span>';
-    if(monthIn===0&&monthSpend===0)html+='<span style="font-size:11px;color:var(--muted)">Transfers only</span>';
+    if(monthTfrOut>0)html+='<span style="font-size:11px;font-weight:700;color:var(--muted)">~'+fmt(monthTfrOut)+' tfr</span>';
+    if(monthTfrIn>0)html+='<span style="font-size:11px;font-weight:700;color:var(--muted)">~+'+fmt(monthTfrIn)+' tfr</span>';
     html+='</div></div>';
 
     html+='<div style="display:grid;grid-template-columns:60px 1fr 70px 55px 24px;gap:0;padding:4px 10px;margin-bottom:1px">';
