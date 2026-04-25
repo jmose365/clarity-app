@@ -496,11 +496,14 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
       <div><div style="line-height:1"><span style="display:inline-flex;align-items:flex-end;line-height:1"><span style="font-size:2rem;font-weight:900;background:var(--gp);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.04em;line-height:1">¢</span><span style="font-size:1rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;padding-bottom:0.15em">larity</span></span></div><div style="font-size:12px;color:var(--muted)">Your financial coach</div></div>
       <button onclick="closeAdvisor()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Close</button>
     </div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-      <button id="voiceBtn" onclick="toggleVoice()" style="display:flex;align-items:center;gap:8px;background:var(--pl);border:1.5px solid var(--primary);border-radius:10px;padding:9px 16px;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <button id="voiceBtn" onclick="toggleVoice()" style="display:flex;align-items:center;gap:8px;background:var(--pl);border:1.5px solid var(--primary);border-radius:10px;padding:9px 14px;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Speak
       </button>
-      <div style="font-size:12px;color:var(--muted)" id="voiceStatus">Or type below</div>
+      <button onclick="document.getElementById('receiptScanModal').style.display='flex'" style="display:flex;align-items:center;gap:8px;background:rgba(22,163,74,0.08);border:1.5px solid rgba(22,163,74,0.3);border-radius:10px;padding:9px 14px;color:var(--green);font-size:13px;font-weight:600;cursor:pointer">
+        📷 Scan Receipt
+      </button>
+      <div style="font-size:12px;color:var(--muted);flex:1;text-align:right" id="voiceStatus">Or type below</div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
       <button onclick="sendMsg('Log a transaction',false)" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:5px 11px;font-size:12px;color:var(--text2);cursor:pointer;font-weight:500">Log a transaction</button>
@@ -3203,6 +3206,102 @@ async function addInc(){
 async function removeInc(id){await sb.from('additional_income').delete().eq('id',id);INC=INC.filter(function(i){return i.id!==id;});renderLedger();}
 
 // TRANSACTIONS VIEW
+function openAddTxModal(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='addTxModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var CATS2=CATS.concat(['Transfer','Income']);
+  var jointAcct=getJointAccount();
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:16px">Add Transaction</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Merchant / Description</label><input class="inp" id="atx-name" placeholder="e.g. Target, Gas Station"/></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<div style="flex:1"><label class="lbl">Amount</label><div style="display:flex;align-items:center;gap:6px"><span style="font-weight:700;color:var(--muted)">$</span><input class="inp" type="tel" inputmode="decimal" id="atx-amt" placeholder="0.00"/></div></div>';
+  h+='<div style="flex:1"><label class="lbl">Date</label><input class="inp" type="date" id="atx-date" value="'+today()+'"/></div>';
+  h+='</div>';
+  h+='<div><label class="lbl">Category</label><select class="sel" id="atx-cat">'+CATS2.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div><label class="lbl">Type</label><div class="tog-wrap">';
+  ['Debit (Money Out)','Credit (Money In)','Transfer'].forEach(function(tp,i){
+    h+='<button class="tog-btn'+(i===0?' on':'')+'" onclick="setAtxType(this)" data-type="'+tp+'">'+tp.split(' ')[0]+'</button>';
+  });
+  h+='</div></div>';
+  h+='<div><label class="lbl">Who</label><div class="tog-wrap">';
+  HM.forEach(function(member,i){
+    h+='<button class="tog-btn'+(member.id===CU.id?' on':'')+'" onclick="setAtxDM(this)" data-dm="'+member.first_name.toLowerCase()+'">'+member.first_name+'</button>';
+  });
+  h+='<button class="tog-btn" onclick="setAtxDM(this)" data-dm="joint">Joint</button>';
+  h+='</div></div>';
+  if(ACCOUNTS.length>0){
+    h+='<div><label class="lbl">Account</label><select class="sel" id="atx-acct">';
+    ACCOUNTS.filter(function(a){return a.is_active;}).forEach(function(a){
+      h+='<option value="'+a.id+'"'+(a.account_purpose==='joint'?' selected':'')+'>'+a.name+'</option>';
+    });
+    h+='</select></div>';
+  }
+  h+='<div><label class="lbl">Notes (optional)</label><input class="inp" id="atx-notes" placeholder=""/></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="saveAddTx()" class="btn btn-p" style="flex:1">Save</button>';
+  h+='<button onclick="document.getElementById(\x27addTxModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
+  h+='</div>';
+  h+='<div id="atx-msg" style="font-size:13px;font-weight:500"></div>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._atxType='Debit';
+  window._atxDM=UP.first_name.toLowerCase();
+}
+
+function setAtxType(btn){
+  window._atxType=btn.getAttribute('data-type').split(' ')[0];
+  btn.closest('.tog-wrap').querySelectorAll('.tog-btn').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+}
+
+function setAtxDM(btn){
+  window._atxDM=btn.getAttribute('data-dm');
+  btn.closest('.tog-wrap').querySelectorAll('.tog-btn').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+}
+
+async function saveAddTx(){
+  var name=(document.getElementById('atx-name').value||'').trim();
+  var amt=parseFloat((document.getElementById('atx-amt').value||'0').replace(/[^0-9.]/g,''))||0;
+  var date=document.getElementById('atx-date').value||today();
+  var cat=document.getElementById('atx-cat').value;
+  var notes=(document.getElementById('atx-notes').value||'').trim();
+  var acctEl=document.getElementById('atx-acct');
+  var acctId=acctEl?acctEl.value:null;
+  var msg=document.getElementById('atx-msg');
+  var type=window._atxType||'Debit';
+  var dm=window._atxDM||'joint';
+
+  if(!name){msg.style.color='var(--red)';msg.textContent='Merchant name required.';return;}
+  if(!amt){msg.style.color='var(--red)';msg.textContent='Amount required.';return;}
+
+  var notePrefix=type==='Credit'?'Credit':type==='Transfer'?'Transfer':'Debit';
+  var r=await sb.from('transactions').insert({
+    household_id:HID,logged_by:CU.id,
+    name:name,amount:amt,
+    category:cat,
+    transaction_date:date,
+    notes:notePrefix+' · '+(notes||name),
+    decision_maker:dm,
+    account_id:acctId||null
+  }).select('*').single();
+
+  if(r.error){msg.style.color='var(--red)';msg.textContent='Error: '+r.error.message;return;}
+  TX.unshift(r.data);
+
+  // Adjust account balance for debits
+  if(type==='Debit'&&acctId){
+    var acct=ACCOUNTS.find(function(a){return a.id===acctId;});
+    if(acct)await updateAccountBalance(acctId,(acct.balance||0)-amt);
+  }
+
+  await logAct('transaction_logged',name+' — '+fmt(amt)+' logged manually','transaction',r.data.id,{amount:amt,type:type});
+  document.getElementById('addTxModal').remove();
+  updateTopBar();renderLedger();renderHome();
+}
+
 function getCatEmoji(cat){
   var map={'Housing':'🏠','Utilities':'💡','Food & Drinks':'🍔','Transportation':'🚗',
     'Healthcare':'💊','Entertainment':'🎬','Subscriptions':'📱','Personal Care':'💇',
@@ -3315,8 +3414,10 @@ function renderTxView(){
 
   // Actions
   html+='<div style="display:flex;gap:8px;margin-bottom:12px">';
-  html+='<button onclick="exportTxCSV()" style="flex:1;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text)">Export CSV</button>';
+  html+='<button onclick="openAddTxModal()" style="flex:1;background:var(--gp);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:#fff;cursor:pointer">+ Add</button>';
+  html+='<button onclick="document.getElementById(\x27receiptScanModal\x27).style.display=\x27flex\x27" style="flex:1;background:rgba(22,163,74,0.08);border:1.5px solid rgba(22,163,74,0.3);border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--green);cursor:pointer">📷 Scan</button>';
   html+='<button onclick="goTab(\x27settings\x27)" style="flex:1;background:var(--pl);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer">Import CSV</button>';
+  html+='<button onclick="exportTxCSV()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:9px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text)">Export</button>';
   html+='</div>';
 
   if(filtered.length===0){
