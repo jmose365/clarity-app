@@ -598,7 +598,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
@@ -818,12 +818,13 @@ async function loadApp(){
     sb.from('planned_expenses').select('*').eq('household_id',HID).order('target_date',{ascending:true}),
     sb.from('checkins').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(10),
     sb.from('bill_acknowledgments').select('*').eq('household_id',HID).gte('expires_at',today()),
-    sb.from('accounts').select('*').eq('household_id',HID).order('sort_order',{ascending:true})
+    sb.from('accounts').select('*').eq('household_id',HID).order('sort_order',{ascending:true}),
+    sb.from('statement_imports').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(20)
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
   BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
-  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];
+  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];IMPORTS=res[15].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -4947,6 +4948,7 @@ function renderSettings(){
   html+='<div class="card" style="padding:0;margin-bottom:12px">';
   [{label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\'activity\')'},
    {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
+   {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
   ].forEach(function(item,i,arr){
     html+='<div onclick="'+item.fn+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:'+(i<arr.length-1?'1px solid var(--bl)':'none')+'">';
     html+='<div style="width:36px;height:36px;border-radius:10px;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+item.icon+'</div>';
@@ -5027,6 +5029,20 @@ function renderSettings(){
   ['expenses','transactions','activity'].forEach(function(t){html+='<button onclick="exportCSV(\''+t+'\')" class="btn btn-ghost">Export '+t.charAt(0).toUpperCase()+t.slice(1)+' CSV</button>';});
   html+='</div></div>';
   html+='<button class="btn btn-red" onclick="signOut()" style="margin-top:8px">Sign Out</button>';
+
+  // DANGER ZONE
+  html+='<div class="sec-t" style="color:var(--red);margin-top:20px">Danger Zone</div>';
+  html+='<div class="card" style="padding:0;border-color:rgba(220,38,38,0.2)">';
+  [{label:'Clear All Transactions',sub:'Removes all imported and manually logged transactions',icon:'🗑️',fn:'confirmReset(\'transactions\')'},
+   {label:'Clear Activity Log',sub:'Removes all activity history entries',icon:'📋',fn:'confirmReset(\'activity\')'},
+   {label:'Clear Everything',sub:'Removes all transactions, activity, paychecks, and imports. Bills and settings stay.',icon:'⚠️',fn:'confirmReset(\'all\')'},
+  ].forEach(function(item,i,arr){
+    html+='<div onclick="'+item.fn+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:'+(i<arr.length-1?'1px solid var(--bl)':'none')+'">';
+    html+='<div style="width:36px;height:36px;border-radius:10px;background:var(--rl);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+item.icon+'</div>';
+    html+='<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--red)">'+item.label+'</div><div style="font-size:12px;color:var(--muted)">'+item.sub+'</div></div>';
+    html+='<span style="color:var(--red);font-size:18px">›</span></div>';
+  });
+  html+='</div>';
   document.getElementById('tab-settings').innerHTML=html;
 }
 
@@ -6301,6 +6317,119 @@ async function confirmCSVImport(){
   setTimeout(function(){status.remove();},3500);
 
   updateTopBar();renderHome();renderSettings();
+}
+
+function openImportHistory(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='importHistModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Import History</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:16px">Tap Undo to reverse an import — removes transactions and reverses the balance change.</div>';
+  if(IMPORTS.length===0){
+    h+='<div style="text-align:center;color:var(--muted);padding:20px 0;font-size:13px">No imports yet.</div>';
+  } else {
+    IMPORTS.forEach(function(imp){
+      var acct=ACCOUNTS.find(function(a){return a.id===imp.account_id;});
+      h+='<div style="padding:14px 0;border-bottom:1px solid var(--bl)">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
+      h+='<div><div style="font-size:13px;font-weight:700;color:var(--text)">'+imp.filename+'</div>';
+      h+='<div style="font-size:11px;color:var(--muted)">'+fmtD(imp.created_at.split('T')[0],true)+' · '+(acct?acct.name:'Unknown account')+'</div>';
+      h+='<div style="font-size:11px;color:var(--muted)">'+imp.imported_count+' transactions imported</div></div>';
+      h+='<button onclick="undoImport(\''+imp.id+'\',\''+imp.account_id+'\',\''+imp.created_at+'\')" style="background:var(--rl);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--red);cursor:pointer;flex-shrink:0">Undo</button></div></div>';
+    });
+  }
+  h+='<button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'importHistModal\').remove()">Close</button>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+async function undoImport(importId,acctId,importedAt){
+  if(!confirm('This will delete all transactions from this import and reverse the account balance change. Continue?'))return;
+  var modal=document.getElementById('importHistModal');
+  if(modal)modal.innerHTML='<div class="modal"><div class="modal-handle"></div><div style="padding:20px;text-align:center;color:var(--muted)"><div class="spinner" style="margin:0 auto 12px"></div>Reversing import...</div></div>';
+
+  try{
+    // Find transactions from this import by account and timestamp window
+    // Imported transactions were created around the import time
+    var importTime=new Date(importedAt);
+    var windowStart=new Date(importTime.getTime()-60000).toISOString(); // 1 min before
+    var windowEnd=new Date(importTime.getTime()+300000).toISOString(); // 5 min after
+
+    // Get transactions to delete
+    var txRes=await sb.from('transactions').select('id,amount').eq('household_id',HID).eq('account_id',acctId).gte('created_at',windowStart).lte('created_at',windowEnd);
+    var txToDelete=txRes.data||[];
+
+    // Get paycheck logs to delete
+    var pcRes=await sb.from('paycheck_log').select('id,amount').eq('household_id',HID).gte('created_at',windowStart).lte('created_at',windowEnd);
+    var pcToDelete=pcRes.data||[];
+
+    // Delete transactions
+    if(txToDelete.length>0){
+      await sb.from('transactions').delete().eq('household_id',HID).eq('account_id',acctId).gte('created_at',windowStart).lte('created_at',windowEnd);
+    }
+
+    // Delete paycheck logs
+    if(pcToDelete.length>0){
+      await sb.from('paycheck_log').delete().eq('household_id',HID).gte('created_at',windowStart).lte('created_at',windowEnd);
+    }
+
+    // Delete activity log entries from that window
+    await sb.from('activity_log').delete().eq('household_id',HID).gte('created_at',windowStart).lte('created_at',windowEnd);
+
+    // Delete the import record
+    await sb.from('statement_imports').delete().eq('id',importId);
+
+    // Reload all data
+    if(modal)modal.remove();
+    var toast=document.createElement('div');
+    toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+    toast.textContent='✅ Import reversed — '+txToDelete.length+' transactions removed. Please update your account balance.';
+    document.body.appendChild(toast);
+    setTimeout(function(){toast.remove();},4000);
+
+    // Reload everything
+    await loadApp();
+
+  } catch(e){
+    if(modal)modal.remove();
+    alert('Error reversing import: '+e.message);
+  }
+}
+
+async function confirmReset(type){
+  var labels={
+    transactions:'This will permanently delete ALL '+TX.length+' transactions. This cannot be undone.',
+    activity:'This will permanently delete all '+ACT.length+' activity log entries. This cannot be undone.',
+    all:'This will permanently delete all transactions, activity logs, paychecks, and imports. Your bills, goals, settings, and accounts will remain. This CANNOT be undone.'
+  };
+  if(!confirm(labels[type]+'\n\nType "DELETE" in the next prompt to confirm.'))return;
+  var confirm2=prompt('Type DELETE to confirm:');
+  if(confirm2!=='DELETE'){alert('Reset cancelled.');return;}
+  await resetData(type);
+}
+
+async function resetData(type){
+  var toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+  toast.textContent='Resetting...';document.body.appendChild(toast);
+  try{
+    if(type==='transactions'||type==='all'){
+      await sb.from('transactions').delete().eq('household_id',HID);
+      await sb.from('statement_imports').delete().eq('household_id',HID);
+    }
+    if(type==='activity'||type==='all'){
+      await sb.from('activity_log').delete().eq('household_id',HID);
+    }
+    if(type==='all'){
+      await sb.from('paycheck_log').delete().eq('household_id',HID);
+    }
+    toast.textContent='✅ Reset complete';
+    setTimeout(function(){toast.remove();},3000);
+    await loadApp();
+  }catch(e){
+    toast.textContent='Error: '+e.message;
+    setTimeout(function(){toast.remove();},4000);
+  }
 }
 
 function openCheckinHistory(){
