@@ -6031,13 +6031,18 @@ function parseCSVRow(line){
 }
 
 function parseDateToISO(dateStr){
-  // Handle MM/DD/YYYY and YYYY-MM-DD formats
   if(!dateStr)return null;
-  dateStr=dateStr.trim();
+  dateStr=dateStr.trim().replace(/^"|"$/g,''); // strip quotes
   if(dateStr.match(/^\d{4}-\d{2}-\d{2}$/))return dateStr;
-  if(dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
-    var parts=dateStr.split('/');
-    return parts[2]+'-'+parts[0]+'-'+parts[1];
+  // MM/DD/YYYY or M/D/YYYY (Huntington uses zero-padded but handle both)
+  var slashMatch=dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(slashMatch){
+    return slashMatch[3]+'-'+slashMatch[1].padStart(2,'0')+'-'+slashMatch[2].padStart(2,'0');
+  }
+  // MM-DD-YYYY
+  var dashMatch=dateStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(dashMatch){
+    return dashMatch[3]+'-'+dashMatch[1].padStart(2,'0')+'-'+dashMatch[2].padStart(2,'0');
   }
   return null;
 }
@@ -6165,7 +6170,10 @@ async function parseCSVWithClaude(csvText,filename){
       });
     }
 
-    if(parsed.length===0){throw new Error('No valid transactions found in file.');}
+    if(parsed.length===0){
+      var sampleDate=lines.length>1?parseCSVRow(lines[1])[dateIdx]:'';
+      throw new Error('No valid transactions found. Sample date value: "'+sampleDate+'" — expected MM/DD/YYYY format. Headers: '+headers.slice(0,4).join(', '));
+    }
     showCSVReview(parsed,filename);
 
   }catch(e){
