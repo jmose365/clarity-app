@@ -6403,10 +6403,10 @@ async function confirmCSVImport(){
     return {
       household_id:HID,logged_by:CU.id,
       name:r.clean_name,
-      amount:Math.abs(r.amount), // always stored positive
+      amount:Math.abs(r.amount),
       category:r.category||'Other',
       transaction_date:r.date,
-      notes:(isDebit?'Debit':'Credit')+' · '+( r.memo||''),
+      notes:(isDebit?'Debit':'Credit')+' · '+(r.memo||''),
       decision_maker:'joint',
       account_id:acctId
     };
@@ -6417,8 +6417,24 @@ async function confirmCSVImport(){
     if(!r.error){TX=TX.concat(r.data||[]);imported+=txInserts.length;}
   }
 
-  // Log paychecks
+  // Log paychecks — into BOTH paycheck_log AND transactions so they appear in ledger
   var pcRows=toImport.filter(function(r){return r.is_paycheck;});
+  var pcTxInserts=pcRows.map(function(pc){
+    return {
+      household_id:HID,logged_by:CU.id,
+      name:pc.clean_name,
+      amount:Math.abs(pc.amount),
+      category:'Income',
+      transaction_date:pc.date,
+      notes:'Credit · '+pc.memo+' (Paycheck)',
+      decision_maker:'joint',
+      account_id:acctId
+    };
+  });
+  if(pcTxInserts.length>0){
+    var pcTxR=await sb.from('transactions').insert(pcTxInserts).select('*');
+    if(!pcTxR.error){TX=TX.concat(pcTxR.data||[]);}
+  }
   for(var i=0;i<pcRows.length;i++){
     var pc=pcRows[i];
     var pR=await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,pay_date:pc.date,amount:Math.abs(pc.amount),scheduled_date:pc.date,arrived_on_time:true}).select('*').single();
