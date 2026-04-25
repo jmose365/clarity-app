@@ -428,10 +428,20 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
     <div class="logo-wrap">
       <span style="display:inline-flex;align-items:flex-end;line-height:1;font-weight:800"><span style="font-size:2rem;font-weight:900;background:var(--gp);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.04em;line-height:1">¢</span><span style="font-size:1rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;padding-bottom:0.15em">larity</span></span>
     </div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="acctSwitcher" onclick="toggleAcctSwitcher()" style="display:none;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:5px">
+        <span id="acctSwitcherLabel">Household</span>
+        <span style="font-size:9px;color:var(--muted)">▾</span>
+      </div>
       <div id="topPill" class="pos-pill pos-behind" onclick="togglePosPop()" style="cursor:pointer">Behind</div>
       <div id="userAv" class="user-av" style="background:#4361ee" onclick="toggleMenu()"></div>
     </div>
+  </div>
+
+  <!-- Account Switcher Dropdown -->
+  <div id="acctSwitcherPop" style="display:none;position:fixed;top:56px;left:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:8px;z-index:200;box-shadow:var(--shadow-lg);min-width:220px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:6px 8px 10px">View Account</div>
+    <div id="acctSwitcherList"></div>
   </div>
 
   <!-- Position popover -->
@@ -603,6 +613,7 @@ var API_URL='/api/claude';
 // STATE
 var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
+var selectedAccountId=null; // null = household/joint view
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
 var pcEarly=false,pendingTxData=null,txConvState=null;
 var CATS=['Housing','Utilities','Food & Drinks','Transportation','Healthcare','Entertainment','Subscriptions','Personal Care','Clothing','Education & Childcare','Household Supplies','Debt & Retirement','Gifts & Donations','Travel','Pets','Miscellaneous'];
@@ -842,7 +853,91 @@ async function loadApp(){
   checkProactiveClarityBanner();
 }
 
-function renderAll(){updateTopBar();renderHome();}
+function renderAll(){
+  updateTopBar();
+  // Show account switcher if multiple accounts exist
+  var switcher=document.getElementById('acctSwitcher');
+  if(switcher){
+    if(ACCOUNTS.length>1){
+      switcher.style.display='flex';
+      updateAcctSwitcherLabel();
+    } else {
+      switcher.style.display='none';
+    }
+  }
+  renderHome();
+}
+
+function updateAcctSwitcherLabel(){
+  var label=document.getElementById('acctSwitcherLabel');
+  if(!label)return;
+  if(!selectedAccountId){
+    label.textContent='Household';
+  } else {
+    var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
+    label.textContent=acct?acct.name:'Household';
+  }
+}
+
+function toggleAcctSwitcher(){
+  var pop=document.getElementById('acctSwitcherPop');
+  var posPop=document.getElementById('posPop');
+  if(posPop)posPop.style.display='none';
+  if(!pop)return;
+  if(pop.style.display!=='none'){pop.style.display='none';return;}
+  // Build list
+  var list=document.getElementById('acctSwitcherList');
+  if(!list)return;
+  var myName=UP?UP.first_name.toLowerCase():'';
+  var html='';
+  // Household option
+  html+='<div onclick="switchAccount(null)" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;background:'+(selectedAccountId===null?'var(--pl)':'transparent')+';margin-bottom:2px">';
+  html+='<div style="width:28px;height:28px;border-radius:8px;background:var(--gp);display:flex;align-items:center;justify-content:center;font-size:14px">🏠</div>';
+  html+='<div><div style="font-size:13px;font-weight:700;color:'+(selectedAccountId===null?'var(--primary)':'var(--text)')+'">Household</div>';
+  html+='<div style="font-size:11px;color:var(--muted)">Joint view — all bills & income</div></div></div>';
+  // Individual accounts
+  ACCOUNTS.filter(function(a){return a.is_active;}).forEach(function(acc){
+    var isMyPersonal=acc.account_purpose===('personal_'+myName);
+    var isPartnerPersonal=acc.is_private&&!isMyPersonal;
+    if(isPartnerPersonal)return; // hide partner's private accounts
+    var isSelected=selectedAccountId===acc.id;
+    var icon=acc.account_type==='savings'?'🏦':acc.account_type==='credit'?'💳':'🏛️';
+    html+='<div onclick="switchAccount(\x27'+acc.id+'\x27)" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;background:'+(isSelected?'var(--pl)':'transparent')+';margin-bottom:2px">';
+    html+='<div style="width:28px;height:28px;border-radius:8px;background:'+acc.color+';display:flex;align-items:center;justify-content:center;font-size:14px">'+icon+'</div>';
+    html+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:'+(isSelected?'var(--primary)':'var(--text)')+'">'+acc.name+'</div>';
+    html+='<div style="font-size:11px;color:var(--muted)">'+fmt(acc.balance||0)+(acc.account_purpose==='joint'?' · Joint':isMyPersonal?' · Personal':'')+'</div></div>';
+    if(isSelected)html+='<span style="color:var(--primary);font-size:14px">✓</span>';
+    html+='</div>';
+  });
+  list.innerHTML=html;
+  pop.style.display='block';
+}
+
+function switchAccount(acctId){
+  selectedAccountId=acctId;
+  document.getElementById('acctSwitcherPop').style.display='none';
+  updateAcctSwitcherLabel();
+  updateTopBar();
+  // Re-render current active tab
+  var activePanel=document.querySelector('.panel.on');
+  if(activePanel){
+    var id=activePanel.id.replace('tab-','');
+    goTab(id);
+  }
+}
+
+// Get transactions filtered to selected account
+function getAccountTX(){
+  if(!selectedAccountId)return TX; // household = all
+  return TX.filter(function(t){return t.account_id===selectedAccountId;});
+}
+
+// Get available balance for selected account
+function getAccountBalance(){
+  if(!selectedAccountId)return calcAvailable();
+  var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
+  return acct?(acct.balance||0):0;
+}
 function togglePosPop(){
   var pop=document.getElementById('posPop');
   if(pop.style.display==='none'){
@@ -3337,7 +3432,7 @@ function renderTxView(){
     cutoffStr=co.toISOString().split('T')[0];
   }
 
-  var allTX=TX.slice().sort(function(a,b){
+  var allTX=getAccountTX().slice().sort(function(a,b){
     return (b.transaction_date||b.created_at||'').localeCompare(a.transaction_date||a.created_at||'');
   });
 
@@ -4866,7 +4961,7 @@ function renderInsights(){
   });
   html+='</div>';
 
-  html+='<div id="'+trendId+'">'+buildTrendsChart('all',6,TX)+'</div>';
+  html+='<div id="'+trendId+'">'+buildTrendsChart('all',6,getAccountTX())+'</div>';
   html+='</div>';
 
   window._trendElId=trendId;
@@ -4886,7 +4981,7 @@ function setTrendDM(dm){
     btn.style.boxShadow=on?'var(--shadow)':'none';
   });
   var el=document.getElementById(window._trendElId);
-  if(el)el.innerHTML=buildTrendsChart(window._trendDM,window._trendTP||6,TX);
+  if(el)el.innerHTML=buildTrendsChart(window._trendDM,window._trendTP||6,getAccountTX());
 }
 
 function setTrendTP(tp){
@@ -4899,7 +4994,7 @@ function setTrendTP(tp){
     btn.style.boxShadow=on?'var(--shadow)':'none';
   });
   var el=document.getElementById(window._trendElId);
-  if(el)el.innerHTML=buildTrendsChart(window._trendDM||'all',tp,TX);
+  if(el)el.innerHTML=buildTrendsChart(window._trendDM||'all',tp,getAccountTX());
 }
 
 function buildTrendsChart(dm,numMonths,txArr){
@@ -5338,7 +5433,18 @@ async function sendMsg(text,fromInput){
   var activeGoals=GOALS.filter(function(g){return !g.is_complete;});
 
   var threeCheckMonthsNow=getThreeCheckMonths();var inThreeCheckNow=isInThreeCheckMonth();
+  // Selected account context
+  var selAcct=selectedAccountId?ACCOUNTS.find(function(a){return a.id===selectedAccountId;}):null;
+  var acctTX=getAccountTX();
+  var acctSpend=acctTX.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return !ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
+  var acctIncome=acctTX.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return ic;}).reduce(function(s,t){return s+t.amount;},0);
+
   var sys='You are Clarity, a sharp, direct, no-nonsense personal financial recovery coach for the Moseberry household. Real answers only. No lectures. No fluff.\n\n'
+    +(selAcct?'CURRENTLY VIEWING: '+selAcct.name+' account ('+fmt(selAcct.balance||0)+' balance)\n'
+      +'- Account spending (all time): '+fmt(acctSpend)+'\n'
+      +'- Account income/credits (all time): '+fmt(acctIncome)+'\n'
+      +'- Account type: '+selAcct.account_purpose+'\n\n'
+      :'')
     +'HOUSEHOLD FINANCIAL DATA:\n'
     +'- Position: '+p.toUpperCase()+'\n'
     +'- Available: '+fmt(cash)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
@@ -5351,6 +5457,8 @@ async function sendMsg(text,fromInput){
     +'- Active goals: '+(activeGoals.length>0?activeGoals.map(function(g){return g.name+' ('+Math.round(g.current_amount/g.target_amount*100)+'% — '+g.importance+')';}).join(', '):'None')+'\n'
     +'- THREE-PAYCHECK MONTHS THIS YEAR: '+(threeCheckMonthsNow.length>0?threeCheckMonthsNow.join(', '):'None detected')+'\n'
     +'- CURRENTLY IN 3-CHECK MONTH: '+(inThreeCheckNow?'YES — extra '+fmt(UP.paycheck_amount||0)+' this month. Bills already covered by first 2 checks. This check is available for goals.':'No')+'\n\n'
+    +'ALL ACCOUNTS:\n'
+    +ACCOUNTS.filter(function(a){return a.is_active;}).map(function(a){return '- '+a.name+': '+fmt(a.balance||0)+' ('+a.account_purpose+')';}).join('\n')+'\n\n'
     +'KEY CONCEPTS:\n'
     +'- Available = cash in hand + logged paychecks - paid bills and transactions\n'
     +'- Earmarked = bills flagged for payment (money spoken for, not yet deducted)\n'
@@ -6373,16 +6481,15 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:14px">'+rows.length+' transactions from '+filename+'</div>';
 
   var transfersOutTotal=transfersOut.reduce(function(s,r){return s+r.amount;},0);
+  var transfersInTotal=transfersIn.reduce(function(s,r){return s+(r.amount||0);},0);
   var paycheckTotal2=paychecks.reduce(function(s,r){return s+(r.amount||0);},0);
   var otherIn=credits.filter(function(r){return !r.is_paycheck;});
   var otherInTotal=otherIn.reduce(function(s,r){return s+(r.amount||0);},0);
   var totalOut=Math.abs(spendingNet)+Math.abs(transfersOutTotal);
-  var totalIn=paycheckTotal2+otherInTotal;
+  var totalIn=paycheckTotal2+otherInTotal+transfersInTotal;
 
-  // Tiles organized as Out (left) vs In (right) — reads like a ledger
+  // Tiles — Out (left) vs In (right)
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">';
-
-  // Column headers
   h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--red);text-align:center;padding:4px 0">Money Out</div>';
   h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--green);text-align:center;padding:4px 0">Money In</div>';
 
@@ -6397,11 +6504,21 @@ function showCSVReview(rows,filename){
   h+='<div style="font-size:13px;font-weight:800;color:var(--green)">'+fmt(paycheckTotal2)+'</div>';
   h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+paychecks.length+' paychecks</div></div>';
 
-  // Row 2: Transfers Out | Other Money In
+  // Row 2: Transfers Out | Transfers In
   h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
   h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Transfers Out</div>';
   h+='<div style="font-size:13px;font-weight:800;color:var(--amber)">'+fmt(Math.abs(transfersOutTotal))+'</div>';
   h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+transfersOut.length+' transfers</div></div>';
+
+  h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Transfers In</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--green)">'+fmt(transfersInTotal)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:1px">'+transfersIn.length+' transfers</div></div>';
+
+  // Row 3: — | Other Credits
+  h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center;opacity:0.5">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">—</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:var(--muted)">—</div></div>';
 
   h+='<div style="background:var(--bg);border-radius:10px;padding:8px;text-align:center">';
   h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px">Other Money In</div>';
@@ -6410,21 +6527,23 @@ function showCSVReview(rows,filename){
 
   h+='</div>';
 
-  // Divider with = sign
+  // Divider
   h+='<div style="display:flex;align-items:center;gap:8px;margin:4px 0 6px">';
   h+='<div style="flex:1;height:1px;background:var(--bl)"></div>';
   h+='<div style="font-size:11px;font-weight:800;color:var(--muted)">=</div>';
   h+='<div style="flex:1;height:1px;background:var(--bl)"></div></div>';
 
-  // Totals row
+  // Totals
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">';
   h+='<div style="background:var(--rl);border:1px solid rgba(220,38,38,0.15);border-radius:12px;padding:10px 12px;text-align:center">';
   h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--red);margin-bottom:2px">Total Money Out</div>';
-  h+='<div style="font-size:16px;font-weight:900;color:var(--red)">'+fmt(totalOut)+'</div></div>';
+  h+='<div style="font-size:16px;font-weight:900;color:var(--red)">'+fmt(totalOut)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:2px">Spending + Transfers Out</div></div>';
 
   h+='<div style="background:var(--gl);border:1px solid rgba(22,163,74,0.15);border-radius:12px;padding:10px 12px;text-align:center">';
   h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:2px">Total Money In</div>';
-  h+='<div style="font-size:16px;font-weight:900;color:var(--green)">'+fmt(totalIn)+'</div></div>';
+  h+='<div style="font-size:16px;font-weight:900;color:var(--green)">'+fmt(totalIn)+'</div>';
+  h+='<div style="font-size:9px;color:var(--muted);margin-top:2px">Income + Transfers In + Credits</div></div>';
   h+='</div>';
   // Transaction list — ALL rows, scrollable
   h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">All Transactions to Import ('+rows.length+')</div>';
@@ -6893,6 +7012,8 @@ document.addEventListener('click',function(e){
   if(m&&av&&!m.contains(e.target)&&!av.contains(e.target))m.style.display='none';
   var pop=document.getElementById('posPop');var pill=document.getElementById('topPill');
   if(pop&&pill&&!pop.contains(e.target)&&!pill.contains(e.target))pop.style.display='none';
+  var asp=document.getElementById('acctSwitcherPop');var asw=document.getElementById('acctSwitcher');
+  if(asp&&asw&&!asp.contains(e.target)&&!asw.contains(e.target))asp.style.display='none';
   var am=document.getElementById('advisorModal');
   if(am&&am.style.display!=='none'&&!am.querySelector('.modal').contains(e.target)&&e.target===am)closeAdvisor();
 });
