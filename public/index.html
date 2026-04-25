@@ -6400,11 +6400,11 @@ async function confirmCSVImport(){
   var allRows=d.rows;
 
   // Check which external_ids already exist to avoid dupes
-  var existingExtIds=TX.filter(function(t){return t.external_id;}).map(function(t){return t.external_id;});
+  var existingExtIds=new Set(TX.filter(function(t){return t.external_id;}).map(function(t){return t.external_id;}));
 
   var toInsert=allRows.filter(function(r){
-    if(!r.external_id)return true; // no ID, always insert
-    return existingExtIds.indexOf(r.external_id)<0; // skip if already imported
+    if(!r.external_id)return true;
+    return !existingExtIds.has(r.external_id);
   });
 
   skipped=allRows.length-toInsert.length;
@@ -6429,15 +6429,20 @@ async function confirmCSVImport(){
     };
   });
 
-  // Insert in batches of 100 to avoid payload limits
+  // Insert in batches of 100 — upsert to skip duplicates gracefully
   var batchSize=100;
   for(var b=0;b<txInserts.length;b+=batchSize){
     var batch=txInserts.slice(b,b+batchSize);
-    var r=await sb.from('transactions').insert(batch).select('*');
+    var r=await sb.from('transactions').upsert(batch,{onConflict:'household_id,external_id',ignoreDuplicates:true}).select('*');
     if(!r.error){
       TX=TX.concat(r.data||[]);
-      imported+=batch.length;
+      imported+=(r.data||[]).length;
       status.textContent='Importing... '+imported+' of '+txInserts.length;
+    } else {
+      console.error('Batch error:',r.error);
+      // Fall back to insert if upsert fails
+      var r2=await sb.from('transactions').insert(batch).select('*');
+      if(!r2.error){TX=TX.concat(r2.data||[]);imported+=(r2.data||[]).length;}
     }
   }
 
