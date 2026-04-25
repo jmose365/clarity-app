@@ -6163,48 +6163,51 @@ function inferCategoryFromName(name,memo){
 
 async function parseCSVWithClaude(csvText,filename){
   var status=document.getElementById('csv-status');
-  if(status)status.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Parsing your Huntington statement...</div>';
+  if(status)status.innerHTML='<div style="display:flex;align-items:center;gap:8px;color:var(--muted);padding:12px 0"><div class="spinner"></div>Parsing your statement...</div>';
 
   try{
-    // Pre-process CSV client-side — no Claude needed for well-structured bank exports
     var lines=csvText.trim().split(/\r?\n/);
     if(lines.length<2){throw new Error('CSV appears empty');}
 
-    // Parse header to find column indices
+    // Parse header — find all relevant columns
     var headers=parseCSVRow(lines[0]).map(function(h){return h.toLowerCase().trim();});
     var dateIdx=headers.findIndex(function(h){return h.includes('date');});
     var payeeIdx=headers.findIndex(function(h){return h.includes('payee');});
     var memoIdx=headers.findIndex(function(h){return h.includes('memo');});
     var amtIdx=headers.findIndex(function(h){return h.includes('amount');});
     var catIdx=headers.findIndex(function(h){return h.includes('category');});
+    var txnIdx=headers.findIndex(function(h){return h.includes('transaction number')||h.includes('transaction id')||h.includes('reference');});
 
-    if(dateIdx<0||amtIdx<0){throw new Error('Could not find Date or Amount columns. Headers found: '+headers.join(', '));}
+    if(dateIdx<0||amtIdx<0){throw new Error('Could not find Date or Amount columns. Headers: '+headers.join(', '));}
 
     var parsed=[];
     for(var i=1;i<lines.length;i++){
       var line=lines[i].trim();if(!line)continue;
       var cols=parseCSVRow(line);
       var dateRaw=dateIdx>=0?cols[dateIdx]:'';
-      var payee=payeeIdx>=0?cols[payeeIdx]:'';
-      var memo=memoIdx>=0?cols[memoIdx]:'';
+      var payee=payeeIdx>=0?(cols[payeeIdx]||''):'';
+      var memo=memoIdx>=0?(cols[memoIdx]||''):'';
       var amtRaw=amtIdx>=0?cols[amtIdx]:'0';
       var bankCat=catIdx>=0?cols[catIdx]:'';
+      var txnNum=txnIdx>=0?(cols[txnIdx]||''):'';
 
       var dateISO=parseDateToISO(dateRaw);
-      if(!dateISO)continue; // skip rows with no valid date
+      if(!dateISO)continue;
 
       var amount=parseFloat(amtRaw.replace(/[^0-9.\-]/g,''))||0;
       var txType=detectTransactionType(payee,memo,amount);
       var cleanName=cleanMerchantName(payee,memo);
-      var category=bankCat||inferCategoryFromName(cleanName,memo);
-      var isPaycheck=txType==='paycheck';
-      var isTransfer=txType==='transfer';
-      var isRefund=txType==='refund';
-      var isDeposit=txType==='deposit';
 
-      // Refunds and deposits treated as credits, not transfers
-      if(isRefund)category='Other';
-      if(isDeposit)category='Income';
+      // Assign category based on type first, then infer
+      var category;
+      if(txType==='paycheck')category='Income';
+      else if(txType==='transfer')category='Transfer';
+      else if(txType==='refund')category='Other';
+      else if(txType==='deposit')category='Income';
+      else category=bankCat||inferCategoryFromName(cleanName,memo);
+
+      // Build external_id from transaction number or fallback to date+amount+payee
+      var externalId=txnNum?txnNum:(dateISO+'_'+Math.abs(amount)+'_'+(payee||memo).substring(0,10).replace(/\s/g,''));
 
       parsed.push({
         date:dateISO,
@@ -6213,9 +6216,11 @@ async function parseCSVWithClaude(csvText,filename){
         amount:amount,
         type:txType,
         category:category,
-        is_paycheck:isPaycheck,
-        is_transfer:isTransfer,
-        original_payee:payee
+        is_paycheck:txType==='paycheck',
+        is_transfer:txType==='transfer',
+        original_payee:payee,
+        external_id:externalId,
+        txn_num:txnNum
       });
     }
 
@@ -6387,61 +6392,68 @@ async function confirmCSVImport(){
   status.textContent='Importing transactions...';document.body.appendChild(status);
 
   var acctId=d.acctId;
-  var importable=d.rows.filter(function(r){return !r.is_transfer;});
-  var imported=0;var paycheckCount=0;
+  var imported=0;var paycheckCount=0;var skipped=0;
 
-  // Get checked items from modal
-  var checks=document.querySelectorAll('#csvImportModal [data-idx]');
-  var selectedIndices=new Set();
-  checks.forEach(function(cb){if(cb.checked)selectedIndices.add(parseInt(cb.getAttribute('data-idx')));});
+  // ALL rows go to transactions — no exclusions
+  // Paychecks → Income category, Transfers → Transfer category
+  // external_id prevents duplicates
+  var allRows=d.rows;
 
-  var toImport=importable.filter(function(r,i){return selectedIndices.has(i);});
+  // Check which external_ids already exist to avoid dupes
+  var existingExtIds=TX.filter(function(t){return t.external_id;}).map(function(t){return t.external_id;});
 
-  // Bulk insert transactions
-  var txInserts=toImport.filter(function(r){return !r.is_paycheck;}).map(function(r){
+  var toInsert=allRows.filter(function(r){
+    if(!r.external_id)return true; // no ID, always insert
+    return existingExtIds.indexOf(r.external_id)<0; // skip if already imported
+  });
+
+  skipped=allRows.length-toInsert.length;
+
+  // Build transaction inserts — everything goes in
+  var txInserts=toInsert.map(function(r){
     var isDebit=r.amount<0;
+    var isPaycheck=r.is_paycheck;
+    var isTransfer=r.is_transfer;
+    var noteType=isPaycheck?'Credit':isTransfer?(r.amount>0?'Credit':'Debit'):isDebit?'Debit':'Credit';
     return {
-      household_id:HID,logged_by:CU.id,
+      household_id:HID,
+      logged_by:CU.id,
       name:r.clean_name,
       amount:Math.abs(r.amount),
       category:r.category||'Other',
       transaction_date:r.date,
-      notes:(isDebit?'Debit':'Credit')+' · '+(r.memo||''),
+      notes:noteType+' · '+(r.memo||'')+(isPaycheck?' (Paycheck)':''),
       decision_maker:'joint',
-      account_id:acctId
+      account_id:acctId,
+      external_id:r.external_id||null
     };
   });
 
-  if(txInserts.length>0){
-    var r=await sb.from('transactions').insert(txInserts).select('*');
-    if(!r.error){TX=TX.concat(r.data||[]);imported+=txInserts.length;}
+  // Insert in batches of 100 to avoid payload limits
+  var batchSize=100;
+  for(var b=0;b<txInserts.length;b+=batchSize){
+    var batch=txInserts.slice(b,b+batchSize);
+    var r=await sb.from('transactions').insert(batch).select('*');
+    if(!r.error){
+      TX=TX.concat(r.data||[]);
+      imported+=batch.length;
+      status.textContent='Importing... '+imported+' of '+txInserts.length;
+    }
   }
 
-  // Log paychecks — into BOTH paycheck_log AND transactions so they appear in ledger
-  var pcRows=toImport.filter(function(r){return r.is_paycheck;});
-  var pcTxInserts=pcRows.map(function(pc){
-    return {
-      household_id:HID,logged_by:CU.id,
-      name:pc.clean_name,
-      amount:Math.abs(pc.amount),
-      category:'Income',
-      transaction_date:pc.date,
-      notes:'Credit · '+pc.memo+' (Paycheck)',
-      decision_maker:'joint',
-      account_id:acctId
-    };
-  });
-  if(pcTxInserts.length>0){
-    var pcTxR=await sb.from('transactions').insert(pcTxInserts).select('*');
-    if(!pcTxR.error){TX=TX.concat(pcTxR.data||[]);}
-  }
+  // Also log paychecks to paycheck_log for income tracking
+  var pcRows=toInsert.filter(function(r){return r.is_paycheck;});
   for(var i=0;i<pcRows.length;i++){
     var pc=pcRows[i];
-    var pR=await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,pay_date:pc.date,amount:Math.abs(pc.amount),scheduled_date:pc.date,arrived_on_time:true}).select('*').single();
+    var pR=await sb.from('paycheck_log').insert({
+      household_id:HID,user_id:CU.id,
+      pay_date:pc.date,amount:Math.abs(pc.amount),
+      scheduled_date:pc.date,arrived_on_time:true
+    }).select('*').single();
     if(!pR.error){PAYLOG.push(pR.data);paycheckCount++;}
   }
 
-  // Update account balance with calculated ending balance
+  // Update account balance
   var endingBal=window._csvEndingBal;
   var acct=ACCOUNTS.find(function(a){return a.id===acctId;});
   if(acct&&endingBal!==null&&endingBal!==undefined){
@@ -6449,14 +6461,16 @@ async function confirmCSVImport(){
   }
 
   // Log import
-  await sb.from('statement_imports').insert({household_id:HID,imported_by:CU.id,account_id:acctId,
-    filename:d.filename,row_count:d.rows.length,imported_count:imported,skipped_count:d.rows.length-imported});
-  await logAct('csv_import',imported+' transactions imported from '+d.filename,'import',null,{count:imported,file:d.filename});
-  sendNotification('transaction_logged',imported+' transactions imported from '+d.filename,null);
+  await sb.from('statement_imports').insert({
+    household_id:HID,imported_by:CU.id,account_id:acctId,
+    filename:d.filename,row_count:d.rows.length,
+    imported_count:imported,skipped_count:skipped
+  });
+  await logAct('csv_import',imported+' transactions imported from '+d.filename+(skipped>0?' ('+skipped+' duplicates skipped)':''),'import',null,{count:imported,file:d.filename});
 
   document.getElementById('csvImportModal').remove();
-  status.textContent='✅ Imported '+imported+' transactions'+(paycheckCount>0?', '+paycheckCount+' paycheck'+(paycheckCount>1?'s':''):'');
-  setTimeout(function(){status.remove();},3500);
+  status.textContent='✅ Imported '+imported+' transactions'+(paycheckCount>0?', '+paycheckCount+' paychecks':'')+( skipped>0?', '+skipped+' duplicates skipped':'');
+  setTimeout(function(){status.remove();},4000);
 
   updateTopBar();renderHome();renderSettings();
 }
