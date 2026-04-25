@@ -3203,6 +3203,14 @@ async function addInc(){
 async function removeInc(id){await sb.from('additional_income').delete().eq('id',id);INC=INC.filter(function(i){return i.id!==id;});renderLedger();}
 
 // TRANSACTIONS VIEW
+function getCatEmoji(cat){
+  var map={'Housing':'🏠','Utilities':'💡','Food & Drinks':'🍔','Transportation':'🚗',
+    'Healthcare':'💊','Entertainment':'🎬','Subscriptions':'📱','Personal Care':'💇',
+    'Clothing':'👕','Household Supplies':'🧹','Debt & Retirement':'💳','Gifts & Donations':'🎁',
+    'Education & Childcare':'📚','Travel':'✈️','Pets':'🐾','Income':'💰','Transfer':'🔄','Other':'📦','Miscellaneous':'📦'};
+  return map[cat]||'💳';
+}
+
 function setTxCat(el){window._txCat=el.getAttribute('data-cat');renderLedger();}
 function setTxPeriod(el){window._txPeriod=el.getAttribute('data-period');renderLedger();}
 function setTxType(el){window._txType=el.getAttribute('data-type');renderLedger();}
