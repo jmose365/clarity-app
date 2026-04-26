@@ -3775,6 +3775,11 @@ function setCF(c){filterCat=c;renderLedger();}
 
 // GOALS
 function renderGoals(){
+  if(isPersonalAccountBlocked()){
+    var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
+    document.getElementById('tab-goals').innerHTML='<div style="padding:40px 20px;text-align:center"><div style="font-size:3rem;margin-bottom:16px">🔒</div><div style="font-size:18px;font-weight:800;margin-bottom:8px">Private Account</div><div style="font-size:13px;color:var(--muted);margin-bottom:20px">'+(acct?acct.name+' insights are':'This account\'s data is')+' only visible to the account owner.</div><button onclick="switchAccount(null)" class="btn btn-ghost" style="width:auto;display:inline-block;padding:10px 24px">Back to Household View</button></div>';
+    return;
+  }
   var active=GOALS.filter(function(g){return !g.is_complete;});
   var complete=GOALS.filter(function(g){return g.is_complete;});
   var userBadges=BADGES.filter(function(b){return b.user_id===CU.id;});
@@ -4089,6 +4094,12 @@ var planForecastMonth=new Date().getMonth();
 var planForecastMaxYear=new Date().getFullYear()+5;
 
 function renderPlan(){
+  if(isPersonalAccountBlocked()){
+    var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
+    var acctName=acct?acct.name:'This account';
+    document.getElementById('tab-plan').innerHTML='<div style="padding:40px 20px;text-align:center"><div style="font-size:3rem;margin-bottom:16px">\uD83D\uDD12</div><div style="font-size:18px;font-weight:800;margin-bottom:8px">Private Account</div><div style="font-size:13px;color:var(--muted);margin-bottom:20px">'+acctName+' data is only visible to the account owner.</div><button onclick="switchAccount(null)" class="btn btn-ghost" style="width:auto;display:inline-block;padding:10px 24px">Back to Household View</button></div>';
+    return;
+  }
   var td=today();var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
 
@@ -4619,7 +4630,25 @@ function renderActivity(){
 }
 
 // INSIGHTS
+function isPersonalAccountBlocked(){
+  // Returns true if viewing a personal account that belongs to someone else
+  if(!selectedAccountId)return false;
+  var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
+  if(!acct)return false;
+  return acct.is_private&&acct.owner_id&&acct.owner_id!==CU.id;
+}
+
 function renderInsights(){
+  // Block non-owner from seeing personal account insights
+  if(isPersonalAccountBlocked()){
+    var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
+    document.getElementById('tab-insights').innerHTML='<div style="padding:40px 20px;text-align:center">'
+      +'<div style="font-size:3rem;margin-bottom:16px">🔒</div>'
+      +'<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Private Account</div>'
+      +'<div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px">'+(acct?acct.name:'This account')+' is a personal account. Insights are only visible to the account owner.</div>'
+      +'<button onclick="switchAccount(null)" class="btn btn-ghost" style="width:auto;display:inline-block;padding:10px 24px">Back to Household View</button></div>';
+    return;
+  }
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
   var monthlyPay=(UP.paycheck_amount||0)*2; // Standard 2-check month baseline
   var threeCheckMonths=getThreeCheckMonths();
@@ -6125,37 +6154,6 @@ function setAcctColor(el,color){
   var wrap=el.closest('div');
   wrap.querySelectorAll('[data-color]').forEach(function(d){d.style.border='2px solid transparent';});
   el.style.border='2px solid white';
-}
-
-async function saveNewAccount(){
-  var name=(document.getElementById('aa-name').value||'').trim();
-  var inst=(document.getElementById('aa-inst').value||'').trim();
-  var type=document.getElementById('aa-type').value||'checking';
-  var last4=(document.getElementById('aa-last4').value||'').trim();
-  var balRaw=(document.getElementById('aa-bal').value||'0').replace(/[^0-9.\-]/g,'');
-  var bal=parseFloat(balRaw)||0;
-  var isSpending=document.getElementById('aa-spending').checked;
-  var isPrivate=document.getElementById('aa-private').checked;
-  if(!name){alert('Account name is required.');return;}
-  var r=await sb.from('accounts').insert({
-    household_id:HID,created_by:CU.id,name:name,institution:inst||null,
-    account_type:type,last_four:last4||null,balance:bal,
-    is_spending:isSpending,is_private:isPrivate,
-    owner_id:isPrivate?CU.id:null,
-    color:window._acctColor||'#4361ee',
-    sort_order:ACCOUNTS.length,last_synced_at:new Date().toISOString()
-  }).select('*').single();
-  if(r.error){alert('Error: '+r.error.message);return;}
-  ACCOUNTS.push(r.data);
-  // If this is the first account, migrate cash_on_hand to it
-  if(ACCOUNTS.length===1&&SET.cash_on_hand&&SET.cash_on_hand!==0&&bal===0){
-    await sb.from('accounts').update({balance:SET.cash_on_hand}).eq('id',r.data.id);
-    r.data.balance=SET.cash_on_hand;
-  }
-  document.getElementById('addAcctModal').remove();
-  await logAct('account_added',name+' account added — '+fmt(bal),'account',r.data.id,{});
-  renderSettings();
-  updateTopBar();renderHome();
 }
 
 function openEditAccount(acctId){
