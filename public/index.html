@@ -4643,14 +4643,22 @@ function renderInsights(){
   if(isPersonalAccountBlocked()){
     var acct=ACCOUNTS.find(function(a){return a.id===selectedAccountId;});
     document.getElementById('tab-insights').innerHTML='<div style="padding:40px 20px;text-align:center">'
-      +'<div style="font-size:3rem;margin-bottom:16px">🔒</div>'
+      +'<div style="font-size:3rem;margin-bottom:16px">\uD83D\uDD12</div>'
       +'<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Private Account</div>'
       +'<div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px">'+(acct?acct.name:'This account')+' is a personal account. Insights are only visible to the account owner.</div>'
       +'<button onclick="switchAccount(null)" class="btn btn-ghost" style="width:auto;display:inline-block;padding:10px 24px">Back to Household View</button></div>';
     return;
   }
+
+  // Use account-scoped transactions
+  var acctTX=getAccountTX();
+  var selAcct=selectedAccountId?ACCOUNTS.find(function(a){return a.id===selectedAccountId;}):null;
+  var acctLabel=selAcct?selAcct.name:'Household';
+
+  // Banner when viewing a specific account
+  var acctBanner=selAcct?'<div style="background:var(--pl);border:1px solid var(--pm);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:12px;font-weight:700;color:var(--primary)">Viewing: '+selAcct.name+'</div><div style="font-size:12px;color:var(--muted)">'+TX.length+' total · '+acctTX.length+' this account</div></div>':'';
   var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
-  var monthlyPay=(UP.paycheck_amount||0)*2; // Standard 2-check month baseline
+  var monthlyPay=(UP.paycheck_amount||0)*2;
   var threeCheckMonths=getThreeCheckMonths();
   var thisYear=new Date().getFullYear();
   var threeCheckThisYear=threeCheckMonths.filter(function(m){return m.startsWith(thisYear+'');});
@@ -4671,12 +4679,21 @@ function renderInsights(){
   var CAT_COLORS=['#4361ee','#22c55e','#f59e0b','#ef4444','#9b72f0','#2ec4b6','#f97316','#ec4899'];
   var catBreak=CATS.map(function(cat){return{cat:cat,total:EX.filter(function(e){return e.category===cat;}).reduce(function(s,e){return s+e.amount;},0)};}).filter(function(c){return c.total>0;}).sort(function(a,b){return b.total-a.total;});
   var dayTotals={};EX.forEach(function(e){dayTotals[e.due_day]=(dayTotals[e.due_day]||0)+e.amount;});
+
+  // Account-scoped spending stats for Recovery Velocity
+  var lastPayDate=null;
+  if(UP.pay_dates){var pd2=getArr(UP.pay_dates).filter(function(d){return d<=today();}).sort();lastPayDate=pd2[pd2.length-1]||null;}
+  var periodTX=lastPayDate?acctTX.filter(function(t){var d=t.transaction_date||t.created_at.split('T')[0];return d>=lastPayDate;}):[];
+  var periodSpend=periodTX.reduce(function(s,t){return s+t.amount;},0);
+  var jayTx=acctTX.filter(function(t){return t.decision_maker==='jay';}).reduce(function(s,t){return s+t.amount;},0);
+  var chariTx=acctTX.filter(function(t){return t.decision_maker==='chari';}).reduce(function(s,t){return s+t.amount;},0);
   var gapDays=Object.entries(dayTotals).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
 
   function ibar(val,max,color){var p=Math.min((val/Math.max(max,1))*100,100);return '<div class="bar-t"><div class="bar-f" style="width:'+p+'%;background:'+color+'"></div></div>';}
   function iCard(num,title,content){return '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div class="ins-num">'+num+'</div><div style="font-size:15px;font-weight:700">'+title+'</div></div>'+content+'</div>';}
 
   var html='<div class="ph"><div class="ph-eye">Insights</div><div class="ph-title">What Your Numbers <span style="color:var(--primary)">Reveal</span></div><div class="ph-sub">Six views of your finances most apps never show you.</div></div>';
+  html+=acctBanner;
 
   html+=iCard(1,'Paycheck Erosion Rate',
     '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><div style="font-size:3rem;font-weight:800;color:'+eColor+';line-height:1;letter-spacing:-.03em">'+erosionPct+'<span style="font-size:1.5rem">%</span></div><div style="font-size:13px;color:var(--text2);margin-top:4px">of your check committed before it arrives</div></div><div style="text-align:right"><div class="lbl">Auto-committed</div><div style="font-size:1.3rem;font-weight:800;color:var(--red)">'+fmt(erosionTotal)+'</div></div></div>'
@@ -4790,11 +4807,7 @@ function renderInsights(){
   var pdTotal2=pd.reduce(function(s,e){return s+calcTotalDueNow(e);},0);
   var paycheck=UP.paycheck_amount||0;
 
-  // Actual velocity — transactions logged this pay period
-  var lastPayDate=null;
-  if(UP.pay_dates){var pd2=getArr(UP.pay_dates).filter(function(d){return d<=today();}).sort();lastPayDate=pd2[pd2.length-1]||null;}
-  var periodTX=lastPayDate?TX.filter(function(t){var d=t.transaction_date||t.created_at.split('T')[0];return d>=lastPayDate;}):[];
-  var periodSpend=periodTX.reduce(function(s,t){return s+t.amount;},0);
+  // Actual velocity — uses account-scoped periodTX already calculated above
   var actualVelocity=net-periodSpend;
   var hasActual=periodTX.length>0;
 
