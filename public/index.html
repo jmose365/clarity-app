@@ -856,8 +856,9 @@ async function loadApp(){
   document.getElementById('uMenuName').textContent=UP.first_name+(UP.last_name?' '+UP.last_name:'');
   // Set default decision maker to logged-in user
   selectedDM=UP.first_name.toLowerCase();
-  // Init chat
-  chatHist=[{role:'assistant',content:"I have your complete household picture — every bill, your income, earmarks, and goals.\n\nAsk me anything or say **\"Log a transaction\"** and I'll walk you through it step by step."}];
+  // Init chat — load from DB
+  chatHist=[];
+  loadChatHistory();
   renderAll();
   checkPendingPaychecks();
   checkEarmarkNotifications();
@@ -5608,14 +5609,66 @@ async function saveThr(){
 function copyHH(){var d=document.createElement('input');d.value=HID;document.body.appendChild(d);d.select();document.execCommand('copy');document.body.removeChild(d);alert('Household ID copied!');}
 
 // ADVISOR
-function openAdvisor(){
+async function openAdvisor(){
   document.getElementById('advisorModal').style.display='flex';
   var msgs=document.getElementById('chatMsgs');if(!msgs)return;
-  if(msgs.children.length===0)renderChatHistory();
+  // Load from DB if chat is empty
+  if(msgs.children.length===0){
+    if(chatHist.length<=1){
+      await loadChatHistory();
+    }
+    renderChatHistory();
+  }
 }
+
 function closeAdvisor(){document.getElementById('advisorModal').style.display='none';}
+
+async function loadChatHistory(){
+  if(!HID)return;
+  try{
+    var r=await sb.from('chat_history').select('*').eq('household_id',HID).order('created_at',{ascending:true}).limit(100);
+    if(r.error||!r.data||r.data.length===0){
+      // No history — show welcome message
+      chatHist=[{role:'assistant',content:'I have your complete household picture — every bill, your income, earmarks, and goals.\n\nAsk me anything or say **"Log a transaction"** and I\x27ll walk you through it step by step.'}];
+      return;
+    }
+    chatHist=r.data.map(function(row){return {role:row.role,content:row.content,id:row.id};});
+  }catch(e){
+    chatHist=[{role:'assistant',content:'I have your complete household picture — every bill, your income, earmarks, and goals.\n\nAsk me anything or say **"Log a transaction"** and I\x27ll walk you through it step by step.'}];
+  }
+}
+
+async function saveChatMessage(role,content){
+  if(!HID||!CU)return null;
+  try{
+    var r=await sb.from('chat_history').insert({
+      household_id:HID,
+      user_id:CU.id,
+      role:role,
+      content:content
+    }).select('id').single();
+    return r.data?r.data.id:null;
+  }catch(e){return null;}
+}
+
+async function clearChatHistory(){
+  if(!confirm('Clear all chat history with Clarity? This cannot be undone.'))return;
+  await sb.from('chat_history').delete().eq('household_id',HID);
+  chatHist=[{role:'assistant',content:'Fresh start. What do you want to work on?'}];
+  renderChatHistory();
+}
+
 function renderChatHistory(){
   var msgs=document.getElementById('chatMsgs');if(!msgs)return;msgs.innerHTML='';
+
+  // Add clear history button at top if there are messages
+  if(chatHist.length>2){
+    var clearBtn=document.createElement('div');
+    clearBtn.style.cssText='text-align:center;margin-bottom:8px';
+    clearBtn.innerHTML='<button onclick="clearChatHistory()" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">Clear history</button>';
+    msgs.appendChild(clearBtn);
+  }
+
   chatHist.forEach(function(m){
     var div=document.createElement('div');div.className='msg-bubble '+(m.role==='user'?'msg-user':'msg-ai');
     div.innerHTML=m.content.replace(/\*\*(.*?)\*\*/g,'<strong style="color:'+(m.role==='user'?'rgba(255,255,255,0.9)':'var(--primary)')+'">$1</strong>').replace(/\n/g,'<br/>');
@@ -5642,8 +5695,9 @@ async function sendMsg(text,fromInput){
   if(isSpeaking){try{window.speechSynthesis.cancel();}catch(e){}isSpeaking=false;}
   var msgs=document.getElementById('chatMsgs');if(!msgs)return;
 
-  // Add user message
+  // Add user message and save to DB
   chatHist.push({role:'user',content:text});
+  saveChatMessage('user',text);
   var ub=document.createElement('div');ub.className='msg-bubble msg-user';ub.textContent=text;msgs.appendChild(ub);
 
   // Check if in transaction logging flow
@@ -5718,6 +5772,7 @@ async function sendMsg(text,fromInput){
     var reply=(data.content&&data.content[0]&&data.content[0].text)||'Something went wrong.';
     var t2=document.getElementById('typing');if(t2)t2.remove();
     chatHist.push({role:'assistant',content:reply});
+    saveChatMessage('assistant',reply);
     var ab=document.createElement('div');ab.className='msg-bubble msg-ai';
     ab.innerHTML=reply.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--primary)">$1</strong>').replace(/\n/g,'<br/>');
     msgs.appendChild(ab);msgs.scrollTop=msgs.scrollHeight;
