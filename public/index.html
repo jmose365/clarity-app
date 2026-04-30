@@ -3725,6 +3725,206 @@ function checkBudgetAlerts(){
   });
 }
 // Stored in memory — merchantRules maps merchant prefix → category
+// ══════════════════════════════════════════════
+// WHAT-IF SANDBOX
+// ══════════════════════════════════════════════
+var _sandbox={extraIncome:0,subAdj:0,foodAdj:0,housingAdj:0,newExpense:0,extraDebtPayment:0,goalContrib:0};
+
+function renderWhatIfSandbox(){
+  var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
+  var paycheck=UP.paycheck_amount||0;
+  var subs=EX.filter(function(e){return e.category==='Subscriptions';}).reduce(function(s,e){return s+e.amount;},0);
+  var food=EX.filter(function(e){return e.category==='Food & Drinks';}).reduce(function(s,e){return s+e.amount;},0);
+  var housing=EX.filter(function(e){return e.category==='Housing';}).reduce(function(s,e){return s+e.amount;},0);
+  var pdTotal=EX.filter(function(e){return e.is_past_due;}).reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+  var topGoal=GOALS.filter(function(g){return !g.is_complete;}).sort(function(a,b){
+    return (a.importance==='need'?0:a.importance==='want'?1:2)-(b.importance==='need'?0:b.importance==='want'?1:2);
+  })[0];
+
+  var h='<div class="card" style="margin-bottom:14px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+  h+='<div style="display:flex;align-items:center;gap:10px"><div class="ins-num">8</div><div style="font-size:15px;font-weight:700">What-If Sandbox</div></div>';
+  h+='<button onclick="resetSandbox()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted)">Reset</button></div>';
+  h+='<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Model changes before committing. Sliders show real-time impact on position, spendable, and timeline. Your actual data is never touched.</div>';
+
+  // Quick scenario presets
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">';
+  [{l:'Chari gets a job',s:'chari_job'},{l:'Cut subscriptions',s:'cut_subs'},{l:'Reduce rent',s:'reduce_rent'},{l:'Car payment',s:'car_payment'},{l:'Attack past due',s:'attack_pd'}].forEach(function(sc){
+    h+='<button onclick="loadScenario(\x27'+sc.s+'\x27)" style="padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;white-space:nowrap">'+sc.l+'</button>';
+  });
+  h+='</div>';
+
+  // Sliders
+  h+='<div id="sb-sliders" style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px">';
+  h+=sbSlider('extraIncome','💵 Additional Monthly Income',0,5000,100,_sandbox.extraIncome,'income','+'+fmt(paycheck*2)+'/mo current');
+  h+=sbSlider('subAdj','📱 Subscriptions Adjustment',-Math.max(100,Math.round(subs)),Math.round(subs||500),50,_sandbox.subAdj,'expense','Current: '+fmt(subs)+'/mo · negative = cut');
+  h+=sbSlider('foodAdj','🍔 Food & Drinks Adjustment',-Math.max(100,Math.round(food)),Math.round(food||500),50,_sandbox.foodAdj,'expense','Current: '+fmt(food)+'/mo · negative = spend less');
+  h+=sbSlider('housingAdj','🏠 Housing Adjustment',-Math.max(100,Math.round(housing)),Math.round(housing||1000),50,_sandbox.housingAdj,'expense','Current: '+fmt(housing)+'/mo · negative = lower rent');
+  h+=sbSlider('newExpense','➕ New Monthly Expense',0,1500,50,_sandbox.newExpense,'expense','Add a new bill (car payment, insurance, etc.)');
+  if(pdTotal>0)h+=sbSlider('extraDebtPayment','⚡ Extra Past Due Payment/Check',0,Math.min(1000,Math.round(pdTotal)),50,_sandbox.extraDebtPayment,'income','Accelerate clearing '+fmt(pdTotal)+' past due');
+  if(topGoal)h+=sbSlider('goalContrib','🎯 Extra Goal Contribution/Check',0,1000,50,_sandbox.goalContrib,'income','Toward: '+topGoal.name);
+  h+='</div>';
+
+  // Results
+  h+='<div id="sb-results">'+calcSandboxResults()+'</div>';
+  h+='</div>';
+  return h;
+}
+
+function sbSlider(key,label,min,max,step,val,type,hint){
+  var isNeg=val<0;var isPos=val>0;
+  var color=type==='income'?(isPos?'var(--green)':'var(--muted)'):(isNeg?'var(--green)':isPos?'var(--red)':'var(--muted)');
+  var h='<div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">';
+  h+='<span style="font-size:12px;font-weight:700">'+label+'</span>';
+  h+='<span id="sbv_'+key+'" style="font-size:13px;font-weight:800;color:'+color+'">'+(val>=0?'+':'')+fmt(val)+'</span></div>';
+  h+='<input type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" oninput="updateSandbox(\x27'+key+'\x27,\x27'+type+'\x27,this.value)" style="width:100%;accent-color:var(--primary);cursor:pointer;margin-bottom:3px"/>';
+  h+='<div style="font-size:10px;color:var(--muted)">'+hint+'</div></div>';
+  return h;
+}
+
+function updateSandbox(key,type,val){
+  _sandbox[key]=parseFloat(val)||0;
+  var v=_sandbox[key];
+  var el=document.getElementById('sbv_'+key);
+  if(el){
+    var isNeg=v<0;var isPos=v>0;
+    el.style.color=type==='income'?(isPos?'var(--green)':'var(--muted)'):(isNeg?'var(--green)':isPos?'var(--red)':'var(--muted)');
+    el.textContent=(v>=0?'+':'')+fmt(v);
+  }
+  var r=document.getElementById('sb-results');
+  if(r)r.innerHTML=calcSandboxResults();
+}
+
+function loadScenario(name){
+  var subs=EX.filter(function(e){return e.category==='Subscriptions';}).reduce(function(s,e){return s+e.amount;},0);
+  var pdTotal=EX.filter(function(e){return e.is_past_due;}).reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+  _sandbox={extraIncome:0,subAdj:0,foodAdj:0,housingAdj:0,newExpense:0,extraDebtPayment:0,goalContrib:0};
+  if(name==='chari_job')_sandbox.extraIncome=2000;
+  else if(name==='cut_subs')_sandbox.subAdj=-Math.min(200,Math.round(subs*0.4));
+  else if(name==='reduce_rent')_sandbox.housingAdj=-200;
+  else if(name==='car_payment')_sandbox.newExpense=450;
+  else if(name==='attack_pd'&&pdTotal>0)_sandbox.extraDebtPayment=Math.min(300,Math.round(pdTotal/4));
+  renderInsights();
+}
+
+function resetSandbox(){
+  _sandbox={extraIncome:0,subAdj:0,foodAdj:0,housingAdj:0,newExpense:0,extraDebtPayment:0,goalContrib:0};
+  renderInsights();
+}
+
+function calcSandboxResults(){
+  var paycheck=UP.paycheck_amount||0;
+  var monthly=EX.reduce(function(s,e){return s+e.amount;},0);
+  var available=calcAvailable();
+  var earmarked=calcEarmarked();
+  var aheadThreshold=SET.ahead_threshold||1000;
+  var pdTotal=EX.filter(function(e){return e.is_past_due;}).reduce(function(s,e){return s+calcTotalDueNow(e);},0);
+  var topGoal=GOALS.filter(function(g){return !g.is_complete;}).sort(function(a,b){
+    return (a.importance==='need'?0:a.importance==='want'?1:2)-(b.importance==='need'?0:b.importance==='want'?1:2);
+  })[0];
+
+  // Adjusted figures
+  var adjMonthlyIncome=(paycheck*2)+_sandbox.extraIncome;
+  var adjMonthlyExpenses=monthly+_sandbox.subAdj+_sandbox.foodAdj+_sandbox.housingAdj+_sandbox.newExpense;
+  var adjMonthlyNet=adjMonthlyIncome-adjMonthlyExpenses;
+  var adjNetPerCheck=adjMonthlyNet/2;
+  var adjSpendable=Math.max(0,(available-(earmarked+(_sandbox.subAdj+_sandbox.foodAdj+_sandbox.housingAdj+_sandbox.newExpense)/2)));
+
+  // Current figures
+  var currentNet=(paycheck*2)-monthly;
+  var currentSpendable=calcSpendable();
+  var currentPos=calcPos();
+
+  // Projected position
+  var adjPos;
+  if(pdTotal>0&&adjSpendable<0)adjPos='behind';
+  else if(pdTotal>0)adjPos='current';
+  else if(adjSpendable>=aheadThreshold)adjPos='ahead';
+  else if(adjSpendable>=(SET.ontrack_threshold||600))adjPos='ontrack';
+  else adjPos='current';
+
+  // Checks to Ahead
+  var checksToAhead=null;
+  var gap=aheadThreshold-adjSpendable;
+  if(gap<=0){checksToAhead=0;}
+  else if(adjNetPerCheck>0){
+    var checksForPD=0;
+    if(pdTotal>0){var ppCheck=adjNetPerCheck/2+_sandbox.extraDebtPayment;checksForPD=ppCheck>0?Math.ceil(pdTotal/ppCheck):99;}
+    checksToAhead=checksForPD+Math.ceil(gap/adjNetPerCheck);
+  }
+
+  // Checks to top goal
+  var checksToGoal=null;
+  if(topGoal){
+    var rem=topGoal.target_amount-topGoal.current_amount;
+    var gpc=(topGoal.contribution_per_paycheck||0)+_sandbox.goalContrib;
+    if(gpc>0)checksToGoal=Math.ceil(rem/gpc);
+  }
+
+  var posColors={behind:'var(--red)',current:'var(--amber)',ontrack:'var(--primary)',ahead:'var(--green)'};
+  var posLabels={behind:'Behind',current:'Current',ontrack:'On Track',ahead:'Ahead'};
+  var posChanged=adjPos!==currentPos;
+  var netDelta=adjMonthlyNet-currentNet;
+  var spendDelta=adjSpendable-currentSpendable;
+  var expDelta=adjMonthlyExpenses-monthly;
+
+  var h='<div style="background:rgba(67,97,238,0.04);border:1.5px solid rgba(67,97,238,0.15);border-radius:14px;padding:14px">';
+  h+='<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--primary);margin-bottom:12px">Projected Outcome</div>';
+
+  // Position arrow
+  h+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--bl)">';
+  h+='<div style="flex:1;text-align:center;padding:10px;background:var(--bg);border-radius:10px"><div style="font-size:9px;color:var(--muted);margin-bottom:2px">Now</div><div style="font-size:15px;font-weight:900;color:'+posColors[currentPos]+'">'+posLabels[currentPos]+'</div></div>';
+  h+='<div style="font-size:22px;color:var(--muted)">→</div>';
+  h+='<div style="flex:1;text-align:center;padding:10px;border-radius:10px;border:1.5px solid '+(posChanged?posColors[adjPos]:'var(--border)')+';background:'+(posChanged?'rgba(22,163,74,0.06)':'var(--bg)')+'"><div style="font-size:9px;color:var(--muted);margin-bottom:2px">Projected</div><div style="font-size:15px;font-weight:900;color:'+posColors[adjPos]+'">'+posLabels[adjPos]+(posChanged?' ✓':'')+'</div></div>';
+  h+='</div>';
+
+  // Metrics
+  [{l:'Monthly Net',cur:currentNet,adj:adjMonthlyNet,delta:netDelta,good:netDelta>0},
+   {l:'Spendable',cur:currentSpendable,adj:adjSpendable,delta:spendDelta,good:spendDelta>0},
+   {l:'Monthly Expenses',cur:monthly,adj:adjMonthlyExpenses,delta:expDelta,good:expDelta<0}
+  ].forEach(function(m){
+    var changed=Math.abs(m.delta)>=1;
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(200,210,240,0.12)">';
+    h+='<span style="font-size:12px;color:var(--text2)">'+m.l+'</span>';
+    h+='<div style="display:flex;align-items:center;gap:8px">';
+    if(changed)h+='<span style="font-size:11px;color:var(--muted);text-decoration:line-through">'+fmt(m.cur)+'</span>';
+    h+='<span style="font-size:13px;font-weight:800;color:'+(changed?(m.good?'var(--green)':'var(--red)'):'var(--text)')+'">'+fmt(m.adj)+'</span>';
+    if(changed)h+='<span style="font-size:10px;font-weight:700;color:'+(m.good?'var(--green)':'var(--red)')+'">'+(m.delta>0?'+':'')+fmt(m.delta)+'</span>';
+    h+='</div></div>';
+  });
+
+  // Timeline
+  h+='<div style="display:flex;gap:8px;margin-top:12px">';
+  h+='<div style="flex:1;background:var(--bg);border-radius:10px;padding:10px;text-align:center">';
+  h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">Checks to Ahead</div>';
+  if(checksToAhead===null)h+='<div style="font-size:16px;font-weight:900;color:var(--red)">∞</div><div style="font-size:9px;color:var(--muted)">net negative</div>';
+  else if(checksToAhead===0)h+='<div style="font-size:16px;font-weight:900;color:var(--green)">Now!</div>';
+  else{h+='<div style="font-size:16px;font-weight:900;color:var(--primary)">'+checksToAhead+'</div><div style="font-size:9px;color:var(--muted)">~'+Math.round(checksToAhead/2)+' months</div>';}
+  h+='</div>';
+  if(topGoal&&checksToGoal!==null){
+    h+='<div style="flex:1;background:var(--bg);border-radius:10px;padding:10px;text-align:center">';
+    h+='<div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px">'+topGoal.name.substring(0,14)+'</div>';
+    h+='<div style="font-size:16px;font-weight:900;color:var(--purple)">'+checksToGoal+'</div>';
+    h+='<div style="font-size:9px;color:var(--muted)">checks · ~'+Math.round(checksToGoal/2)+' mo</div>';
+    h+='</div>';
+  }
+  h+='</div>';
+
+  // Scenario summary
+  var changes=[];
+  if(_sandbox.extraIncome)changes.push('+'+fmt(_sandbox.extraIncome)+'/mo income');
+  if(_sandbox.subAdj)changes.push((_sandbox.subAdj<0?'-':'+')+fmt(Math.abs(_sandbox.subAdj))+' subscriptions');
+  if(_sandbox.foodAdj)changes.push((_sandbox.foodAdj<0?'-':'+')+fmt(Math.abs(_sandbox.foodAdj))+' food');
+  if(_sandbox.housingAdj)changes.push((_sandbox.housingAdj<0?'-':'+')+fmt(Math.abs(_sandbox.housingAdj))+' housing');
+  if(_sandbox.newExpense)changes.push('+'+fmt(_sandbox.newExpense)+' new expense');
+  if(_sandbox.extraDebtPayment)changes.push('+'+fmt(_sandbox.extraDebtPayment)+'/check vs past due');
+  if(_sandbox.goalContrib)changes.push('+'+fmt(_sandbox.goalContrib)+'/check to goal');
+  if(changes.length>0)h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bl);font-size:10px;color:var(--muted);line-height:1.6">Modeling: '+changes.join(' · ')+'</div>';
+  h+='</div>';
+  return h;
+}
+
 var merchantRules={};
 
 function getMerchantKey(name){
@@ -5516,6 +5716,9 @@ function renderInsights(){
 
   // Budget vs Actual card
   html+=renderBudgetInsightsCard();
+
+  // What-If Sandbox card
+  html+=renderWhatIfSandbox();
 
   window._trendElId=trendId;
   window._trendDM='all';
