@@ -612,7 +612,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[],BUDGETS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var selectedAccountId=null; // null = household/joint view
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
@@ -844,12 +844,13 @@ async function loadApp(){
     sb.from('checkins').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(10),
     sb.from('bill_acknowledgments').select('*').eq('household_id',HID).gte('expires_at',today()),
     sb.from('accounts').select('*').eq('household_id',HID).order('sort_order',{ascending:true}),
-    sb.from('statement_imports').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(20)
+    sb.from('statement_imports').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(20),
+    sb.from('budgets').select('*').eq('household_id',HID)
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
   BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
-  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];IMPORTS=res[15].data||[];
+  PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];IMPORTS=res[15].data||[];BUDGETS=res[16].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -1458,6 +1459,8 @@ function renderHome(){
     html+='<button onclick="ackEarmarkNotif(\x27'+e.id+'\x27)" style="background:var(--amber);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-left:10px">Got it</button>';
     html+='</div>';
   });
+
+  html+=renderBudgetBanner();
 
   // Hero card
   html+='<div class="hero '+p+'" style="margin-top:14px"><div class="hero-inner">';
@@ -3417,7 +3420,310 @@ function getCatEmoji(cat){
   return map[cat]||'💳';
 }
 
-// ── MERCHANT CATEGORY RULES ──────────────────────────────────────────────────
+// ══════════════════════════════════════════════
+// BUDGET SYSTEM
+// ══════════════════════════════════════════════
+
+function getBudgetSpending(category, period){
+  // period: 'month' or 'check'
+  var now=new Date();
+  var cutoff;
+  if(period==='check'){
+    var payDates=getArr(UP.pay_dates).filter(function(d){return d<=today();}).sort();
+    var lastPay=payDates[payDates.length-1];
+    cutoff=lastPay||new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0];
+  } else {
+    cutoff=new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0];
+  }
+  return TX.filter(function(t){
+    var ic=t.notes&&t.notes.indexOf('Credit')>=0;
+    var d=t.transaction_date||t.created_at.split('T')[0];
+    return !ic&&t.category===category&&d>=cutoff;
+  }).reduce(function(s,t){return s+t.amount;},0);
+}
+
+function getBudgetStatus(budget){
+  var spent=getBudgetSpending(budget.category,'month');
+  var pct=budget.monthly_amount>0?Math.round((spent/budget.monthly_amount)*100):0;
+  return {spent:spent,budget:budget.monthly_amount,pct:pct,over:spent>budget.monthly_amount,remaining:Math.max(0,budget.monthly_amount-spent)};
+}
+
+// Suggest budgets based on 3-month average spending
+function suggestBudgets(){
+  var now=new Date();
+  var cutoff=new Date(now.getFullYear(),now.getMonth()-3,1).toISOString().split('T')[0];
+  var catTotals={};
+  TX.filter(function(t){
+    var ic=t.notes&&t.notes.indexOf('Credit')>=0;
+    var d=t.transaction_date||t.created_at.split('T')[0];
+    return !ic&&t.category!=='Transfer'&&t.category!=='Income'&&d>=cutoff;
+  }).forEach(function(t){
+    var cat=t.category||'Other';
+    catTotals[cat]=(catTotals[cat]||0)+t.amount;
+  });
+  // Average over 3 months, round up to nearest $50
+  var suggestions={};
+  Object.keys(catTotals).forEach(function(cat){
+    var avg=catTotals[cat]/3;
+    suggestions[cat]=Math.ceil(avg/50)*50; // round up to nearest $50
+  });
+  return suggestions;
+}
+
+async function openBudgetManager(){
+  var suggestions=suggestBudgets();
+  var m=document.createElement('div');m.className='modal-ov';m.id='budgetModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal" style="max-height:95vh"><div class="modal-handle"></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+  h+='<div style="font-size:16px;font-weight:800">Monthly Budgets</div>';
+  h+='<button onclick="document.getElementById(\x27budgetModal\x27).remove()" style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer">×</button></div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">Clarity suggested these based on your last 3 months. Edit any amount and save.</div>';
+
+  // Categories with suggestions or existing budgets
+  var allCats=new Set(Object.keys(suggestions).concat(BUDGETS.map(function(b){return b.category;})));
+  var catsArr=Array.from(allCats).sort();
+
+  h+='<div style="overflow-y:auto;max-height:65vh;display:flex;flex-direction:column;gap:8px;margin-bottom:14px">';
+  catsArr.forEach(function(cat){
+    var existing=BUDGETS.find(function(b){return b.category===cat;});
+    var suggested=suggestions[cat]||0;
+    var current=existing?existing.monthly_amount:suggested;
+    var spent=getBudgetSpending(cat,'month');
+    var pct=current>0?Math.min(Math.round((spent/current)*100),100):0;
+    var barColor=pct>=100?'var(--red)':pct>=80?'var(--amber)':'var(--primary)';
+    var isSuggested=!existing&&suggested>0;
+
+    h+='<div style="background:var(--surface);border:1px solid var(--glass-border);border-radius:14px;padding:12px 14px">';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+    h+='<span style="font-size:18px">'+getCatEmoji(cat)+'</span>';
+    h+='<div style="flex:1"><div style="font-size:13px;font-weight:700">'+cat+'</div>';
+    if(isSuggested)h+='<div style="font-size:10px;color:var(--primary);font-weight:600">✨ Clarity suggestion</div>';
+    h+='</div>';
+    h+='<div style="display:flex;align-items:center;gap:6px"><span style="font-size:13px;font-weight:700;color:var(--muted)">$</span>';
+    h+='<input type="tel" inputmode="decimal" id="bgt-'+cat.replace(/[^a-zA-Z]/g,'_')+'" value="'+Math.round(current)+'" style="width:80px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:5px 8px;font-size:13px;font-weight:700;text-align:right"/></div></div>';
+    if(spent>0){
+      h+='<div style="height:5px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden;margin-bottom:4px">';
+      h+='<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:99px;transition:width .4s ease"></div></div>';
+      h+='<div style="font-size:10px;color:var(--muted)">'+fmt(spent)+' spent this month'+(current>0?' · '+pct+'% of budget':'')+'</div>';
+    }
+    h+='</div>';
+  });
+
+  // Add custom category
+  h+='<div style="background:rgba(67,97,238,0.04);border:1px dashed rgba(67,97,238,0.2);border-radius:14px;padding:12px 14px;display:flex;gap:8px;align-items:center">';
+  h+='<select class="sel" id="bgt-new-cat" style="flex:1;font-size:12px">'+CATS.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select>';
+  h+='<input type="tel" inputmode="decimal" id="bgt-new-amt" placeholder="$" style="width:80px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;font-weight:700;text-align:right"/>';
+  h+='<button onclick="addBudgetRow()" style="background:var(--primary);border:none;border-radius:8px;padding:8px 12px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Add</button>';
+  h+='</div>';
+  h+='</div>';
+
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="saveAllBudgets()" class="btn btn-p" style="flex:1">Save All Budgets</button>';
+  h+='<button onclick="document.getElementById(\x27budgetModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
+  h+='</div>';
+  h+='<div id="bgt-msg" style="font-size:13px;font-weight:500;margin-top:8px;text-align:center"></div>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._budgetCats=catsArr;
+}
+
+function addBudgetRow(){
+  var cat=document.getElementById('bgt-new-cat').value;
+  var amt=parseFloat(document.getElementById('bgt-new-amt').value)||0;
+  if(!cat||!amt)return;
+  if(window._budgetCats.indexOf(cat)<0){
+    window._budgetCats.push(cat);
+    // Re-open with new cat — simple approach
+    document.getElementById('budgetModal').remove();
+    BUDGETS=BUDGETS.filter(function(b){return b.category!==cat;});
+    BUDGETS.push({category:cat,monthly_amount:amt,household_id:HID});
+    openBudgetManager();
+  }
+}
+
+async function saveAllBudgets(){
+  var msg=document.getElementById('bgt-msg');
+  msg.style.color='var(--muted)';msg.textContent='Saving...';
+  var suggestions=suggestBudgets();
+  var upserts=[];
+  (window._budgetCats||[]).forEach(function(cat){
+    var key='bgt-'+cat.replace(/[^a-zA-Z]/g,'_');
+    var el=document.getElementById(key);
+    if(!el)return;
+    var amt=parseFloat(el.value)||0;
+    if(amt>0){
+      upserts.push({
+        household_id:HID,
+        category:cat,
+        monthly_amount:amt,
+        suggested_amount:suggestions[cat]||null,
+        created_by:CU.id,
+        updated_at:new Date().toISOString()
+      });
+    }
+  });
+
+  if(upserts.length===0){msg.style.color='var(--red)';msg.textContent='No budgets to save.';return;}
+
+  var r=await sb.from('budgets').upsert(upserts,{onConflict:'household_id,category'}).select('*');
+  if(r.error){msg.style.color='var(--red)';msg.textContent='Error: '+r.error.message;return;}
+  BUDGETS=r.data||[];
+
+  // Check for over-budget alerts and send Pushover
+  BUDGETS.forEach(function(b){
+    var status=getBudgetStatus(b);
+    if(status.pct>=90){
+      sendNotification('budget_alert',b.category+' budget '+status.pct+'% used — '+fmt(status.spent)+' of '+fmt(b.monthly_amount),status.spent);
+    }
+  });
+
+  document.getElementById('budgetModal').remove();
+  var toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+  toast.textContent='✅ '+upserts.length+' budgets saved';
+  document.body.appendChild(toast);setTimeout(function(){toast.remove();},2500);
+  renderHome();renderInsights();
+}
+
+function renderBudgetBanner(){
+  if(BUDGETS.length===0)return '';
+  var overBudget=BUDGETS.filter(function(b){return getBudgetStatus(b).over;});
+  var nearBudget=BUDGETS.filter(function(b){var s=getBudgetStatus(b);return !s.over&&s.pct>=80;});
+  if(overBudget.length===0&&nearBudget.length===0)return '';
+
+  var h='<div style="background:'+(overBudget.length>0?'var(--rl)':'var(--al)')+';border:1px solid '+(overBudget.length>0?'rgba(220,38,38,0.25)':'rgba(217,119,6,0.25)')+';border-radius:16px;padding:14px 16px;margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+  h+='<div style="font-size:13px;font-weight:700;color:'+(overBudget.length>0?'var(--red)':'var(--amber)');
+  if(overBudget.length>0)h+='">'+(overBudget.length)+' categor'+(overBudget.length===1?'y':'ies')+' over budget</div>';
+  else h+='">'+(nearBudget.length)+' categor'+(nearBudget.length===1?'y':'ies')+' near budget limit</div>';
+  h+='<button onclick="openBudgetManager()" style="background:none;border:none;font-size:12px;font-weight:700;color:'+(overBudget.length>0?'var(--red)':'var(--amber)')+';cursor:pointer">Manage →</button></div>';
+
+  overBudget.slice(0,3).forEach(function(b){
+    var s=getBudgetStatus(b);
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    h+='<div style="display:flex;align-items:center;gap:6px"><span>'+getCatEmoji(b.category)+'</span><span style="font-size:12px;font-weight:600;color:var(--text)">'+b.category+'</span></div>';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--red)">'+fmt(s.spent)+' / '+fmt(s.budget)+' <span style="font-weight:400;color:var(--muted)">('+s.pct+'%)</span></div></div>';
+  });
+  nearBudget.slice(0,2).forEach(function(b){
+    var s=getBudgetStatus(b);
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    h+='<div style="display:flex;align-items:center;gap:6px"><span>'+getCatEmoji(b.category)+'</span><span style="font-size:12px;color:var(--text2)">'+b.category+'</span></div>';
+    h+='<div style="font-size:12px;color:var(--amber)">'+fmt(s.spent)+' of '+fmt(s.budget)+' ('+s.pct+'%)</div></div>';
+  });
+  h+='</div>';
+  return h;
+}
+
+function renderBudgetInsightsCard(){
+  if(BUDGETS.length===0){
+    return '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div class="ins-num">7</div><div style="font-size:15px;font-weight:700">Budget vs Actual</div></div>'
+      +'<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px">No budgets set yet.</div>'
+      +'<button onclick="openBudgetManager()" class="btn btn-p">Set Up Budgets with Clarity</button></div>';
+  }
+
+  var now=new Date();
+  var monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0];
+  var payDates=getArr(UP.pay_dates).filter(function(d){return d<=today();}).sort();
+  var lastPay=payDates[payDates.length-1]||monthStart;
+  var daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  var dayOfMonth=now.getDate();
+  var monthProgress=Math.round((dayOfMonth/daysInMonth)*100);
+
+  var h='<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">';
+  h+='<div style="display:flex;align-items:center;gap:10px"><div class="ins-num">7</div><div style="font-size:15px;font-weight:700">Budget vs Actual</div></div>';
+  h+='<button onclick="openBudgetManager()" style="background:var(--pl);border:1px solid var(--pm);border-radius:10px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--primary);cursor:pointer">Edit</button></div>';
+
+  // Period toggle
+  h+='<div style="display:flex;gap:4px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:14px" id="bgt-period-wrap">';
+  ['monthly','check'].forEach(function(p,i){
+    var on=i===0;
+    h+='<button onclick="setBudgetPeriod(this)" data-period="'+p+'" style="flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:600;border:none;background:'+(on?'var(--surface-solid)':'transparent')+';color:'+(on?'var(--primary)':'var(--muted)')+';box-shadow:'+(on?'var(--shadow)':'none')+';cursor:pointer">'+(p==='monthly'?'This Month':'This Paycheck')+'</button>';
+  });
+  h+='</div>';
+  h+='<div id="bgt-card-body">';
+  h+=renderBudgetRows('monthly',monthProgress);
+  h+='</div></div>';
+  return h;
+}
+
+function setBudgetPeriod(btn){
+  var period=btn.getAttribute('data-period');
+  btn.closest('#bgt-period-wrap').querySelectorAll('button').forEach(function(b){
+    var on=b===btn;
+    b.style.background=on?'var(--surface-solid)':'transparent';
+    b.style.color=on?'var(--primary)':'var(--muted)';
+    b.style.boxShadow=on?'var(--shadow)':'none';
+  });
+  var body=document.getElementById('bgt-card-body');
+  var now=new Date();
+  var daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  var progress=period==='monthly'?Math.round((now.getDate()/daysInMonth)*100):50;
+  if(body)body.innerHTML=renderBudgetRows(period,progress);
+}
+
+function renderBudgetRows(period,progress){
+  var sorted=BUDGETS.slice().sort(function(a,b){
+    var sa=getBudgetStatus(a);var sb2=getBudgetStatus(b);
+    return sb2.pct-sa.pct; // highest % first
+  });
+  var h='';
+  // Period progress
+  h+='<div style="margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">';
+  h+='<span>'+(period==='monthly'?'Month':'Paycheck')+' progress</span><span>'+progress+'% through</span></div>';
+  h+='<div style="height:4px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden">';
+  h+='<div style="height:100%;width:'+progress+'%;background:rgba(67,97,238,0.3);border-radius:99px"></div></div></div>';
+
+  sorted.forEach(function(b){
+    var spent=getBudgetSpending(b.category,period);
+    var budgetAmt=period==='monthly'?b.monthly_amount:(b.monthly_amount/2);
+    var pct=budgetAmt>0?Math.round((spent/budgetAmt)*100):0;
+    var remaining=Math.max(0,budgetAmt-spent);
+    var over=spent>budgetAmt;
+    var barColor=pct>=100?'var(--red)':pct>=80?'var(--amber)':'var(--primary)';
+    // Flag if spending pace is ahead of time
+    var paceWarning=!over&&pct>progress+15;
+
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    h+='<div style="display:flex;align-items:center;gap:6px"><span>'+getCatEmoji(b.category)+'</span>';
+    h+='<span style="font-size:12px;font-weight:700;color:var(--text)">'+b.category+'</span>';
+    if(over)h+='<span style="font-size:9px;font-weight:800;background:var(--red);color:#fff;border-radius:4px;padding:1px 5px">OVER</span>';
+    else if(paceWarning)h+='<span style="font-size:9px;font-weight:800;background:var(--al);color:var(--amber);border-radius:4px;padding:1px 5px">PACE ⚡</span>';
+    h+='</div>';
+    h+='<div style="text-align:right"><div style="font-size:12px;font-weight:800;color:'+(over?'var(--red)':pct>=80?'var(--amber)':'var(--text)')+'">'+fmt(spent)+' / '+fmt(budgetAmt)+'</div>';
+    h+='<div style="font-size:10px;color:var(--muted)">'+(over?fmt(spent-budgetAmt)+' over':fmt(remaining)+' left')+'</div></div></div>';
+    h+='<div style="height:8px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden;position:relative">';
+    h+='<div style="height:100%;width:'+Math.min(pct,100)+'%;background:'+barColor+';border-radius:99px;transition:width .5s ease"></div>';
+    // Pace marker
+    h+='<div style="position:absolute;top:0;bottom:0;left:'+progress+'%;width:2px;background:rgba(0,0,0,0.2)"></div>';
+    h+='</div></div>';
+  });
+
+  // Overall summary
+  var totalBudget=BUDGETS.reduce(function(s,b){return s+(period==='monthly'?b.monthly_amount:b.monthly_amount/2);},0);
+  var totalSpent=BUDGETS.reduce(function(s,b){return s+getBudgetSpending(b.category,period);},0);
+  var overallPct=totalBudget>0?Math.round((totalSpent/totalBudget)*100):0;
+  h+='<div style="border-top:1px solid var(--bl);padding-top:10px;display:flex;justify-content:space-between;align-items:center">';
+  h+='<div style="font-size:12px;font-weight:700;color:var(--text)">Total</div>';
+  h+='<div style="text-align:right"><div style="font-size:13px;font-weight:800;color:'+(overallPct>=100?'var(--red)':overallPct>=80?'var(--amber)':'var(--primary)')+'">'+fmt(totalSpent)+' / '+fmt(totalBudget)+'</div>';
+  h+='<div style="font-size:10px;color:var(--muted)">'+overallPct+'% of '+(period==='monthly'?'monthly':'paycheck')+' budget</div></div></div>';
+  return h;
+}
+
+function checkBudgetAlerts(){
+  // Fire Pushover for categories at 90% or 100%
+  if(BUDGETS.length===0)return;
+  BUDGETS.forEach(function(b){
+    var s=getBudgetStatus(b);
+    if(s.pct>=100){
+      sendNotification('budget_alert',b.category+' is OVER budget — '+fmt(s.spent)+' spent vs '+fmt(s.budget)+' budget',s.spent);
+    } else if(s.pct>=90){
+      sendNotification('budget_alert',b.category+' at '+s.pct+'% of budget — '+fmt(s.remaining)+' remaining',s.spent);
+    }
+  });
+}
 // Stored in memory — merchantRules maps merchant prefix → category
 var merchantRules={};
 
@@ -5208,6 +5514,9 @@ function renderInsights(){
   html+='<div id="'+trendId+'">'+buildTrendsChart('all',6,getAccountTX())+'</div>';
   html+='</div>';
 
+  // Budget vs Actual card
+  html+=renderBudgetInsightsCard();
+
   window._trendElId=trendId;
   window._trendDM='all';
   window._trendTP=6;
@@ -5482,6 +5791,7 @@ function renderSettings(){
   [{label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\x27activity\x27)'},
    {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
    {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
+   {label:'Manage Budgets',sub:'Set monthly category budgets — Clarity suggests from your history',icon:'💰',fn:'openBudgetManager()'},
   ].forEach(function(item,i,arr){
     html+='<div onclick="'+item.fn+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:'+(i<arr.length-1?'1px solid var(--bl)':'none')+'">';
     html+='<div style="width:36px;height:36px;border-radius:10px;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+item.icon+'</div>';
