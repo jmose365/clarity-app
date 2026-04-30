@@ -582,33 +582,6 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
   </div>
 </div>
 
-<!-- PAYCHECK MODAL -->
-<div id="paycheckModal" class="modal-ov" style="display:none">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div style="font-size:16px;font-weight:800;margin-bottom:8px">Paycheck Arrived?</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:20px" id="paycheckModalSub"></div>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div><label class="lbl">Amount received</label><input class="inp" type="number" id="pc-amount"/></div>
-      <div><label class="lbl">Date received</label><input class="inp" type="date" id="pc-date"/></div>
-      <div id="pc-early-wrap">
-        <label class="lbl">Did it arrive early?</label>
-        <div class="tog-wrap">
-          <button class="tog-btn on" onclick="setPcEarly(false,this)">No, on time</button>
-          <button class="tog-btn" onclick="setPcEarly(true,this)">Yes, arrived early</button>
-        </div>
-      </div>
-      <div id="pc-retroactive-wrap" style="display:none">
-        <div class="alert alert-blue">This paycheck date has already passed. Logging it retroactively will update your Available balance and history accurately.</div>
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-p" style="flex:1" onclick="logPaycheck()">Log Paycheck</button>
-        <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('paycheckModal').style.display='none'">Later</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- CHART TOOLTIP -->
 <div id="chartTip" class="chart-tip"></div>
 
@@ -651,7 +624,7 @@ var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BAD
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var selectedAccountId=null; // null = household/joint view
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
-var pcEarly=false,pendingTxData=null,txConvState=null;
+var pendingTxData=null,txConvState=null;
 var CATS=['Housing','Utilities','Food & Drinks','Transportation','Healthcare','Entertainment','Subscriptions','Personal Care','Clothing','Education & Childcare','Household Supplies','Debt & Retirement','Gifts & Donations','Travel','Pets','Miscellaneous'];
 var CYCLES=['monthly','biweekly','weekly','one-time'];
 var CONS=['eviction','repossession','disconnection','collections','late_fee','credit_hit','other'];
@@ -922,17 +895,6 @@ function isPaidThisCycle(exp){
 function getUColor(uid){var m=HM.find(function(x){return x.id===uid;});return m?(m.avatar_color||'#4361ee'):'#4361ee';}
 function getUName(uid){var m=HM.find(function(x){return x.id===uid;});return m?m.first_name:'?';}
 
-// Check pending paychecks
-function getPendingPaychecks(){
-  var payDates=getArr(UP.pay_dates);
-  var td=today();
-  return payDates.filter(function(pd){
-    if(pd>td)return false;
-    var alreadyLogged=PAYLOG.some(function(pl){return pl.scheduled_date===pd;});
-    return !alreadyLogged;
-  });
-}
-
 // AUTH
 function showAuthTab(t){
   document.getElementById('loginForm').style.display=t==='login'?'block':'none';
@@ -1039,7 +1001,6 @@ async function loadApp(){
   chatHist=[];
   loadChatHistory();
   renderAll();
-  checkPendingPaychecks();
   checkEarmarkNotifications();
   checkProactiveClarityBanner();
   // Auto-launch walkthrough for first-time users
@@ -1265,64 +1226,7 @@ function goTab(id,btn){
   else if(id==='settings')renderSettings();
 }
 
-// PAYCHECK DETECTION
-function checkPendingPaychecks(){
-  var pending=getPendingPaychecks();
-  if(pending.length>0){
-    // Show for the most recent pending paycheck
-    var latest=pending[pending.length-1];
-    var isRetro=daysUntil(latest)<0;
-    document.getElementById('paycheckModalSub').textContent=isRetro?
-      'Paycheck of '+fmt(UP.paycheck_amount||0)+' was scheduled for '+fmtD(latest,true)+'. Log it to keep your balance accurate.':
-      'Your paycheck of '+fmt(UP.paycheck_amount||0)+' was expected on '+fmtD(latest,true)+'. Did it arrive?';
-    document.getElementById('pc-amount').value=UP.paycheck_amount||0;
-    document.getElementById('pc-date').value=today();
-    document.getElementById('pc-retroactive-wrap').style.display=isRetro?'block':'none';
-    document.getElementById('paycheckModal').style.display='flex';
-    window._pendingPaycheckDate=latest;
-  }
-}
-function setPcEarly(val,btn){
-  pcEarly=val;
-  btn.parentElement.querySelectorAll('.tog-btn').forEach(function(b){b.classList.remove('on');});
-  btn.classList.add('on');
-}
-async function logPaycheck(){
-  var amt=parseFloat(document.getElementById('pc-amount').value)||0;
-  var date=document.getElementById('pc-date').value||today();
-  var scheduled=window._pendingPaycheckDate||today();
-  // Log to paycheck_log
-  await sb.from('paycheck_log').insert({household_id:HID,user_id:CU.id,amount:amt,scheduled_date:scheduled,actual_date:date,arrived_early:pcEarly});
-  // Credit joint account (or cash_on_hand fallback)
-  var jAPay=getJointAccount();
-  if(jAPay){await updateAccountBalance(jAPay.id,(jAPay.balance||0)+amt);}
-  else{var newCash=(SET.cash_on_hand||0)+amt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
-  // If arrived early, adjust pay schedule
-  if(pcEarly&&date<scheduled){
-    var diff=daysUntil(scheduled)-daysUntil(date);
-    var newPayDates=genPay(date);
-    await sb.from('user_profiles').update({pay_dates:JSON.stringify(newPayDates),next_pay_date:addDays(date,14)}).eq('id',CU.id);
-    UP.pay_dates=newPayDates;UP.next_pay_date=addDays(date,14);
-  }
-  // Reload paycheck log and activate pending earmarks
-  var nl=await sb.from('paycheck_log').select('*').eq('household_id',HID).order('logged_at',{ascending:false});
-  PAYLOG=nl.data||[];
-  // Activate any pending earmarks
-  await activatePendingEarmarks();
-  await logAct('paycheck_logged','Paycheck logged — '+fmt(amt)+(pcEarly?' (arrived early)':''),'profile',null,{amount:amt,scheduled:scheduled,actual:date});
-  sendNotification('paycheck_logged','Paycheck — '+fmt(amt),amt);
-  document.getElementById('paycheckModal').style.display='none';
-  updateTopBar();renderHome();
-  // Check if more pending paychecks
-  var remaining=getPendingPaychecks();
-  if(remaining.length>0){
-    window._pendingPaycheckDate=remaining[remaining.length-1];
-    document.getElementById('pc-amount').value=UP.paycheck_amount||0;
-    document.getElementById('pc-date').value=today();
-    document.getElementById('paycheckModal').style.display='flex';
-  }
-}
-
+// EARMARK ACTIVATION — runs after CSV import to mark earmarked bills as active
 async function activatePendingEarmarks(){
   // Determine which paycheck number this is for the current month
   var curMonth=new Date().toISOString().slice(0,7);
@@ -1846,7 +1750,7 @@ function renderHome(){
   html+='<div class="sec-t">Quick Actions</div>';
   html+='<div class="g2" style="margin-bottom:14px">';
   html+='<button onclick="openAdvisor()" style="background:var(--gp);border:none;border-radius:14px;padding:14px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(67,97,238,0.25)">Ask Clarity</button>';
-  html+='<button onclick="openLogPaycheckManual()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--shadow)">Log Paycheck</button>';
+  html+='<button onclick="ACCOUNTS.length>0?openCSVImport():goTab(\x27settings\x27)" style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;box-shadow:var(--shadow)">Import Statement</button>';
   html+='</div>';
 
   // SPENDING PATTERNS — current month transactions
@@ -2355,15 +2259,6 @@ async function updateCash(amt){
   await logAct('cash_updated','Balance updated from '+fmt(old)+' to '+fmt(amt),'profile',null,{old:old,new:amt});
   sendNotification('cash_updated','Available updated to '+fmt(amt));
   updateTopBar();renderHome();
-}
-
-function openLogPaycheckManual(){
-  window._pendingPaycheckDate=UP.next_pay_date||today();
-  document.getElementById('paycheckModalSub').textContent='Log a paycheck manually. Use this if a check arrived that was not auto-detected.';
-  document.getElementById('pc-amount').value=UP.paycheck_amount||0;
-  document.getElementById('pc-date').value=today();
-  document.getElementById('pc-retroactive-wrap').style.display='none';
-  document.getElementById('paycheckModal').style.display='flex';
 }
 
 // MARK PAID (from Ledger)
