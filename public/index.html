@@ -3405,6 +3405,195 @@ function getCatEmoji(cat){
   return map[cat]||'💳';
 }
 
+// ── MERCHANT CATEGORY RULES ──────────────────────────────────────────────────
+// Stored in memory — merchantRules maps merchant prefix → category
+var merchantRules={};
+
+function getMerchantKey(name){
+  // Normalize to first 12 chars uppercase, strip special chars
+  return (name||'').toUpperCase().replace(/[^A-Z0-9 ]/g,'').substring(0,12).trim();
+}
+
+function applyMerchantRules(txArr){
+  return txArr.map(function(t){
+    var key=getMerchantKey(t.name);
+    if(merchantRules[key]&&merchantRules[key]!==t.category){
+      return Object.assign({},t,{category:merchantRules[key]});
+    }
+    return t;
+  });
+}
+
+// Open per-merchant recategorize from transaction detail
+function openMerchantRecategorize(txId){
+  var t=TX.find(function(x){return x.id===txId;});if(!t)return;
+  var key=getMerchantKey(t.name);
+  var similar=TX.filter(function(x){return getMerchantKey(x.name)===key;});
+  var cats=CATS.concat(['Transfer','Income','Other Money In']);
+
+  var m=document.createElement('div');m.className='modal-ov';m.id='merchantCatModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal"><div class="modal-handle"></div>';
+  h+='<div style="font-size:16px;font-weight:800;margin-bottom:4px">Recategorize Merchant</div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:4px">'+t.name+'</div>';
+  h+='<div style="background:var(--pl);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--primary);font-weight:600">'+similar.length+' transaction'+(similar.length!==1?'s':'')+' from this merchant</div>';
+  h+='<div><label class="lbl">New Category for ALL transactions from this merchant</label>';
+  h+='<select class="sel" id="mcat-cat">'+cats.map(function(c){return '<option'+(c===t.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+  h+='<div style="margin-top:12px;margin-bottom:16px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="mcat-future" checked style="width:16px;height:16px;accent-color:var(--primary)"/><div><div style="font-size:13px;font-weight:600">Apply to future imports too</div><div style="font-size:11px;color:var(--muted)">Saves a rule so this merchant always maps to the selected category</div></div></label></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="saveMerchantRecategorize(\x27'+txId+'\x27,\x27'+key+'\x27)" class="btn btn-p" style="flex:1">Apply to All '+similar.length+'</button>';
+  h+='<button onclick="document.getElementById(\x27merchantCatModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
+  h+='</div></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+async function saveMerchantRecategorize(txId,merchantKey){
+  var cat=document.getElementById('mcat-cat').value;
+  var saveFuture=document.getElementById('mcat-future').checked;
+  var modal=document.getElementById('merchantCatModal');
+
+  // Find all matching transactions
+  var toUpdate=TX.filter(function(x){return getMerchantKey(x.name)===merchantKey;});
+  var ids=toUpdate.map(function(x){return x.id;});
+
+  if(modal)modal.innerHTML='<div class="modal"><div style="padding:20px;text-align:center;color:var(--muted)"><div class="spinner" style="margin:0 auto 12px"></div>Updating '+ids.length+' transactions...</div></div>';
+
+  // Batch update Supabase
+  var batchSize=50;
+  for(var b=0;b<ids.length;b+=batchSize){
+    var batch=ids.slice(b,b+batchSize);
+    await sb.from('transactions').update({category:cat}).in('id',batch);
+  }
+
+  // Update local TX
+  TX=TX.map(function(x){
+    return ids.indexOf(x.id)>=0?Object.assign({},x,{category:cat}):x;
+  });
+
+  // Save merchant rule for future imports
+  if(saveFuture)merchantRules[merchantKey]=cat;
+
+  if(modal)modal.remove();
+  await logAct('bulk_recategorize',ids.length+' transactions from "'+merchantKey+'" → '+cat,'transaction',null,{count:ids.length,category:cat,merchant:merchantKey});
+
+  var toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+  toast.textContent='✅ '+ids.length+' transactions updated to '+cat;
+  document.body.appendChild(toast);setTimeout(function(){toast.remove();},3000);
+  renderLedger();
+}
+
+// ── MANAGE ALL MERCHANTS SCREEN ───────────────────────────────────────────────
+function openManageMerchants(){
+  // Build merchant map from all transactions
+  var merchantMap={};
+  TX.forEach(function(t){
+    var key=getMerchantKey(t.name);
+    if(!key)return;
+    if(!merchantMap[key]){merchantMap[key]={name:t.name,key:key,count:0,cats:{},totalAmt:0};}
+    merchantMap[key].count++;
+    merchantMap[key].totalAmt+=t.amount;
+    merchantMap[key].cats[t.category]=(merchantMap[key].cats[t.category]||0)+1;
+  });
+
+  // Sort by count desc
+  var merchants=Object.values(merchantMap).sort(function(a,b){return b.count-a.count;});
+
+  var m=document.createElement('div');m.className='modal-ov';m.id='manageMerchantsModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var cats=CATS.concat(['Transfer','Income','Other Money In']);
+
+  var h='<div class="modal" style="max-height:95vh"><div class="modal-handle"></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+  h+='<div style="font-size:16px;font-weight:800">Manage Merchants</div>';
+  h+='<button onclick="document.getElementById(\x27manageMerchantsModal\x27).remove()" style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer">×</button></div>';
+  h+='<div style="font-size:13px;color:var(--muted);margin-bottom:12px">'+merchants.length+' merchants · '+TX.length+' total transactions. Change category to update all transactions from that merchant at once.</div>';
+
+  // Search
+  h+='<input class="inp" type="text" placeholder="Search merchants..." id="mm-search" oninput="filterMerchantList(this.value)" style="margin-bottom:12px;font-size:13px"/>';
+
+  h+='<div id="mm-list" style="overflow-y:auto;max-height:60vh;display:flex;flex-direction:column;gap:6px">';
+  merchants.forEach(function(merch){
+    // Determine current category (most common one)
+    var topCat=Object.entries(merch.cats).sort(function(a,b){return b[1]-a[1];})[0];
+    var currentCat=topCat?topCat[0]:'Other';
+    var mixedCats=Object.keys(merch.cats).length>1;
+
+    h+='<div class="mm-row" data-merchant="'+merch.key+'" data-name="'+merch.name.toLowerCase()+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--glass-border);border-radius:12px">';
+    h+='<div style="font-size:20px;flex-shrink:0">'+getCatEmoji(currentCat)+'</div>';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+merch.name+'</div>';
+    h+='<div style="font-size:10px;color:var(--muted)">'+merch.count+' transactions · '+fmt(merch.totalAmt)+(mixedCats?' · <span style="color:var(--amber);font-weight:600">Mixed categories</span>':'')+'</div></div>';
+    h+='<select onchange="quickMerchantCat(this,\x27'+merch.key+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:11px;font-weight:600;color:var(--text);max-width:130px;flex-shrink:0">';
+    cats.forEach(function(c){h+='<option'+(c===currentCat?' selected':'')+'>'+c+'</option>';});
+    h+='</select></div>';
+  });
+  h+='</div>';
+  h+='<div id="mm-pending" style="margin-top:12px;display:none">';
+  h+='<button onclick="applyAllMerchantChanges()" class="btn btn-p">Apply All Changes</button></div>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._mmPendingChanges={};
+}
+
+function filterMerchantList(q){
+  var rows=document.querySelectorAll('.mm-row');
+  q=q.toLowerCase();
+  rows.forEach(function(row){
+    var name=row.getAttribute('data-name')||'';
+    row.style.display=(!q||name.includes(q))?'flex':'none';
+  });
+}
+
+function quickMerchantCat(sel,merchantKey){
+  if(!window._mmPendingChanges)window._mmPendingChanges={};
+  window._mmPendingChanges[merchantKey]=sel.value;
+  // Show apply button
+  var pending=document.getElementById('mm-pending');
+  var count=Object.keys(window._mmPendingChanges).length;
+  if(pending){
+    pending.style.display='block';
+    pending.querySelector('button').textContent='Apply '+count+' Change'+(count!==1?'s':'');
+  }
+  // Update emoji next to it
+  var row=sel.closest('.mm-row');
+  if(row){var emoji=row.querySelector('div[style*="font-size:20px"]');if(emoji)emoji.textContent=getCatEmoji(sel.value);}
+}
+
+async function applyAllMerchantChanges(){
+  var changes=window._mmPendingChanges||{};
+  var keys=Object.keys(changes);
+  if(keys.length===0)return;
+  var pending=document.getElementById('mm-pending');
+  if(pending)pending.querySelector('button').textContent='Applying...';
+
+  var totalUpdated=0;
+  for(var i=0;i<keys.length;i++){
+    var key=keys[i];var cat=changes[key];
+    var toUpdate=TX.filter(function(x){return getMerchantKey(x.name)===key;});
+    var ids=toUpdate.map(function(x){return x.id;});
+    if(ids.length===0)continue;
+    // Batch update
+    for(var b=0;b<ids.length;b+=50){
+      var batch=ids.slice(b,b+50);
+      await sb.from('transactions').update({category:cat}).in('id',batch);
+    }
+    TX=TX.map(function(x){return ids.indexOf(x.id)>=0?Object.assign({},x,{category:cat}):x;});
+    merchantRules[key]=cat;
+    totalUpdated+=ids.length;
+  }
+
+  await logAct('bulk_recategorize',totalUpdated+' transactions recategorized across '+keys.length+' merchants','transaction',null,{count:totalUpdated});
+  window._mmPendingChanges={};
+  document.getElementById('manageMerchantsModal').remove();
+
+  var toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:600';
+  toast.textContent='✅ '+totalUpdated+' transactions updated across '+keys.length+' merchants';
+  document.body.appendChild(toast);setTimeout(function(){toast.remove();},3500);
+  renderLedger();
+}
+
 function setTxCat(el){window._txCat=el.getAttribute('data-cat');renderLedger();}
 function setTxPeriod(el){window._txPeriod=el.getAttribute('data-period');renderLedger();}
 function setTxType(el){window._txType=el.getAttribute('data-type');renderLedger();}
@@ -3508,11 +3697,11 @@ function renderTxView(){
   html+='</div>';
 
   // Actions
-  html+='<div style="display:flex;gap:8px;margin-bottom:12px">';
+  html+='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
   html+='<button onclick="openAddTxModal()" style="flex:1;background:var(--gp);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:#fff;cursor:pointer">+ Add</button>';
   html+='<button onclick="document.getElementById(\x27receiptScanModal\x27).style.display=\x27flex\x27" style="flex:1;background:rgba(22,163,74,0.08);border:1.5px solid rgba(22,163,74,0.3);border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--green);cursor:pointer">📷 Scan</button>';
-  html+='<button onclick="goTab(\x27settings\x27)" style="flex:1;background:var(--pl);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer">Import CSV</button>';
-  html+='<button onclick="exportTxCSV()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:9px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text)">Export</button>';
+  html+='<button onclick="openManageMerchants()" style="flex:1;background:var(--al);border:1.5px solid rgba(217,119,6,0.3);border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--amber);cursor:pointer">🏷 Merchants</button>';
+  html+='<button onclick="goTab(\x27settings\x27)" style="flex:1;background:var(--pl);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer">Import</button>';
   html+='</div>';
 
   if(filtered.length===0){
@@ -3621,8 +3810,9 @@ function openTxDetail(txId){
   h+='<button onclick="saveTxEdit(\x27'+txId+'\x27,\x27'+t.name.substring(0,8)+'\x27)" class="btn btn-p" style="flex:1">Save</button>';
   h+='<button onclick="deleteTx(\x27'+txId+'\x27,'+t.amount+');document.getElementById(\x27txDetailModal\x27).remove()" class="btn btn-red" style="flex:1">Delete</button>';
   h+='<button onclick="document.getElementById(\x27txDetailModal\x27).remove()" class="btn btn-ghost" style="flex:1">Cancel</button>';
-  h+='</div></div></div>';
-  m.innerHTML=h;document.body.appendChild(m);
+  h+='</div>';
+  h+='<button onclick="document.getElementById(\x27txDetailModal\x27).remove();openMerchantRecategorize(\x27'+txId+'\x27)" style="width:100%;margin-top:8px;background:var(--al);border:1.5px solid rgba(217,119,6,0.3);border-radius:12px;padding:10px;font-size:12px;font-weight:700;color:var(--amber);cursor:pointer">🏷 Recategorize All '+sameName.length+' from this merchant</button>';
+  h+='</div></div>';
 }
 
 async function saveTxEdit(txId,namePrefix){
@@ -6329,6 +6519,9 @@ function detectTransactionType(payee,memo,amount){
   var combined=p+' '+m;
   // Zelle/Venmo RECEIVED — money coming IN is a credit, not a transfer
   if(amount>0&&(combined.match(/MONEY RECEIVED|RECEIVED FROM|PAYMENT.*RECEIVED/)))return 'credit';
+  if(amount>0&&combined.match(/PAYMENT ID.*MONEY RECEIVED/))return 'credit';
+  // Zelle sends with "Money Sent to" in payee — those are outgoing transfers
+  if(combined.match(/MONEY SENT TO/))return 'transfer';
   // Transfer detection — outgoing Zelle, internal bank moves
   if(combined.match(/TFR|TRANSFER|XFER|INTERNET TFR|TFR FRM|TFR TO/))return 'transfer';
   if(combined.match(/ZELLE|VENMO|CASHAPP|PAYPAL.*TRANSFER/))return 'transfer';
