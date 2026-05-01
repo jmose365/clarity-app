@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -13,63 +14,63 @@
   /* Gradient mesh background colors */
   --mesh-1:#e8ecff;--mesh-2:#f0e8ff;--mesh-3:#e8f4ff;--mesh-4:#fff0e8;
 
-  /* Glass surfaces */
-  --bg:rgba(255,255,255,0.45);
-  --surface:rgba(255,255,255,0.72);
-  --surface-solid:#fff;
-  --glass:rgba(255,255,255,0.55);
-  --glass-border:rgba(255,255,255,0.8);
-  --glass-shadow:0 8px 32px rgba(67,97,238,0.08),0 2px 8px rgba(0,0,0,0.04);
-  --border:rgba(200,210,240,0.5);
-  --bl:rgba(200,210,240,0.3);
+/* Glass surfaces */
+–bg:rgba(255,255,255,0.45);
+–surface:rgba(255,255,255,0.72);
+–surface-solid:#fff;
+–glass:rgba(255,255,255,0.55);
+–glass-border:rgba(255,255,255,0.8);
+–glass-shadow:0 8px 32px rgba(67,97,238,0.08),0 2px 8px rgba(0,0,0,0.04);
+–border:rgba(200,210,240,0.5);
+–bl:rgba(200,210,240,0.3);
 
-  /* Brand */
-  --primary:#4361ee;--pl:rgba(67,97,238,0.1);--pm:rgba(67,97,238,0.2);
-  --green:#16a34a;--gl:rgba(22,163,74,0.1);
-  --red:#dc2626;--rl:rgba(220,38,38,0.08);
-  --amber:#d97706;--al:rgba(217,119,6,0.08);
-  --purple:#7c3aed;--pul:rgba(124,58,237,0.08);
+/* Brand */
+–primary:#4361ee;–pl:rgba(67,97,238,0.1);–pm:rgba(67,97,238,0.2);
+–green:#16a34a;–gl:rgba(22,163,74,0.1);
+–red:#dc2626;–rl:rgba(220,38,38,0.08);
+–amber:#d97706;–al:rgba(217,119,6,0.08);
+–purple:#7c3aed;–pul:rgba(124,58,237,0.08);
 
-  /* Text */
-  --text:#0f172a;--text2:#334155;--muted:#64748b;
+/* Text */
+–text:#0f172a;–text2:#334155;–muted:#64748b;
 
-  /* Gradients */
-  --gp:linear-gradient(135deg,#4361ee 0%,#7c3aed 100%);
-  --gg:linear-gradient(135deg,#16a34a 0%,#059669 100%);
-  --gr:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);
-  --ga:linear-gradient(135deg,#d97706 0%,#b45309 100%);
-  --gh:linear-gradient(90deg,#dc2626 0%,#d97706 40%,#16a34a 100%);
+/* Gradients */
+–gp:linear-gradient(135deg,#4361ee 0%,#7c3aed 100%);
+–gg:linear-gradient(135deg,#16a34a 0%,#059669 100%);
+–gr:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);
+–ga:linear-gradient(135deg,#d97706 0%,#b45309 100%);
+–gh:linear-gradient(90deg,#dc2626 0%,#d97706 40%,#16a34a 100%);
 
-  /* Shadows */
-  --shadow:0 2px 12px rgba(67,97,238,0.07),0 1px 3px rgba(0,0,0,0.05);
-  --shadow-lg:0 16px 48px rgba(67,97,238,0.14),0 4px 12px rgba(0,0,0,0.06);
-  --shadow-card:0 4px 24px rgba(67,97,238,0.09),0 1px 4px rgba(0,0,0,0.05);
+/* Shadows */
+–shadow:0 2px 12px rgba(67,97,238,0.07),0 1px 3px rgba(0,0,0,0.05);
+–shadow-lg:0 16px 48px rgba(67,97,238,0.14),0 4px 12px rgba(0,0,0,0.06);
+–shadow-card:0 4px 24px rgba(67,97,238,0.09),0 1px 4px rgba(0,0,0,0.05);
 }
 
 /* MESH BACKGROUND */
 html,body{
-  min-height:100vh;
-  color:var(--text);
-  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
-  font-size:15px;
+min-height:100vh;
+color:var(–text);
+font-family:‘DM Sans’,-apple-system,BlinkMacSystemFont,sans-serif;
+font-size:15px;
 }
 body::before{
-  content:'';
-  position:fixed;inset:0;z-index:-1;
-  background:
-    radial-gradient(ellipse 80% 60% at 20% -10%,rgba(99,102,241,0.18) 0%,transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 10%,rgba(167,139,250,0.14) 0%,transparent 55%),
-    radial-gradient(ellipse 70% 60% at 10% 80%,rgba(59,130,246,0.1) 0%,transparent 55%),
-    radial-gradient(ellipse 80% 70% at 90% 85%,rgba(236,72,153,0.08) 0%,transparent 60%),
-    linear-gradient(160deg,#eef2ff 0%,#f5f3ff 35%,#eff6ff 65%,#fdf4ff 100%);
-  background-attachment:fixed;
+content:’’;
+position:fixed;inset:0;z-index:-1;
+background:
+radial-gradient(ellipse 80% 60% at 20% -10%,rgba(99,102,241,0.18) 0%,transparent 60%),
+radial-gradient(ellipse 60% 50% at 80% 10%,rgba(167,139,250,0.14) 0%,transparent 55%),
+radial-gradient(ellipse 70% 60% at 10% 80%,rgba(59,130,246,0.1) 0%,transparent 55%),
+radial-gradient(ellipse 80% 70% at 90% 85%,rgba(236,72,153,0.08) 0%,transparent 60%),
+linear-gradient(160deg,#eef2ff 0%,#f5f3ff 35%,#eff6ff 65%,#fdf4ff 100%);
+background-attachment:fixed;
 }
 
-input,select,button,textarea{font-family:'DM Sans',-apple-system,sans-serif;}
+input,select,button,textarea{font-family:‘DM Sans’,-apple-system,sans-serif;}
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-thumb{background:rgba(67,97,238,0.2);border-radius:99px}
-input::placeholder{color:var(--muted)}
-select option{background:#fff;color:var(--text)}
+input::placeholder{color:var(–muted)}
+select option{background:#fff;color:var(–text)}
 input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) saturate(2) hue-rotate(200deg)}
 
 /* AUTH */
@@ -77,28 +78,28 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 .auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:40px;justify-content:center}
 .auth-logo-icon{width:44px;height:44px;border-radius:12px;overflow:hidden}
 .auth-card{
-  background:var(--surface);
-  border-radius:24px;
-  padding:32px;
-  box-shadow:var(--shadow-lg);
-  border:1px solid var(--glass-border);
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
+background:var(–surface);
+border-radius:24px;
+padding:32px;
+box-shadow:var(–shadow-lg);
+border:1px solid var(–glass-border);
+backdrop-filter:blur(20px);
+-webkit-backdrop-filter:blur(20px);
 }
 .auth-tabs{display:flex;gap:4px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px;margin-bottom:24px}
-.auth-tab{flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
-.auth-tab.on{background:var(--surface-solid);color:var(--primary);box-shadow:var(--shadow)}
+.auth-tab{flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;border:none;background:transparent;color:var(–muted);cursor:pointer;transition:all .2s}
+.auth-tab.on{background:var(–surface-solid);color:var(–primary);box-shadow:var(–shadow)}
 
 /* LAYOUT */
 .app{max-width:520px;margin:0 auto;padding:0 16px 110px}
 .topbar{
-  position:sticky;top:0;z-index:50;
-  background:rgba(255,255,255,0.75);
-  border-bottom:1px solid rgba(255,255,255,0.9);
-  padding:12px 20px;
-  display:flex;align-items:center;justify-content:space-between;
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  box-shadow:0 1px 0 rgba(67,97,238,0.06),0 4px 20px rgba(0,0,0,0.04);
+position:sticky;top:0;z-index:50;
+background:rgba(255,255,255,0.75);
+border-bottom:1px solid rgba(255,255,255,0.9);
+padding:12px 20px;
+display:flex;align-items:center;justify-content:space-between;
+backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+box-shadow:0 1px 0 rgba(67,97,238,0.06),0 4px 20px rgba(0,0,0,0.04);
 }
 .logo-wrap{display:flex;align-items:center;gap:10px}
 .logo-icon{width:28px;height:28px;border-radius:8px;overflow:hidden;flex-shrink:0}
@@ -107,101 +108,101 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 
 /* GLASS CARDS */
 .card{
-  background:var(--surface);
-  border-radius:20px;
-  padding:20px;
-  margin-bottom:12px;
-  box-shadow:var(--shadow-card);
-  border:1px solid var(--glass-border);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
+background:var(–surface);
+border-radius:20px;
+padding:20px;
+margin-bottom:12px;
+box-shadow:var(–shadow-card);
+border:1px solid var(–glass-border);
+backdrop-filter:blur(16px);
+-webkit-backdrop-filter:blur(16px);
 }
 
 /* INPUTS */
 .inp{
-  display:block;
-  background:rgba(255,255,255,0.6);
-  border:1.5px solid rgba(200,210,240,0.6);
-  border-radius:12px;
-  padding:11px 14px;
-  color:var(--text);
-  font-size:14px;
-  width:100%;
-  outline:none;
-  transition:all .2s;
-  backdrop-filter:blur(8px);
+display:block;
+background:rgba(255,255,255,0.6);
+border:1.5px solid rgba(200,210,240,0.6);
+border-radius:12px;
+padding:11px 14px;
+color:var(–text);
+font-size:14px;
+width:100%;
+outline:none;
+transition:all .2s;
+backdrop-filter:blur(8px);
 }
-.inp:focus{border-color:var(--primary);background:rgba(255,255,255,0.85);box-shadow:0 0 0 3px rgba(67,97,238,0.1)}
+.inp:focus{border-color:var(–primary);background:rgba(255,255,255,0.85);box-shadow:0 0 0 3px rgba(67,97,238,0.1)}
 .sel{
-  display:block;
-  background:rgba(255,255,255,0.6);
-  border:1.5px solid rgba(200,210,240,0.6);
-  border-radius:12px;
-  padding:11px 14px;
-  color:var(--text);
-  font-size:14px;
-  width:100%;
-  outline:none;
+display:block;
+background:rgba(255,255,255,0.6);
+border:1.5px solid rgba(200,210,240,0.6);
+border-radius:12px;
+padding:11px 14px;
+color:var(–text);
+font-size:14px;
+width:100%;
+outline:none;
 }
-.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px;display:block}
-.hint{font-size:12px;color:var(--muted);margin-bottom:6px;line-height:1.5}
+.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(–muted);margin-bottom:5px;display:block}
+.hint{font-size:12px;color:var(–muted);margin-bottom:6px;line-height:1.5}
 
 /* BUTTONS */
 .btn{display:block;width:100%;border:none;border-radius:14px;padding:13px 20px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;letter-spacing:-.01em}
 .btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
 .btn:active{transform:translateY(0)}
-.btn-p{background:var(--gp);color:#fff;box-shadow:0 4px 16px rgba(67,97,238,0.35)}
-.btn-g{background:var(--gg);color:#fff;box-shadow:0 4px 16px rgba(22,163,74,0.3)}
-.btn-ghost{background:rgba(67,97,238,0.06);color:var(--primary);border:1.5px solid rgba(67,97,238,0.2)}
-.btn-red{background:rgba(220,38,38,0.07);color:var(--red);border:1px solid rgba(220,38,38,0.2)}
-.btn-amber{background:rgba(217,119,6,0.07);color:var(--amber);border:1px solid rgba(217,119,6,0.2)}
+.btn-p{background:var(–gp);color:#fff;box-shadow:0 4px 16px rgba(67,97,238,0.35)}
+.btn-g{background:var(–gg);color:#fff;box-shadow:0 4px 16px rgba(22,163,74,0.3)}
+.btn-ghost{background:rgba(67,97,238,0.06);color:var(–primary);border:1.5px solid rgba(67,97,238,0.2)}
+.btn-red{background:rgba(220,38,38,0.07);color:var(–red);border:1px solid rgba(220,38,38,0.2)}
+.btn-amber{background:rgba(217,119,6,0.07);color:var(–amber);border:1px solid rgba(217,119,6,0.2)}
 .btn-sm{padding:7px 14px;font-size:12px;border-radius:10px;display:inline-block;width:auto}
 
 /* TOGGLES */
 .tog-wrap{display:flex;gap:4px;background:rgba(67,97,238,0.06);border-radius:12px;padding:4px}
-.tog-btn{flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:500;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
-.tog-btn.on{background:var(--surface-solid);color:var(--primary);box-shadow:var(--shadow);font-weight:600}
+.tog-btn{flex:1;padding:9px 0;border-radius:9px;font-size:13px;font-weight:500;border:none;background:transparent;color:var(–muted);cursor:pointer;transition:all .2s}
+.tog-btn.on{background:var(–surface-solid);color:var(–primary);box-shadow:var(–shadow);font-weight:600}
 
 /* SECTION TITLE */
-.sec-t{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:10px}
-.sec-t::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(67,97,238,0.15),transparent)}
+.sec-t{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(–muted);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.sec-t::after{content:’’;flex:1;height:1px;background:linear-gradient(90deg,rgba(67,97,238,0.15),transparent)}
 
 /* PAGE HEADERS */
 .ph{padding-top:20px;padding-bottom:16px;margin-bottom:16px}
-.ph-eye{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin-bottom:6px;opacity:.8}
-.ph-title{font-size:1.6rem;font-weight:800;color:var(--text);line-height:1.2;margin-bottom:4px;letter-spacing:-.03em}
-.ph-sub{font-size:13px;color:var(--muted);line-height:1.5}
+.ph-eye{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(–primary);margin-bottom:6px;opacity:.8}
+.ph-title{font-size:1.6rem;font-weight:800;color:var(–text);line-height:1.2;margin-bottom:4px;letter-spacing:-.03em}
+.ph-sub{font-size:13px;color:var(–muted);line-height:1.5}
 
 /* POSITION PILLS */
 .pos-pill{border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;color:#fff;letter-spacing:.01em}
-.pos-behind{background:var(--gr);box-shadow:0 2px 8px rgba(220,38,38,0.35)}
-.pos-current{background:var(--ga);box-shadow:0 2px 8px rgba(217,119,6,0.35)}
+.pos-behind{background:var(–gr);box-shadow:0 2px 8px rgba(220,38,38,0.35)}
+.pos-current{background:var(–ga);box-shadow:0 2px 8px rgba(217,119,6,0.35)}
 .pos-ontrack{background:linear-gradient(135deg,#16a34a,#0ea5e9);box-shadow:0 2px 8px rgba(22,163,74,0.3)}
-.pos-ahead{background:var(--gp);box-shadow:0 2px 8px rgba(67,97,238,0.35)}
+.pos-ahead{background:var(–gp);box-shadow:0 2px 8px rgba(67,97,238,0.35)}
 
 /* HERO CARD */
 .hero{
-  border-radius:24px;
-  padding:24px 20px 20px;
-  margin-bottom:14px;
-  position:relative;
-  overflow:hidden;
+border-radius:24px;
+padding:24px 20px 20px;
+margin-bottom:14px;
+position:relative;
+overflow:hidden;
 }
 .hero::before{
-  content:'';
-  position:absolute;inset:0;
-  background:rgba(255,255,255,0.08);
-  border-radius:inherit;
-  pointer-events:none;
+content:’’;
+position:absolute;inset:0;
+background:rgba(255,255,255,0.08);
+border-radius:inherit;
+pointer-events:none;
 }
 .hero::after{
-  content:'';
-  position:absolute;
-  top:-40%;right:-20%;
-  width:280px;height:280px;
-  border-radius:50%;
-  background:rgba(255,255,255,0.07);
-  pointer-events:none;
+content:’’;
+position:absolute;
+top:-40%;right:-20%;
+width:280px;height:280px;
+border-radius:50%;
+background:rgba(255,255,255,0.07);
+pointer-events:none;
 }
 .hero-inner{position:relative;z-index:1}
 .hero.behind{background:linear-gradient(135deg,#dc2626 0%,#9f1239 100%);box-shadow:0 12px 40px rgba(220,38,38,0.3)}
@@ -210,98 +211,98 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 .hero.ahead{background:linear-gradient(135deg,#4361ee 0%,#7c3aed 100%);box-shadow:0 12px 40px rgba(67,97,238,0.3)}
 .hero-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px;position:relative;z-index:1}
 .htile{
-  background:rgba(255,255,255,0.15);
-  border:1px solid rgba(255,255,255,0.25);
-  border-radius:14px;
-  padding:10px 12px;
-  backdrop-filter:blur(8px);
+background:rgba(255,255,255,0.15);
+border:1px solid rgba(255,255,255,0.25);
+border-radius:14px;
+padding:10px 12px;
+backdrop-filter:blur(8px);
 }
 .htile-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.7);margin-bottom:3px}
 .htile-v{font-size:13px;font-weight:700;color:#fff}
 
 /* HEALTH BAR */
 .hbar{height:7px;background:rgba(255,255,255,0.15);border-radius:99px;overflow:hidden;position:relative;margin:8px 0}
-.hbar-bg{position:absolute;inset:0;background:var(--gh);border-radius:99px}
+.hbar-bg{position:absolute;inset:0;background:var(–gh);border-radius:99px}
 .hbar-mask{position:absolute;top:0;right:0;bottom:0;background:rgba(255,255,255,0.15);border-radius:0 99px 99px 0;transition:width .6s ease}
 
 /* GRIDS */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .mc{
-  background:var(--surface);
-  border:1px solid var(--glass-border);
-  border-radius:16px;
-  padding:14px;
-  box-shadow:var(--shadow);
-  backdrop-filter:blur(12px);
+background:var(–surface);
+border:1px solid var(–glass-border);
+border-radius:16px;
+padding:14px;
+box-shadow:var(–shadow);
+backdrop-filter:blur(12px);
 }
 
 /* ALERTS */
 .alert{border-radius:16px;padding:13px 16px;margin-bottom:10px;font-size:13px;line-height:1.55;font-weight:500;backdrop-filter:blur(8px)}
-.alert-red{background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.18);color:var(--red)}
-.alert-blue{background:rgba(67,97,238,0.08);border:1px solid rgba(67,97,238,0.18);color:var(--primary)}
-.alert-green{background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.18);color:var(--green)}
-.alert-amber{background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.18);color:var(--amber)}
-.alert-purple{background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.18);color:var(--purple)}
+.alert-red{background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.18);color:var(–red)}
+.alert-blue{background:rgba(67,97,238,0.08);border:1px solid rgba(67,97,238,0.18);color:var(–primary)}
+.alert-green{background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.18);color:var(–green)}
+.alert-amber{background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.18);color:var(–amber)}
+.alert-purple{background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.18);color:var(–purple)}
 
 /* EXPENSE ROWS */
 .exp-row{
-  background:var(--surface);
-  border:1px solid var(--glass-border);
-  border-radius:18px;
-  padding:14px 16px;
-  margin-bottom:8px;
-  box-shadow:var(--shadow);
-  backdrop-filter:blur(16px);
-  transition:box-shadow .2s;
+background:var(–surface);
+border:1px solid var(–glass-border);
+border-radius:18px;
+padding:14px 16px;
+margin-bottom:8px;
+box-shadow:var(–shadow);
+backdrop-filter:blur(16px);
+transition:box-shadow .2s;
 }
-.exp-row:hover{box-shadow:var(--shadow-card)}
+.exp-row:hover{box-shadow:var(–shadow-card)}
 .exp-row.pd{border-color:rgba(220,38,38,0.35);background:rgba(255,245,245,0.75)}
 .exp-row.em{border-color:rgba(217,119,6,0.35);background:rgba(255,251,245,0.75)}
 .exp-row.paid{border-color:rgba(22,163,74,0.3);opacity:.8}
 
 /* TAGS */
 .tag{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;display:inline-block;letter-spacing:.02em}
-.tag-fixed{background:rgba(67,97,238,0.1);color:var(--primary)}
-.tag-var{background:rgba(217,119,6,0.1);color:var(--amber)}
-.tag-pd{background:var(--red);color:#fff}
-.tag-paid{background:var(--green);color:#fff}
-.tag-em{background:rgba(217,119,6,0.12);color:var(--amber)}
-.tag-pending{background:rgba(124,58,237,0.1);color:var(--purple)}
+.tag-fixed{background:rgba(67,97,238,0.1);color:var(–primary)}
+.tag-var{background:rgba(217,119,6,0.1);color:var(–amber)}
+.tag-pd{background:var(–red);color:#fff}
+.tag-paid{background:var(–green);color:#fff}
+.tag-em{background:rgba(217,119,6,0.12);color:var(–amber)}
+.tag-pending{background:rgba(124,58,237,0.1);color:var(–purple)}
 
 /* FILTER PILLS */
-.fp{padding:5px 14px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid rgba(200,210,240,0.5);background:rgba(255,255,255,0.5);color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;backdrop-filter:blur(8px)}
-.fp.on{border-color:var(--primary);background:rgba(67,97,238,0.1);color:var(--primary)}
-.tb{padding:6px 14px;border-radius:99px;font-size:12px;font-weight:600;border:1.5px solid rgba(200,210,240,0.5);background:rgba(255,255,255,0.5);color:var(--muted);cursor:pointer;transition:all .2s;backdrop-filter:blur(8px)}
-.tb.on{border-color:var(--primary);background:rgba(67,97,238,0.1);color:var(--primary)}
+.fp{padding:5px 14px;border-radius:99px;font-size:11px;font-weight:600;border:1.5px solid rgba(200,210,240,0.5);background:rgba(255,255,255,0.5);color:var(–muted);cursor:pointer;transition:all .2s;white-space:nowrap;backdrop-filter:blur(8px)}
+.fp.on{border-color:var(–primary);background:rgba(67,97,238,0.1);color:var(–primary)}
+.tb{padding:6px 14px;border-radius:99px;font-size:12px;font-weight:600;border:1.5px solid rgba(200,210,240,0.5);background:rgba(255,255,255,0.5);color:var(–muted);cursor:pointer;transition:all .2s;backdrop-filter:blur(8px)}
+.tb.on{border-color:var(–primary);background:rgba(67,97,238,0.1);color:var(–primary)}
 
 /* BOTTOM NAV */
 .bnav{
-  position:fixed;bottom:0;left:0;right:0;
-  background:rgba(255,255,255,0.82);
-  border-top:1px solid rgba(255,255,255,0.95);
-  display:flex;z-index:100;
-  backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
-  box-shadow:0 -1px 0 rgba(200,210,240,0.4),0 -8px 32px rgba(67,97,238,0.06);
+position:fixed;bottom:0;left:0;right:0;
+background:rgba(255,255,255,0.82);
+border-top:1px solid rgba(255,255,255,0.95);
+display:flex;z-index:100;
+backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+box-shadow:0 -1px 0 rgba(200,210,240,0.4),0 -8px 32px rgba(67,97,238,0.06);
 }
-.nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0 16px;background:none;border:none;cursor:pointer;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);transition:color .2s;position:relative}
-.nb.on{color:var(--primary)}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0 16px;background:none;border:none;cursor:pointer;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(–muted);transition:color .2s;position:relative}
+.nb.on{color:var(–primary)}
 .nb svg{width:20px;height:20px}
-.nb-badge{position:absolute;top:6px;right:calc(50% - 16px);background:var(--red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 5px;min-width:16px;text-align:center}
+.nb-badge{position:absolute;top:6px;right:calc(50% - 16px);background:var(–red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 5px;min-width:16px;text-align:center}
 
 /* PANELS */
 .panel{display:none}.panel.on{display:block}
 
 /* FLOATING CLARITY BUTTON */
 .clarity-fab{
-  position:fixed;bottom:82px;right:16px;
-  width:54px;height:54px;
-  background:var(--gp);
-  border-radius:50%;border:none;cursor:pointer;
-  box-shadow:0 6px 24px rgba(67,97,238,0.45),0 2px 8px rgba(0,0,0,0.1);
-  display:flex;align-items:center;justify-content:center;
-  z-index:90;transition:transform .2s,box-shadow .2s;
-  border:2px solid rgba(255,255,255,0.3);
+position:fixed;bottom:82px;right:16px;
+width:54px;height:54px;
+background:var(–gp);
+border-radius:50%;border:none;cursor:pointer;
+box-shadow:0 6px 24px rgba(67,97,238,0.45),0 2px 8px rgba(0,0,0,0.1);
+display:flex;align-items:center;justify-content:center;
+z-index:90;transition:transform .2s,box-shadow .2s;
+border:2px solid rgba(255,255,255,0.3);
 }
 .clarity-fab:hover{transform:scale(1.08);box-shadow:0 8px 32px rgba(67,97,238,0.55)}
 @keyframes fabpulse{0%,100%{box-shadow:0 6px 24px rgba(67,97,238,0.45)}50%{box-shadow:0 6px 36px rgba(67,97,238,0.7)}}
@@ -309,70 +310,70 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 
 /* CHAT BUBBLES */
 .msg-bubble{max-width:90%;padding:12px 15px;font-size:13.5px;line-height:1.65;border-radius:18px;margin-bottom:2px}
-.msg-ai{align-self:flex-start;background:rgba(255,255,255,0.8);border:1px solid var(--glass-border);border-bottom-left-radius:5px;backdrop-filter:blur(12px)}
-.msg-user{align-self:flex-end;background:var(--gp);color:#fff;border-bottom-right-radius:5px;box-shadow:0 4px 12px rgba(67,97,238,0.3)}
+.msg-ai{align-self:flex-start;background:rgba(255,255,255,0.8);border:1px solid var(–glass-border);border-bottom-left-radius:5px;backdrop-filter:blur(12px)}
+.msg-user{align-self:flex-end;background:var(–gp);color:#fff;border-bottom-right-radius:5px;box-shadow:0 4px 12px rgba(67,97,238,0.3)}
 
 /* MODALS */
 .modal-ov{position:fixed;inset:0;background:rgba(15,23,42,0.4);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
 .modal{
-  background:rgba(255,255,255,0.9);
-  border-radius:28px 28px 0 0;
-  padding:24px 20px 40px;
-  width:100%;max-width:520px;max-height:92vh;overflow-y:auto;
-  border-top:1px solid rgba(255,255,255,0.95);
-  box-shadow:0 -8px 48px rgba(67,97,238,0.12);
-  backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);
+background:rgba(255,255,255,0.9);
+border-radius:28px 28px 0 0;
+padding:24px 20px 40px;
+width:100%;max-width:520px;max-height:92vh;overflow-y:auto;
+border-top:1px solid rgba(255,255,255,0.95);
+box-shadow:0 -8px 48px rgba(67,97,238,0.12);
+backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);
 }
 .modal-handle{width:44px;height:4px;background:rgba(200,210,240,0.6);border-radius:99px;margin:0 auto 20px}
 
 /* TABLES */
 .dt{width:100%;border-collapse:collapse;font-size:13px}
-.dt th{text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid rgba(200,210,240,0.4);background:rgba(248,250,255,0.6)}
-.dt td{padding:10px 12px;border-bottom:1px solid rgba(200,210,240,0.25);color:var(--text)}
+.dt th{text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(–muted);border-bottom:1px solid rgba(200,210,240,0.4);background:rgba(248,250,255,0.6)}
+.dt td{padding:10px 12px;border-bottom:1px solid rgba(200,210,240,0.25);color:var(–text)}
 .dt tr:hover td{background:rgba(67,97,238,0.03)}
 
 /* DECISION MAKER BADGES */
-.dm-jay{background:rgba(67,97,238,0.1);color:var(--primary);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
-.dm-chari{background:rgba(124,58,237,0.1);color:var(--purple);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
-.dm-joint{background:rgba(22,163,74,0.1);color:var(--green);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
+.dm-jay{background:rgba(67,97,238,0.1);color:var(–primary);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
+.dm-chari{background:rgba(124,58,237,0.1);color:var(–purple);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
+.dm-joint{background:rgba(22,163,74,0.1);color:var(–green);padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
 
 /* GOALS */
 .goal-card{
-  background:var(--surface);
-  border:1px solid var(--glass-border);
-  border-radius:20px;
-  padding:18px;
-  margin-bottom:12px;
-  box-shadow:var(--shadow-card);
-  backdrop-filter:blur(16px);
+background:var(–surface);
+border:1px solid var(–glass-border);
+border-radius:20px;
+padding:18px;
+margin-bottom:12px;
+box-shadow:var(–shadow-card);
+backdrop-filter:blur(16px);
 }
-.goal-card.need{border-left:3px solid var(--primary)}
-.goal-card.want{border-left:3px solid var(--amber)}
-.goal-card.dream{border-left:3px solid var(--purple)}
+.goal-card.need{border-left:3px solid var(–primary)}
+.goal-card.want{border-left:3px solid var(–amber)}
+.goal-card.dream{border-left:3px solid var(–purple)}
 .goal-progress{height:8px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden;margin:10px 0}
 .goal-progress-fill{height:100%;border-radius:99px;transition:width .6s ease}
-.badge-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.6);border:1px solid var(--glass-border);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--text2);margin:3px;backdrop-filter:blur(8px)}
+.badge-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.6);border:1px solid var(–glass-border);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(–text2);margin:3px;backdrop-filter:blur(8px)}
 
 /* CHART */
 .chart-wrap{
-  position:relative;
-  background:var(--surface);
-  border-radius:20px;
-  padding:20px;
-  border:1px solid var(--glass-border);
-  box-shadow:var(--shadow-card);
-  overflow:hidden;
-  backdrop-filter:blur(16px);
+position:relative;
+background:var(–surface);
+border-radius:20px;
+padding:20px;
+border:1px solid var(–glass-border);
+box-shadow:var(–shadow-card);
+overflow:hidden;
+backdrop-filter:blur(16px);
 }
 .chart-tip{position:fixed;background:rgba(15,23,42,0.92);color:#fff;border-radius:12px;padding:9px 13px;font-size:12px;font-weight:600;pointer-events:none;display:none;z-index:500;min-width:140px;max-width:180px;box-shadow:0 8px 24px rgba(0,0,0,0.25);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.1)}
 
 /* INSIGHTS */
-.ins-num{width:30px;height:30px;border-radius:10px;background:var(--gp);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:0 4px 12px rgba(67,97,238,0.3)}
+.ins-num{width:30px;height:30px;border-radius:10px;background:var(–gp);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:0 4px 12px rgba(67,97,238,0.3)}
 .bar-t{height:7px;background:rgba(200,210,240,0.3);border-radius:99px;overflow:hidden;margin:6px 0}
 .bar-f{height:100%;border-radius:99px;transition:width .6s ease}
 
 /* RECEIPT */
-.scan-preview{width:100%;max-height:200px;object-fit:contain;border-radius:14px;border:1px solid var(--glass-border);margin-bottom:12px}
+.scan-preview{width:100%;max-height:200px;object-fit:contain;border-radius:14px;border:1px solid var(–glass-border);margin-bottom:12px}
 
 /* ANIMATIONS */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -380,43 +381,45 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 
-.spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(200,210,240,0.4);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(200,210,240,0.4);border-top-color:var(–primary);border-radius:50%;animation:spin .7s linear infinite}
 
 /* MONOSPACE for numbers in flow */
-.mono{font-family:'DM Mono',monospace}
+.mono{font-family:‘DM Mono’,monospace}
 
 /* ===== WALKTHROUGH STYLES ===== */
 .wt-overlay{position:fixed;inset:0;z-index:9000;pointer-events:auto;display:none;animation:wtFade 0.25s ease}
 .wt-overlay.on{display:block}
 .wt-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .wt-callout{position:absolute;background:rgba(255,255,255,0.98);border-radius:18px;padding:18px 18px 14px;box-shadow:0 24px 56px rgba(15,23,42,0.32),0 4px 16px rgba(67,97,238,0.18);border:1px solid rgba(255,255,255,0.95);max-width:300px;min-width:240px;pointer-events:auto;z-index:9002;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:wtCallout 0.32s cubic-bezier(0.34,1.56,0.64,1)}
-.wt-callout-eye{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--primary);margin-bottom:6px;display:flex;align-items:center;gap:8px}
-.wt-callout-eye::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--primary)}
-.wt-callout-title{font-size:15px;font-weight:800;color:var(--text);line-height:1.3;margin-bottom:6px;letter-spacing:-.01em}
-.wt-callout-body{font-size:13px;color:var(--text2);line-height:1.55}
+.wt-callout-eye{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(–primary);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.wt-callout-eye::before{content:’’;display:inline-block;width:6px;height:6px;border-radius:50%;background:var(–primary)}
+.wt-callout-title{font-size:15px;font-weight:800;color:var(–text);line-height:1.3;margin-bottom:6px;letter-spacing:-.01em}
+.wt-callout-body{font-size:13px;color:var(–text2);line-height:1.55}
 .wt-callout-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(200,210,240,0.4)}
 .wt-progress{display:flex;gap:4px;align-items:center}
 .wt-dot{width:6px;height:6px;border-radius:50%;background:rgba(67,97,238,0.2);transition:all .2s}
-.wt-dot.on{background:var(--primary);width:18px;border-radius:99px}
+.wt-dot.on{background:var(–primary);width:18px;border-radius:99px}
 .wt-btns{display:flex;gap:6px;align-items:center}
 .wt-btn{border:none;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
-.wt-btn-primary{background:var(--gp);color:#fff;box-shadow:0 2px 8px rgba(67,97,238,0.3)}
+.wt-btn-primary{background:var(–gp);color:#fff;box-shadow:0 2px 8px rgba(67,97,238,0.3)}
 .wt-btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
-.wt-btn-back{background:transparent;color:var(--muted);padding:7px 8px}
-.wt-btn-back:hover{color:var(--text2)}
-.wt-skip{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.92);border:1px solid rgba(255,255,255,0.95);border-radius:99px;padding:8px 18px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;z-index:9003;box-shadow:0 4px 16px rgba(0,0,0,0.2);font-family:inherit;pointer-events:auto}
-.wt-skip:hover{background:#fff;color:var(--text)}
-.wt-final-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(200,210,240,0.4);font-size:12px;color:var(--text2)}
-.wt-checkbox{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--border);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;background:#fff;flex-shrink:0}
-.wt-checkbox.on{background:var(--primary);border-color:var(--primary)}
-.wt-checkbox.on::after{content:'✓';color:#fff;font-size:11px;font-weight:800}
+.wt-btn-back{background:transparent;color:var(–muted);padding:7px 8px}
+.wt-btn-back:hover{color:var(–text2)}
+.wt-skip{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.92);border:1px solid rgba(255,255,255,0.95);border-radius:99px;padding:8px 18px;font-size:12px;font-weight:600;color:var(–text2);cursor:pointer;z-index:9003;box-shadow:0 4px 16px rgba(0,0,0,0.2);font-family:inherit;pointer-events:auto}
+.wt-skip:hover{background:#fff;color:var(–text)}
+.wt-final-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(200,210,240,0.4);font-size:12px;color:var(–text2)}
+.wt-checkbox{width:16px;height:16px;border-radius:5px;border:1.5px solid var(–border);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;background:#fff;flex-shrink:0}
+.wt-checkbox.on{background:var(–primary);border-color:var(–primary)}
+.wt-checkbox.on::after{content:‘✓’;color:#fff;font-size:11px;font-weight:800}
 @keyframes wtFade{from{opacity:0}to{opacity:1}}
 @keyframes wtCallout{from{opacity:0;transform:translateY(8px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 </style>
+
 </head>
 <body>
 
 <!-- AUTH -->
+
 <div id="authScreen">
 <div class="auth-wrap">
   <div class="auth-logo">
@@ -452,6 +455,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 </div>
 
 <!-- MAIN APP -->
+
 <div id="mainApp" style="display:none">
   <div class="topbar">
     <div class="logo-wrap">
@@ -468,12 +472,14 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
   </div>
 
   <!-- Account Switcher Dropdown -->
+
   <div id="acctSwitcherPop" style="display:none;position:fixed;top:56px;left:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:8px;z-index:200;box-shadow:var(--shadow-lg);min-width:220px">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:6px 8px 10px">View Account</div>
     <div id="acctSwitcherList"></div>
   </div>
 
   <!-- Position popover -->
+
   <div id="posPop" style="display:none;position:fixed;top:56px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;z-index:200;box-shadow:var(--shadow-lg);min-width:260px;max-width:300px">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px">Your Position</div>
     <div id="posPopRows"></div>
@@ -481,6 +487,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
   </div>
 
   <!-- User menu -->
+
   <div id="uMenu" style="display:none;position:fixed;top:56px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:8px;z-index:200;box-shadow:var(--shadow-lg);min-width:200px">
     <div id="uMenuName" style="padding:10px 12px;font-size:13px;font-weight:700;border-bottom:1px solid var(--border);margin-bottom:4px"></div>
     <button onclick="goTab('settings');toggleMenu()" style="display:block;width:100%;text-align:left;padding:10px 12px;background:none;border:none;font-size:13px;color:var(--text2);cursor:pointer;border-radius:8px">Profile & Settings</button>
@@ -488,6 +495,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
   </div>
 
   <!-- Panels -->
+
   <div class="app">
     <div id="tab-home" class="panel on"></div>
     <div id="tab-ledger" class="panel"></div>
@@ -499,6 +507,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
   </div>
 
   <!-- Bottom nav -->
+
   <nav class="bnav">
     <button class="nb on" id="nav-home" onclick="goTab('home',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
@@ -522,12 +531,14 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
   </nav>
 
   <!-- Floating Clarity button -->
+
   <button class="clarity-fab" id="clarityFab" onclick="openAdvisor()">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
   </button>
 </div>
 
 <!-- WALKTHROUGH OVERLAY -->
+
 <div id="walkthroughOverlay" class="wt-overlay">
   <svg class="wt-svg" id="wtSvg" xmlns="http://www.w3.org/2000/svg"></svg>
   <button class="wt-skip" onclick="skipWalkthrough()">Skip Tour</button>
@@ -535,6 +546,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 </div>
 
 <!-- ADVISOR MODAL -->
+
 <div id="advisorModal" class="modal-ov" style="display:none" onclick="if(event.target===this)closeAdvisor()">
   <div class="modal" style="max-height:85vh">
     <div class="modal-handle"></div>
@@ -568,6 +580,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 </div>
 
 <!-- TRANSACTION CONFIRM MODAL -->
+
 <div id="txConfirmModal" class="modal-ov" style="display:none">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -583,12 +596,15 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
 </div>
 
 <!-- CHART TOOLTIP -->
+
 <div id="chartTip" class="chart-tip"></div>
 
 <!-- STANDALONE RECEIPT INPUT — lives at body level, no modal nesting -->
+
 <input type="file" id="receiptFileInput" accept="image/*" capture="environment" onchange="scanReceipt(this)" style="display:none;position:fixed;top:-9999px"/>
 
 <!-- RECEIPT SCAN MODAL -->
+
 <div id="receiptScanModal" class="modal-ov" style="display:none" onclick="if(event.target===this)document.getElementById('receiptScanModal').style.display='none'">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -2517,11 +2533,12 @@ async function markPaidBiweekly(expId,cycleNum){
 async function markPaidFull(expId,totalAmt){
   var exp=EX.find(function(e){return e.id===expId;});if(!exp)return;
   var today_s=today();var payMonth=new Date().toISOString().slice(0,7);
-  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:totalAmt,payment_date:today_s,payment_month:payMonth,is_partial:false});
-  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:exp.name+' — Full Payment (incl. past due + late charge)',amount:totalAmt,category:exp.category,transaction_date:today_s,notes:'Full payment: past due + late charge + current'}).select('*').single();
+  var payAcct=getPayFromAccount();
+  var payAcctId=payAcct?payAcct.id:null;
+  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:totalAmt,payment_date:today_s,payment_month:payMonth,is_partial:false,account_id:payAcctId});
+  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:exp.name+' — Full Payment (incl. past due + late charge)',amount:totalAmt,category:exp.category,transaction_date:today_s,notes:'Full payment: past due + late charge + current',account_id:payAcctId}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
-  var jA1=getPayFromAccount()||getJointAccount();
-  if(jA1){await updateAccountBalance(jA1.id,jA1.balance-totalAmt);window._payFromAcctId=null;}
+  if(payAcct){await updateAccountBalance(payAcct.id,(payAcct.balance||0)-totalAmt);window._payFromAcctId=null;}
   else{var newCash=(SET.cash_on_hand||0)-totalAmt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
   var updates={last_paid_date:today_s,is_earmarked:false,earmark_state:'inactive',is_past_due:false,past_due_amount:0,late_charge_amount:0};
   await sb.from('expenses').update(updates).eq('id',expId);
@@ -2539,11 +2556,12 @@ async function markPaidPastDue(expId){
   var pd=exp.past_due_amount||0;
   var paidAmt=pd+lc;
   var today_s=today();var payMonth=new Date().toISOString().slice(0,7);
-  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:paidAmt,payment_date:today_s,payment_month:payMonth,is_partial:true});
-  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:exp.name+' — Past Due Payment'+(lc>0?' + Late Charge':''),amount:paidAmt,category:exp.category,transaction_date:today_s,notes:'Past due payment'+(lc>0?' + late charge':'')}).select('*').single();
+  var payAcct=getPayFromAccount();
+  var payAcctId=payAcct?payAcct.id:null;
+  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:paidAmt,payment_date:today_s,payment_month:payMonth,is_partial:true,account_id:payAcctId});
+  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:exp.name+' — Past Due Payment'+(lc>0?' + Late Charge':''),amount:paidAmt,category:exp.category,transaction_date:today_s,notes:'Past due payment'+(lc>0?' + late charge':''),account_id:payAcctId}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
-  var jA2=getPayFromAccount()||getJointAccount();
-  if(jA2){await updateAccountBalance(jA2.id,jA2.balance-paidAmt);window._payFromAcctId=null;}
+  if(payAcct){await updateAccountBalance(payAcct.id,(payAcct.balance||0)-paidAmt);window._payFromAcctId=null;}
   else{var newCash=(SET.cash_on_hand||0)-paidAmt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
   var updates={is_past_due:false,past_due_amount:0,late_charge_amount:0,is_earmarked:false,earmark_state:'inactive'};
   await sb.from('expenses').update(updates).eq('id',expId);
@@ -2625,17 +2643,18 @@ async function markPaid(expId,isHalf,halfNum){
   // Pre-allocation already in Available from income logging — only deduct remaining
   var deductAmt=isBiweekly?Math.max(0,(exp.amount/2)-prealloc/2):Math.max(0,fullAmt-prealloc);
   var today_s=today();var payMonth=new Date().toISOString().slice(0,7);
+  var payAcct=getPayFromAccount();
+  var payAcctId=payAcct?payAcct.id:null;
   // Log to expense_payments — full amount for records
-  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:fullAmt,payment_date:today_s,payment_month:payMonth,is_partial:isHalf||isBiweekly});
+  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:fullAmt,payment_date:today_s,payment_month:payMonth,is_partial:isHalf||isBiweekly,account_id:payAcctId});
   // Log to transactions — full amount for records
   var txLabel=exp.name+(isBiweekly?' (Occurrence '+(cycleNum)+')':isHalf?' (Half '+(halfNum||1)+')':'')+' — Bill Paid';
-  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:txLabel,amount:fullAmt,category:exp.category,transaction_date:today_s,notes:'Bill payment'+(prealloc>0?' ('+fmt(prealloc)+' pre-allocated)':'')}).select('*').single();
+  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:txLabel,amount:fullAmt,category:exp.category,transaction_date:today_s,notes:'Bill payment'+(prealloc>0?' ('+fmt(prealloc)+' pre-allocated)':''),account_id:payAcctId}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
-  // Deduct from Joint account if accounts are set up, otherwise cash_on_hand
-  var jointAcct=getPayFromAccount()||getJointAccount();
-  if(jointAcct){
-    var newJointBal=jointAcct.balance-deductAmt;
-    await updateAccountBalance(jointAcct.id,newJointBal);
+  // Deduct from selected account (or joint fallback, or cash_on_hand)
+  if(payAcct){
+    var newJointBal=(payAcct.balance||0)-deductAmt;
+    await updateAccountBalance(payAcct.id,newJointBal);
     window._payFromAcctId=null;
   } else {
     var newCash=(SET.cash_on_hand||0)-deductAmt;
@@ -3626,9 +3645,9 @@ function openAddTxModal(){
   h+='<button class="tog-btn" onclick="setAtxDM(this)" data-dm="joint">Joint</button>';
   h+='</div></div>';
   if(ACCOUNTS.length>0){
-    h+='<div><label class="lbl">Account</label><select class="sel" id="atx-acct">';
+    h+='<div><label class="lbl">Account *</label><select class="sel" id="atx-acct"><option value="">— Select account —</option>';
     ACCOUNTS.filter(function(a){return a.is_active;}).forEach(function(a){
-      h+='<option value="'+a.id+'"'+(a.account_purpose==='joint'?' selected':'')+'>'+a.name+'</option>';
+      h+='<option value="'+a.id+'">'+a.name+' ('+fmt(a.balance||0)+')</option>';
     });
     h+='</select></div>';
   }
@@ -3670,6 +3689,7 @@ async function saveAddTx(){
 
   if(!name){msg.style.color='var(--red)';msg.textContent='Merchant name required.';return;}
   if(!amt){msg.style.color='var(--red)';msg.textContent='Amount required.';return;}
+  if(ACCOUNTS.length>0&&!acctId){msg.style.color='var(--red)';msg.textContent='Please select which account this came from or went to.';return;}
 
   var notePrefix=type==='Credit'?'Credit':type==='Transfer'?'Transfer':'Debit';
   var r=await sb.from('transactions').insert({
@@ -3685,33 +3705,11 @@ async function saveAddTx(){
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error: '+r.error.message;return;}
   TX.unshift(r.data);
 
-  // Adjust account balance based on transaction type
+  // Adjust balance through centralized helper based on transaction type
   if(type==='Debit'){
-    if(acctId){
-      var acct=ACCOUNTS.find(function(a){return a.id===acctId;});
-      if(acct)await updateAccountBalance(acctId,(acct.balance||0)-amt);
-    } else {
-      // No account specified — pull from joint or cash_on_hand
-      var jAcct=getJointAccount();
-      if(jAcct)await updateAccountBalance(jAcct.id,(jAcct.balance||0)-amt);
-      else {
-        await sb.from('household_settings').update({cash_on_hand:(SET.cash_on_hand||0)-amt}).eq('household_id',HID);
-        SET.cash_on_hand=(SET.cash_on_hand||0)-amt;
-      }
-    }
+    await applyTransactionToBalance(acctId,amt,'debit');
   } else if(type==='Credit'){
-    if(acctId){
-      var acctC=ACCOUNTS.find(function(a){return a.id===acctId;});
-      if(acctC)await updateAccountBalance(acctId,(acctC.balance||0)+amt);
-    } else {
-      // No account specified — add to joint or cash_on_hand
-      var jAcctC=getJointAccount();
-      if(jAcctC)await updateAccountBalance(jAcctC.id,(jAcctC.balance||0)+amt);
-      else {
-        await sb.from('household_settings').update({cash_on_hand:(SET.cash_on_hand||0)+amt}).eq('household_id',HID);
-        SET.cash_on_hand=(SET.cash_on_hand||0)+amt;
-      }
-    }
+    await applyTransactionToBalance(acctId,amt,'credit');
   }
   // Transfer: no balance change — transfers between own accounts net to zero on overall available
 
@@ -5330,12 +5328,69 @@ function renderPlanCard(p,cf){
   // Paychecks between now and target date
   var checksLeft=payDates.filter(function(d){return d>td2&&d<=p.target_date;}).length;
   if(checksLeft===0)checksLeft=Math.max(1,Math.floor(daysAway/14));
-  var perCheck=checksLeft>0?Math.ceil((p.estimated_amount-p.amount_saved)/checksLeft):p.estimated_amount;
-  var savedPct=p.estimated_amount>0?Math.min(Math.round((p.amount_saved/p.estimated_amount)*100),100):0;
-  // Projected balance on target date
+
+  // ===== FORECAST-AWARE SAVING CALCULATION =====
+  // Walk the cash flow projection that was built with paychecks, bills, planned expenses,
+  // forecasted income, and the current balance baked in.
+  var stillNeeded=p.estimated_amount-p.amount_saved;
+  var safetyFloor=SET.ahead_threshold||1000; // keep this much in reserve at all times
   var projEntry=cf.find(function(d){return d.date===p.target_date;});
+  // The cash flow already includes THIS planned expense as an outflow on its target date,
+  // so we read the balance the day BEFORE the target hits to see what we have available going in.
+  var dayBefore=addDays(p.target_date,-1);
+  var projBeforeEntry=cf.find(function(d){return d.date===dayBefore;});
+  var balBeforeExpense=projBeforeEntry?projBeforeEntry.bal:(projEntry?projEntry.bal+p.estimated_amount:null);
+
+  // Look 60 days past the target date for upcoming bills/plans that could leave them stranded
+  var lookAheadDate=addDays(p.target_date,60);
+  var postWindowEntries=cf.filter(function(d){return d.date>=p.target_date&&d.date<=lookAheadDate;});
+  var postWindowMin=postWindowEntries.length>0?Math.min.apply(null,postWindowEntries.map(function(d){return d.bal;})):null;
+
+  // Earmarks that are active right now
+  var earmarkedNow=calcEarmarked();
+
+  // Decide per-check recommendation
+  var perCheck;
+  var strategyMsg='';
+  var strategyTone='neutral'; // 'good' | 'caution' | 'danger'
+  if(balBeforeExpense===null||checksLeft<=0){
+    // No usable forecast — fall back to naive division
+    perCheck=checksLeft>0?Math.ceil(stillNeeded/checksLeft):stillNeeded;
+    strategyMsg='Saving '+fmt(perCheck)+' per check covers this in '+checksLeft+' paychecks.';
+  } else if(balBeforeExpense>=p.estimated_amount+safetyFloor&&postWindowMin>=safetyFloor){
+    // Forecast already covers it AND the post-target window stays safe — minimal saving needed
+    perCheck=0;
+    strategyMsg='Your forecast already covers this expense and stays above your '+fmt(safetyFloor)+' safety floor for 60 days after. No dedicated savings required, but stashing some per check gives a margin.';
+    strategyTone='good';
+  } else {
+    // Calculate the gap between projected balance-before-expense and the safe target
+    // Safe target = expense amount + safety floor
+    var gap;
+    if(postWindowMin!==null&&postWindowMin<safetyFloor){
+      // Post-target window dips below floor — close the gap to make it safe
+      var dipBelow=safetyFloor-postWindowMin;
+      gap=Math.max(p.estimated_amount-balBeforeExpense,0)+dipBelow;
+      strategyTone='danger';
+    } else {
+      gap=Math.max(p.estimated_amount-balBeforeExpense,0);
+      strategyTone=gap>0?'caution':'good';
+    }
+    // Subtract amount already saved toward this plan
+    gap=Math.max(0,gap-p.amount_saved);
+    perCheck=checksLeft>0?Math.ceil(gap/checksLeft):gap;
+    if(perCheck===0){
+      strategyMsg='Forecast covers this comfortably. No dedicated savings needed.';
+      strategyTone='good';
+    } else if(strategyTone==='danger'){
+      strategyMsg='Forecast shows balance dipping below safety floor in the 60 days after. Save '+fmt(perCheck)+' per check to stay protected.';
+    } else {
+      strategyMsg='Forecast falls '+fmt(gap)+' short. Save '+fmt(perCheck)+' per check to close the gap.';
+    }
+  }
+
+  var savedPct=p.estimated_amount>0?Math.min(Math.round((p.amount_saved/p.estimated_amount)*100),100):0;
   var projBal=projEntry?projEntry.bal:null;
-  var canAfford=projBal!==null&&projBal>=p.estimated_amount;
+  var canAfford=projBal!==null&&balBeforeExpense!==null&&balBeforeExpense>=p.estimated_amount;
 
   // Color
   var borderColor=daysAway<=14?'rgba(220,38,38,0.3)':daysAway<=30?'rgba(217,119,6,0.3)':'rgba(67,97,238,0.2)';
@@ -5363,22 +5418,33 @@ function renderPlanCard(p,cf){
     h+='<div style="height:100%;width:'+savedPct+'%;background:var(--green);border-radius:99px"></div></div></div>';
   }
 
-  // Saving strategy
-  h+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.12);border-radius:12px;padding:12px;margin-bottom:12px">';
+  // Saving strategy — now forecast-aware
+  var stratBg=strategyTone==='good'?'var(--gl)':strategyTone==='danger'?'var(--rl)':strategyTone==='caution'?'rgba(217,119,6,0.06)':'rgba(67,97,238,0.05)';
+  var stratBorder=strategyTone==='good'?'rgba(22,163,74,0.2)':strategyTone==='danger'?'rgba(220,38,38,0.2)':strategyTone==='caution'?'rgba(217,119,6,0.2)':'rgba(67,97,238,0.12)';
+  var stratColor=strategyTone==='good'?'var(--green)':strategyTone==='danger'?'var(--red)':strategyTone==='caution'?'var(--amber)':'var(--primary)';
+  h+='<div style="background:'+stratBg+';border:1px solid '+stratBorder+';border-radius:12px;padding:12px;margin-bottom:12px">';
   h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saving Strategy</div>';
   h+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
   h+='<span style="font-size:12px;color:var(--text2)">Paychecks until target</span><span style="font-size:12px;font-weight:700">'+checksLeft+'</span></div>';
   h+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
-  h+='<span style="font-size:12px;color:var(--text2)">Still needed</span><span style="font-size:12px;font-weight:700;color:var(--red)">'+fmt(p.estimated_amount-p.amount_saved)+'</span></div>';
+  h+='<span style="font-size:12px;color:var(--text2)">Still needed</span><span style="font-size:12px;font-weight:700;color:var(--red)">'+fmt(stillNeeded)+'</span></div>';
+  if(balBeforeExpense!==null){
+    h+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+    h+='<span style="font-size:12px;color:var(--text2)">Forecast on '+fmtD(dayBefore,true)+'</span><span style="font-size:12px;font-weight:700;color:'+(balBeforeExpense>=p.estimated_amount?'var(--green)':'var(--red)')+'">'+fmt(balBeforeExpense)+'</span></div>';
+  }
   h+='<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--bl)">';
   h+='<span style="font-size:13px;font-weight:700;color:var(--text)">Set aside per check</span>';
-  h+='<span style="font-size:14px;font-weight:900;color:var(--primary)">'+fmt(perCheck)+'/check</span></div></div>';
+  h+='<span style="font-size:14px;font-weight:900;color:'+stratColor+'">'+(perCheck>0?fmt(perCheck)+'/check':'$0/check')+'</span></div>';
+  h+='<div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.5">'+strategyMsg+'</div>';
+  h+='</div>';
 
-  // Projected balance check
-  if(projBal!==null){
-    h+='<div style="background:'+(canAfford?'var(--gl)':'var(--rl)')+';border:1px solid '+(canAfford?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)')+';border-radius:12px;padding:10px 12px;margin-bottom:12px">';
-    h+='<div style="font-size:12px;font-weight:700;color:'+(canAfford?'var(--green)':'var(--red)')+'">'+( canAfford?'✅ Projected balance covers this':'⚠️ Projected balance falls short')+'</div>';
-    h+='<div style="font-size:12px;color:var(--text2);margin-top:3px">Balance on '+fmtD(p.target_date,true)+': <strong>'+fmt(projBal)+'</strong>'+(canAfford?'':' — '+fmt(p.estimated_amount-projBal)+' short. Start saving now.')+'</div></div>';
+  // Post-expense safety check — show only if there's a future risk worth flagging
+  if(postWindowMin!==null&&postWindowMin<safetyFloor){
+    var lowDate=postWindowEntries.find(function(d){return d.bal===postWindowMin;});
+    h+='<div style="background:var(--rl);border:1px solid rgba(220,38,38,0.2);border-radius:12px;padding:10px 12px;margin-bottom:12px">';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--red)">⚠️ Post-target risk window</div>';
+    h+='<div style="font-size:12px;color:var(--text2);margin-top:3px">After '+p.name+', balance dips to <strong>'+fmt(postWindowMin)+'</strong>'+(lowDate?' on '+fmtD(lowDate.date,true):'')+' — below your '+fmt(safetyFloor)+' safety floor. Bills or plans during that window may be at risk.</div>';
+    h+='</div>';
   }
 
   // Sub items if any
@@ -5634,6 +5700,44 @@ async function openClarityPlanAdvice(pid){
   var pd=EX.filter(function(e){return e.is_past_due;});
   var pdTotal=pd.reduce(function(s,e){return s+(e.past_due_amount||e.amount);},0);
 
+  // Build a fresh cash-flow projection for the relevant window so we can give Claude real numbers
+  var current=calcAvailable();
+  var earmarkedNow=calcEarmarked();
+  var safetyFloor=SET.ahead_threshold||1000;
+  var horizonDays=Math.max(120,(daysUntil(p.target_date)||60)+60);
+  var miniCf=[];var bal=current;
+  for(var di=0;di<horizonDays;di++){
+    var dStr=addDays(td2,di);var dom=new Date(dStr+'T12:00:00').getDate();
+    var inflow=0,outflow=0;
+    if(payDates.indexOf(dStr)>=0)inflow+=paycheck;
+    var fc=getForecastedIncomeForDate(dStr);
+    inflow+=fc.total;
+    EX.forEach(function(exp){
+      var arrActive=exp.arrangement_active&&(!exp.arrangement_expires||exp.arrangement_expires>=dStr);
+      if(arrActive){
+        if(exp.arrangement_due_1===dom)outflow+=exp.arrangement_amount_1||exp.amount;
+        if(exp.arrangement_due_2===dom)outflow+=exp.arrangement_amount_2||0;
+      } else if(exp.is_recurring&&exp.due_day===dom){
+        outflow+=exp.amount;
+      }
+    });
+    PLAN.forEach(function(pp){
+      if(pp.target_date===dStr&&!pp.is_funded)outflow+=pp.estimated_amount;
+    });
+    bal+=inflow-outflow;
+    miniCf.push({date:dStr,bal:bal});
+  }
+  var dayBeforeTarget=addDays(p.target_date,-1);
+  var balBefore=(miniCf.find(function(d){return d.date===dayBeforeTarget;})||{}).bal;
+  var balOnTarget=(miniCf.find(function(d){return d.date===p.target_date;})||{}).bal;
+  var lookAheadDate=addDays(p.target_date,60);
+  var postWindow=miniCf.filter(function(d){return d.date>=p.target_date&&d.date<=lookAheadDate;});
+  var postMin=postWindow.length>0?Math.min.apply(null,postWindow.map(function(d){return d.bal;})):null;
+  var postMinDate=postWindow.find(function(d){return d.bal===postMin;});
+  // Other planned expenses surrounding this one
+  var otherPlans=PLAN.filter(function(pp){return pp.id!==p.id&&!pp.is_funded&&pp.target_date>=td2&&pp.target_date<=lookAheadDate;}).sort(function(a,b){return a.target_date<b.target_date?-1:1;});
+  var otherPlansStr=otherPlans.length>0?otherPlans.map(function(pp){return pp.name+' '+fmt(pp.estimated_amount)+' on '+pp.target_date;}).join('; '):'None';
+
   var m=document.createElement('div');m.className='modal-ov';m.id='planAdviceModal';m.style.display='flex';
   m.onclick=function(e){if(e.target===m)m.remove();};
   var h='<div class="modal"><div class="modal-handle"></div>';
@@ -5644,7 +5748,7 @@ async function openClarityPlanAdvice(pid){
   h+='</div></div>';
   m.innerHTML=h;document.body.appendChild(m);
 
-  var sys='You are Clarity, a personal finance coach. A household is planning a future expense and needs a concrete budgeting plan. Be specific, practical, and honest about constraints. Structure your response with these exact headers:\n\nOVERVIEW\n[2-3 sentences on whether this is achievable given their finances]\n\nSAVING STRATEGY\n[Exactly how much to save per paycheck, which check to start, any risks]\n\nBUDGET BREAKDOWN\n[If no sub-items provided, suggest logical breakdown of the estimated cost]\n\nWATCH OUT FOR\n[1-3 specific risks or conflicts with their current bills/situation]\n\nPRO TIP\n[One creative or non-obvious suggestion to make this easier]\n\nKeep it under 200 words total. Use $ amounts throughout.';
+  var sys='You are Clarity, a personal finance coach. A household is planning a future expense and needs a concrete budgeting plan. Use ALL the forecast data provided — current balance, projected balance day-before-target, projected balance 60 days after target, other planned expenses, earmarks, and forecasted income. Reason about whether their forecast already covers this OR whether they need to actively save. If post-target window dips below the safety floor, flag it and recommend a higher per-check save. Structure with these exact headers:\n\nOVERVIEW\n[2-3 sentences referencing real forecasted numbers — does the forecast already cover this, or is there a gap?]\n\nSAVING STRATEGY\n[Exact dollar per paycheck. If forecast covers it, say $0 needed and explain why. If gap exists, calibrate to close it. Reference the projected balance numbers.]\n\nBUDGET BREAKDOWN\n[If no sub-items provided, suggest logical breakdown of the estimated cost]\n\nWATCH OUT FOR\n[1-3 specific risks. If post-target balance dips below safety floor, name the date and amount. If other planned expenses cluster nearby, flag the conflict.]\n\nPRO TIP\n[One creative or non-obvious suggestion]\n\nKeep it under 220 words total. Use $ amounts throughout. Be honest — if forecast covers it, say so plainly.';
 
   var prompt='Planned expense: '+p.name+'\n'
     +'Estimated cost: '+fmt(p.estimated_amount)+'\n'
@@ -5653,12 +5757,20 @@ async function openClarityPlanAdvice(pid){
     +'Notes: '+(p.notes||'none')+'\n'
     +(p.sub_items&&p.sub_items.length>0?'Budget items: '+p.sub_items.map(function(s){return s.name+' '+fmt(s.amount);}).join(', ')+'\n':'\n')
     +'Already saved toward this: '+fmt(p.amount_saved)+'\n\n'
-    +'Household finances:\n'
-    +'Paycheck: '+fmt(paycheck)+' biweekly\n'
-    +'Monthly bills: '+fmt(monthly)+'\n'
-    +'Past due: '+fmt(pdTotal)+'\n'
-    +'Paychecks until target date: '+checksLeft+'\n'
-    +'Per-check capacity (bills-only net): '+fmt(paycheck-(monthly/2))+'\n'
+    +'CURRENT STATE:\n'
+    +'Available balance now: '+fmt(current)+(current<0?' (Behind — currently negative)':'')+'\n'
+    +'Earmarked now: '+fmt(earmarkedNow)+'\n'
+    +'Spendable now: '+fmt(calcSpendable())+'\n'
+    +'Past due bills: '+fmt(pdTotal)+'\n'
+    +'Safety floor (target reserve): '+fmt(safetyFloor)+'\n\n'
+    +'FORECAST FOR THIS PLAN:\n'
+    +'Paycheck: '+fmt(paycheck)+' biweekly · '+checksLeft+' paychecks until target\n'
+    +'Monthly recurring bills: '+fmt(monthly)+'\n'
+    +'Projected balance day before target ('+fmtD(dayBeforeTarget,true)+'): '+fmt(balBefore||0)+'\n'
+    +'Projected balance ON target date ('+fmtD(p.target_date,true)+', after expense fires): '+fmt(balOnTarget||0)+'\n'
+    +'Lowest projected balance in 60 days AFTER target: '+fmt(postMin||0)+(postMinDate?' on '+fmtD(postMinDate.date,true):'')+'\n'
+    +'Post-target safety check: '+(postMin!==null&&postMin<safetyFloor?'⚠️ DIPS BELOW SAFETY FLOOR — risk of being short for bills after this expense':'✓ stays above safety floor')+'\n\n'
+    +'OTHER PLANNED EXPENSES IN WINDOW (now through 60 days post-target):\n'+otherPlansStr+'\n\n'
     +formatUpcomingIncomeForAI(Math.max(90,daysUntil(p.target_date)||90));
 
   try{
@@ -6674,8 +6786,15 @@ var TX_QUESTIONS={
   category:"What category? Food & Drinks · Clothing · Entertainment · Subscriptions · Personal Care · Transportation · Healthcare · Housing · Utilities · Household Supplies · Education & Childcare · Gifts & Donations · Travel · Pets · Debt & Retirement · Miscellaneous",
   dm:"Whose decision was this — Jay, Chari, or Joint?",
   date:"What date? (Say 'today' or give a date)",
+  account:null, // dynamic — set at ask time
   confirm:null
 };
+
+function buildAccountQuestion(){
+  var active=ACCOUNTS.filter(function(a){return a.is_active;});
+  if(active.length===0)return "Which account did this come from? (No accounts set up — I'll log it without one.)";
+  return "Which account did this come from? "+active.map(function(a){return a.name;}).join(' · ');
+}
 
 async function sendMsg(text,fromInput){
   if(!text||!text.trim())return;
@@ -6724,35 +6843,130 @@ async function sendMsg(text,fromInput){
   var acctSpend=acctTX.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return !ic&&t.category!=='Transfer';}).reduce(function(s,t){return s+t.amount;},0);
   var acctIncome=acctTX.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;return ic;}).reduce(function(s,t){return s+t.amount;},0);
 
-  var sys='You are Clarity, a sharp, direct, no-nonsense personal financial recovery coach for the Moseberry household. Real answers only. No lectures. No fluff.\n\n'
+  // ===== EXPANDED CONTEXT FOR CLARITY =====
+  // Build a full bill calendar for the next 60 days so Claude knows WHEN things hit
+  var td_chat=today();
+  var horizonStart=td_chat;
+  var horizonEnd=addDays(td_chat,60);
+  var billCalendar=[];
+  EX.forEach(function(e){
+    if(!e.is_recurring)return;
+    var cycle=e.pay_cycle||'monthly';
+    var dom=e.due_day||1;
+    // Walk the next 60 days and find when this bill hits
+    for(var di=0;di<60;di++){
+      var dStr=addDays(td_chat,di);
+      var dObj=new Date(dStr+'T12:00:00');
+      var hitToday=false;
+      if(cycle==='monthly'&&dObj.getDate()===dom)hitToday=true;
+      else if(cycle==='biweekly'){
+        // Biweekly bills can have two cycle days
+        if(dObj.getDate()===dom||(e.due_day_2&&dObj.getDate()===e.due_day_2))hitToday=true;
+      } else if(cycle==='weekly'){
+        // Weekly — assume due_day is day-of-week (0-6)
+        if(dObj.getDay()===dom)hitToday=true;
+      }
+      if(hitToday){
+        billCalendar.push({date:dStr,name:e.name,amount:e.amount,category:e.category,past_due:!!e.is_past_due});
+      }
+    }
+  });
+  billCalendar.sort(function(a,b){return a.date<b.date?-1:1;});
+  var billCalCapped=billCalendar.slice(0,30);
+  var billCalStr=billCalCapped.length>0?billCalCapped.map(function(b){return '  • '+fmtD(b.date,true)+': '+b.name+' '+fmt(b.amount)+(b.past_due?' (PAST DUE)':'');}).join('\n'):'  No recurring bills scheduled.';
+
+  // Past due with full detail
+  var pdDetailStr=pd.length>0?pd.map(function(b){
+    var due=b.past_due_amount||b.amount;
+    var lc=b.late_charge_amount||0;
+    return '  • '+b.name+': '+fmt(due)+(lc>0?' + '+fmt(lc)+' late charge':'')+' (consequence: '+(b.consequence||'unspecified')+')';
+  }).join('\n'):'  None — all bills current.';
+
+  // Upcoming paychecks in window
+  var payDates2=getArr(UP.pay_dates);
+  var upcomingChecks=payDates2.filter(function(d){return d>=td_chat&&d<=horizonEnd;}).slice(0,5);
+  var upcomingChecksStr=upcomingChecks.length>0?upcomingChecks.map(function(d){return '  • '+fmtD(d,true)+': '+fmt(UP.paycheck_amount||0);}).join('\n'):'  No paychecks in next 60 days.';
+
+  // Planned expenses in window
+  var upcomingPlans=PLAN.filter(function(pp){return !pp.is_funded&&pp.target_date>=td_chat;}).sort(function(a,b){return a.target_date<b.target_date?-1:1;}).slice(0,10);
+  var plansStr=upcomingPlans.length>0?upcomingPlans.map(function(pp){
+    var dAway=Math.round((new Date(pp.target_date+'T12:00:00')-new Date())/86400000);
+    return '  • '+pp.name+' on '+fmtD(pp.target_date,true)+' ('+dAway+' days): '+fmt(pp.estimated_amount)+(pp.amount_saved>0?' (saved '+fmt(pp.amount_saved)+')':'');
+  }).join('\n'):'  None.';
+
+  // Recent transactions (last 15) for spending pattern context
+  var recentTx=TX.slice(0,15);
+  var recentTxStr=recentTx.length>0?recentTx.map(function(t){
+    var dir=(t.notes&&t.notes.indexOf('Credit')>=0)?'+':'-';
+    return '  • '+fmtD(t.transaction_date,true)+': '+t.name+' '+dir+fmt(t.amount)+' ['+t.category+']';
+  }).join('\n'):'  No transactions logged yet.';
+
+  // 60-day cash flow projection summary
+  var bal=cash;var cfPoints=[];
+  for(var di2=0;di2<60;di2++){
+    var dStr2=addDays(td_chat,di2);var dom2=new Date(dStr2+'T12:00:00').getDate();
+    var inflow2=0,outflow2=0;
+    if(payDates2.indexOf(dStr2)>=0)inflow2+=UP.paycheck_amount||0;
+    var fc2=getForecastedIncomeForDate(dStr2);inflow2+=fc2.total;
+    EX.forEach(function(exp){
+      if(exp.is_recurring&&exp.due_day===dom2)outflow2+=exp.amount;
+    });
+    PLAN.forEach(function(pp){if(pp.target_date===dStr2&&!pp.is_funded)outflow2+=pp.estimated_amount;});
+    bal+=inflow2-outflow2;
+    cfPoints.push({d:dStr2,bal:bal});
+  }
+  var cfMin=cfPoints.length>0?Math.min.apply(null,cfPoints.map(function(x){return x.bal;})):cash;
+  var cfMinPoint=cfPoints.find(function(x){return x.bal===cfMin;});
+  var cfEnd=cfPoints[cfPoints.length-1];
+  var cfStr='Today: '+fmt(cash)+' | 30 days: '+fmt((cfPoints[29]||{}).bal||cash)+' | 60 days: '+fmt((cfEnd||{}).bal||cash)+' | Lowest: '+fmt(cfMin)+(cfMinPoint?' on '+fmtD(cfMinPoint.d,true):'');
+
+  // Bills by category breakdown
+  var byCat={};
+  EX.forEach(function(e){if(e.is_recurring){byCat[e.category]=(byCat[e.category]||0)+e.amount;}});
+  var byCatStr=Object.keys(byCat).map(function(c){return '  • '+c+': '+fmt(byCat[c])+'/mo';}).join('\n');
+
+  var sys='You are Clarity, a sharp, direct, no-nonsense personal financial recovery coach for the Moseberry household. You have FULL access to their financial data — use specific numbers, dates, and bill names in your answers. Real answers only. No lectures. No fluff. Never say you don\'t have access to data unless it\'s genuinely missing from the briefing below.\n\n'
     +(selAcct?'CURRENTLY VIEWING: '+selAcct.name+' account ('+fmt(selAcct.balance||0)+' balance)\n'
       +'- Account spending (all time): '+fmt(acctSpend)+'\n'
       +'- Account income/credits (all time): '+fmt(acctIncome)+'\n'
       +'- Account type: '+selAcct.account_purpose+'\n\n'
       :'')
-    +'HOUSEHOLD FINANCIAL DATA:\n'
-    +'- Position: '+p.toUpperCase()+'\n'
-    +'- Available: '+fmt(cash)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
-    +'- Jay: Employed, '+fmt(UP.paycheck_amount||0)+' biweekly | Next: '+(UP.next_pay_date||'TBD')+'\n'
-    +'- Chari: Not currently employed\n'
-    +'- Monthly bills: '+fmt(monthly)+' | Net per period: '+fmt(net)+' ('+(net>=0?'GAINING':'DEFICIT')+')\n'
-    +'- Past due: '+(pd.length>0?pd.map(function(b){return b.name+' '+fmt(b.amount)+(b.past_due_amount?' (overdue: '+fmt(b.past_due_amount)+')':'');}).join(', '):'None')+'\n'
-    +'- Subscriptions: '+fmt(subs)+'/mo | Passive income: '+fmt(passive)+'/mo\n'
-    +'- Jay decision spending: '+fmt(jayTx)+' | Chari decision spending: '+fmt(chariTx)+'\n'
-    +'- Active goals: '+(activeGoals.length>0?activeGoals.map(function(g){return g.name+' ('+Math.round(g.current_amount/g.target_amount*100)+'% — '+g.importance+')';}).join(', '):'None')+'\n'
-    +'- THREE-PAYCHECK MONTHS THIS YEAR: '+(threeCheckMonthsNow.length>0?threeCheckMonthsNow.join(', '):'None detected')+'\n'
-    +'- CURRENTLY IN 3-CHECK MONTH: '+(inThreeCheckNow?'YES — extra '+fmt(UP.paycheck_amount||0)+' this month. Bills already covered by first 2 checks. This check is available for goals.':'No')+'\n\n'
-    +formatUpcomingIncomeForAI(180)+'\n\n'
-    +'ALL ACCOUNTS:\n'
-    +ACCOUNTS.filter(function(a){return a.is_active;}).map(function(a){return '- '+a.name+': '+fmt(a.balance||0)+' ('+a.account_purpose+')';}).join('\n')+'\n\n'
-    +'KEY CONCEPTS:\n'
-    +'- Available = cash in hand + logged paychecks - paid bills and transactions\n'
-    +'- Earmarked = bills flagged for payment (money spoken for, not yet deducted)\n'
-    +'- Spendable = Available minus Earmarked (what you can truly spend freely)\n'
-    +'- 3rd check months: bills are already covered by 2 regular checks. 3rd check is genuinely free for goals unless Behind.\n'
-    +'- Position: Behind=past due or deficit | Current=all paid | On Track=Spendable $600+ | Ahead=Spendable $1000+\n\n'
-    +'If user says "log a transaction" — ask one question at a time: name, amount, category, decision maker (Jay/Chari/Joint), date.\n'
-    +'Tone: Direct coach. Real numbers. Under 180 words. **Bold** key amounts.';
+    +'═══ HOUSEHOLD SNAPSHOT ═══\n'
+    +'Position: '+p.toUpperCase()+'\n'
+    +'Available: '+fmt(cash)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
+    +'Jay: Employed, '+fmt(UP.paycheck_amount||0)+' biweekly net | Next paycheck: '+(UP.next_pay_date?fmtD(UP.next_pay_date,true):'TBD')+'\n'
+    +'Chari: Not currently employed\n'
+    +'Monthly bills: '+fmt(monthly)+' | Net per pay period (after half-monthly bills): '+fmt(net)+' ('+(net>=0?'GAINING':'DEFICIT')+')\n'
+    +'Subscriptions: '+fmt(subs)+'/mo | Confirmed passive income: '+fmt(passive)+'/mo\n'
+    +'Decision spending breakdown — Jay-decided: '+fmt(jayTx)+' | Chari-decided: '+fmt(chariTx)+'\n'
+    +'Three-paycheck months in '+new Date().getFullYear()+': '+(threeCheckMonthsNow.length>0?threeCheckMonthsNow.join(', '):'None detected')+'\n'
+    +'In a 3-check month right now: '+(inThreeCheckNow?'YES — extra '+fmt(UP.paycheck_amount||0)+' available':'No')+'\n\n'
+    +'═══ UPCOMING PAYCHECKS (next 60 days) ═══\n'+upcomingChecksStr+'\n\n'
+    +'═══ PAST DUE BILLS ═══\n'+pdDetailStr+'\n\n'
+    +'═══ BILL CALENDAR (next 30 hits, chronological) ═══\n'+billCalStr+'\n\n'
+    +'═══ MONTHLY BILLS BY CATEGORY ═══\n'+byCatStr+'\n\n'
+    +'═══ PLANNED EXPENSES (upcoming) ═══\n'+plansStr+'\n\n'
+    +'═══ ACTIVE GOALS ═══\n'+(activeGoals.length>0?activeGoals.map(function(g){return '  • '+g.name+': '+fmt(g.current_amount||0)+' of '+fmt(g.target_amount)+' ('+Math.round((g.current_amount||0)/g.target_amount*100)+'%)'+(g.target_date?' by '+fmtD(g.target_date,true):'')+' — '+g.importance+' priority';}).join('\n'):'  No active goals.')+'\n\n'
+    +'═══ ALL ACCOUNTS ═══\n'
+    +ACCOUNTS.filter(function(a){return a.is_active;}).map(function(a){return '  • '+a.name+': '+fmt(a.balance||0)+' ('+a.account_purpose+(a.is_private?', private':'')+')';}).join('\n')+'\n\n'
+    +'═══ RECENT TRANSACTIONS (last 15) ═══\n'+recentTxStr+'\n\n'
+    +'═══ '+formatUpcomingIncomeForAI(180)+' ═══\n\n'
+    +'═══ 60-DAY CASH FLOW PROJECTION ═══\n'+cfStr+'\n\n'
+    +'═══ KEY CONCEPTS ═══\n'
+    +'• Available = balance across all joint/spending accounts + cash on hand\n'
+    +'• Earmarked = bills flagged for payment (money spoken for, not yet deducted)\n'
+    +'• Spendable = Available minus Earmarked (what you can truly spend freely)\n'
+    +'• 3rd check months: bills covered by first 2 checks, the 3rd is genuinely free for goals unless Behind\n'
+    +'• Position: Behind=past due or deficit | Current=all paid | On Track=Spendable $600+ | Ahead=Spendable $1000+\n'
+    +'• Forecasted income certainty: confirmed=full value, likely=80%, possible=50%\n\n'
+    +'═══ TONE & FORMAT ═══\n'
+    +'• Direct coach voice. Use real numbers from the data above — never say "approximately" or hedge if a real number is in the briefing.\n'
+    +'• Bold key amounts with **markdown** so they highlight.\n'
+    +'• If the user asks "when does X bill come due" — look in the BILL CALENDAR section and give the exact date.\n'
+    +'• If the user asks "can I afford X" — look at the 60-DAY CASH FLOW PROJECTION and give a specific yes/no with the projected balance number.\n'
+    +'• If the user asks about a specific date — calculate using the cash flow projection.\n'
+    +'• Keep most answers under 180 words. Detailed answers can go to 250.\n'
+    +'• If user says "log a transaction" — ask one question at a time: name, amount, category, decision maker, date, account.';
 
   try{
     var msgs2=chatHist.slice(-10).map(function(m){return{role:m.role,content:m.content};});
@@ -6799,7 +7013,7 @@ async function extractTxFromMsg(text,msgs){
 }
 
 function askNextTxQuestion(msgs){
-  var fields=['name','amount','category','dm','date'];
+  var fields=['name','amount','category','dm','date','account'];
   var next=fields.find(function(f){return !txState.data[f];});
   if(!next){
     // All collected — show confirmation
@@ -6808,7 +7022,7 @@ function askNextTxQuestion(msgs){
     return;
   }
   txState.step=next;
-  var q=TX_QUESTIONS[next];
+  var q=next==='account'?buildAccountQuestion():TX_QUESTIONS[next];
   var ab=document.createElement('div');ab.className='msg-bubble msg-ai';ab.textContent=q;
   chatHist.push({role:'assistant',content:q});
   msgs.appendChild(ab);msgs.scrollTop=msgs.scrollHeight;
@@ -6861,6 +7075,27 @@ async function handleTxFlow(text,msgs){
     }
     val=match||'Miscellaneous';
   }
+  else if(txState.step==='account'){
+    var lowerA=text.toLowerCase().trim();
+    var active=ACCOUNTS.filter(function(a){return a.is_active;});
+    if(active.length===0){val='none';}
+    else {
+      // Try to match by exact name (case-insensitive) or partial
+      var matchA=active.find(function(a){return a.name.toLowerCase()===lowerA;});
+      if(!matchA)matchA=active.find(function(a){return a.name.toLowerCase().indexOf(lowerA)>=0||lowerA.indexOf(a.name.toLowerCase())>=0;});
+      // Fallback to first word match (e.g. "direct" → "Direct Deposit")
+      if(!matchA){var firstWord=lowerA.split(/\s+/)[0];if(firstWord)matchA=active.find(function(a){return a.name.toLowerCase().indexOf(firstWord)>=0;});}
+      if(matchA){val=matchA.id;}
+      else {
+        // Couldn't match — re-ask with the list
+        var rab=document.createElement('div');rab.className='msg-bubble msg-ai';
+        rab.textContent="I didn't recognize that account. Please pick one: "+active.map(function(a){return a.name;}).join(', ');
+        chatHist.push({role:'assistant',content:rab.textContent});
+        msgs.appendChild(rab);msgs.scrollTop=msgs.scrollHeight;
+        return; // bail without setting val so we wait for another reply
+      }
+    }
+  }
   txState.data[txState.step]=val;
   askNextTxQuestion(msgs);
 }
@@ -6868,7 +7103,12 @@ async function handleTxFlow(text,msgs){
 function showTxConfirmation(msgs){
   var d=txState.data;
   var dmL={jay:'Jay',chari:'Chari',joint:'Joint'}[d.dm]||'Joint';
-  var confirmMsg="Here's what I have:\n\n**"+d.name+"** — **"+fmt(d.amount||0)+"**\nCategory: "+d.category+"\nDecision: "+dmL+"\nDate: "+fmtD(d.date||today(),true)+"\n\nSay **confirm** to log it or **cancel** to start over.";
+  var acctName='—';
+  if(d.account&&d.account!=='none'){
+    var acctObj=ACCOUNTS.find(function(a){return a.id===d.account;});
+    if(acctObj)acctName=acctObj.name;
+  }
+  var confirmMsg="Here's what I have:\n\n**"+d.name+"** — **"+fmt(d.amount||0)+"**\nCategory: "+d.category+"\nDecision: "+dmL+"\nDate: "+fmtD(d.date||today(),true)+"\nAccount: "+acctName+"\n\nSay **confirm** to log it or **cancel** to start over.";
   chatHist.push({role:'assistant',content:confirmMsg});
   var ab=document.createElement('div');ab.className='msg-bubble msg-ai';
   ab.innerHTML=confirmMsg.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--primary)">$1</strong>').replace(/\n/g,'<br/>');
@@ -6877,12 +7117,12 @@ function showTxConfirmation(msgs){
 
 async function finalizeLoggedTx(msgs){
   var d=txState.data;
-  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:d.dm||'joint',name:d.name,amount:d.amount,category:d.category||'Other',transaction_date:d.date||today(),notes:'Logged via Clarity'}).select('*').single();
+  var acctId=(d.account&&d.account!=='none')?d.account:null;
+  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:d.dm||'joint',name:d.name,amount:d.amount,category:d.category||'Other',transaction_date:d.date||today(),notes:'Logged via Clarity',account_id:acctId}).select('*').single();
   if(r.error){var eb=document.createElement('div');eb.className='msg-bubble msg-ai';eb.textContent='Error saving. Try again.';msgs.appendChild(eb);return;}
   TX.unshift(r.data);
-  var newCash=(SET.cash_on_hand||0)-d.amount;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
+  // Apply debit through centralized helper (falls back to joint or cash_on_hand if no account)
+  await applyTransactionToBalance(acctId,d.amount,'debit');
   var dmL={jay:'Jay',chari:'Chari',joint:'Joint'}[d.dm]||'Joint';
   await logAct('transaction_logged',d.name+' '+fmt(d.amount)+' — Decision: '+dmL,'transaction',r.data.id,{amount:d.amount,dm:d.dm});
   sendNotification('transaction_logged',d.name+' — '+fmt(d.amount)+' ('+dmL+')',d.amount);
@@ -7161,6 +7401,7 @@ function showReceiptConfirm(data){
   h+='<div><label class="lbl">Name</label><input class="inp" id="rc-name" value="'+merchantName+'" placeholder="Merchant name"/></div>';
   h+='<div><label class="lbl">Amount</label><input class="inp" type="number" id="rc-amt" value="'+totalAmt+'" placeholder="0.00"/></div>';
   h+='<div><label class="lbl">Date</label><input class="inp" type="date" id="rc-date" value="'+(txDate&&txDate.match(/^\d{4}-\d{2}-\d{2}/)?txDate:today())+'"/></div>';
+  h+='<div><label class="lbl">Paid From Account *</label><select class="sel" id="rc-acct"><option value="">— Select account —</option>'+ACCOUNTS.filter(function(a){return a.is_active;}).map(function(a){return '<option value="'+a.id+'">'+a.name+' ('+fmt(a.balance||0)+')</option>';}).join('')+'</select></div>';
   h+='<div><label class="lbl">Category</label><select class="sel" id="rc-cat">'+CATS.map(function(c){return '<option'+(category===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
   var defaultDM=CU&&UP?UP.first_name.toLowerCase():'jay';
   h+='<div><label class="lbl">Decision Maker</label><div class="tog-wrap"><button class="tog-btn'+(defaultDM==='jay'?' on':'')+'" data-dm="jay" onclick="setReceiptDM(\x27jay\x27,this)">Jay</button><button class="tog-btn'+(defaultDM==='chari'?' on':'')+'" data-dm="chari" onclick="setReceiptDM(\x27chari\x27,this)">Chari</button><button class="tog-btn" data-dm="joint" onclick="setReceiptDM(\x27joint\x27,this)">Joint</button></div></div>';
@@ -7185,25 +7426,25 @@ async function confirmReceipt(){
   var date=document.getElementById('rc-date').value||today();
   var cat=document.getElementById('rc-cat').value;
   var expId=document.getElementById('rc-exp').value;
+  var acctId=document.getElementById('rc-acct').value;
   var msg=document.getElementById('rc-msg');
   if(!name||!amt){msg.style.color='var(--red)';msg.textContent='Name and amount required.';return;}
+  if(!acctId){msg.style.color='var(--red)';msg.textContent='Please select which account this came from.';return;}
   msg.style.color='var(--muted)';msg.textContent='Logging...';
   var receiptItems=window._lastReceiptItems||[];
   var metadata=receiptItems.length>0?{items:receiptItems}:{};
-  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||selectedDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan',metadata:metadata}).select('*').single();
+  var r=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:window._receiptDM||selectedDM||'joint',name:name,amount:amt,category:cat,transaction_date:date,notes:'Receipt scan',metadata:metadata,account_id:acctId}).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
   // Save receipt image to localStorage keyed by transaction id
   if(window._lastReceiptImageData&&r.data&&r.data.id){
     try{localStorage.setItem('receipt_img_'+r.data.id,window._lastReceiptImageData);}catch(e){}
     window._lastReceiptImageData=null;
   }
-  if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
   TX.unshift(r.data);
-  var newCash=(SET.cash_on_hand||0)-amt;
-  await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
-  SET.cash_on_hand=newCash;
-  // Mark bill as paid if matched
-  if(expId){await markPaid(expId);}
+  // Apply debit to selected account through centralized helper
+  await applyTransactionToBalance(acctId,amt,'debit');
+  // Mark bill as paid if matched (uses _payFromAcctId so the account flows through)
+  if(expId){window._payFromAcctId=acctId;await markPaid(expId);}
   await logAct('receipt_scanned',name+' '+fmt(amt)+' — scanned receipt','transaction',r.data.id,{amount:amt});
   sendNotification('receipt_scanned',name+' — '+fmt(amt),amt);
   document.getElementById('receiptModal').remove();
@@ -7491,6 +7732,40 @@ async function updateAccountBalance(acctId,newBalance){
   var r=await sb.from('accounts').update({balance:newBalance,last_synced_at:new Date().toISOString()}).eq('id',acctId).select('*').single();
   if(!r.error){var idx=ACCOUNTS.findIndex(function(a){return a.id===acctId;});if(idx>=0)ACCOUNTS[idx]=r.data;}
 }
+
+// ═══════════════════════════════════════════════════════════════
+// CENTRALIZED BALANCE APPLICATION — single source of truth
+// Every transaction-creating path must call this.
+// effect: 'debit' (subtract from balance) or 'credit' (add to balance)
+// ═══════════════════════════════════════════════════════════════
+async function applyTransactionToBalance(accountId,amount,effect){
+  if(!accountId){
+    // No account specified — fall back to joint account or cash_on_hand
+    var jAcct=getJointAccount();
+    if(jAcct){
+      accountId=jAcct.id;
+    } else {
+      // Last resort: adjust cash_on_hand
+      var delta=effect==='credit'?amount:-amount;
+      var newCash=(SET.cash_on_hand||0)+delta;
+      await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
+      SET.cash_on_hand=newCash;
+      return;
+    }
+  }
+  var acct=ACCOUNTS.find(function(a){return a.id===accountId;});
+  if(!acct)return;
+  var current=acct.balance||0;
+  var newBal=effect==='credit'?current+amount:current-amount;
+  await updateAccountBalance(accountId,newBal);
+}
+
+// Get the Direct Deposit / joint account ID — used as default for income drops
+function getDirectDepositAcctId(){
+  var jAcct=getJointAccount();
+  return jAcct?jAcct.id:null;
+}
+// ═══════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════
 // CSV IMPORT
@@ -8327,5 +8602,6 @@ async function submitPasswordReset(){
   },1500);
 }
 </script>
+
 </body>
 </html>
