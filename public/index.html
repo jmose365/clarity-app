@@ -938,6 +938,107 @@ function isPaidCycle2(exp){
   return exp.paid_cycle_2_month===curMonth;
 }
 function calcSpendable(){return Math.max(0,calcAvailable()-calcEarmarked());}
+
+// ===== FORECASTED INCOME HELPERS =====
+// Certainty weights: confirmed = full value, likely = 80%, possible = 50%
+function incCertaintyWeight(certainty){
+  if(certainty==='confirmed')return 1.0;
+  if(certainty==='likely')return 0.8;
+  if(certainty==='possible')return 0.5;
+  return 1.0; // default to full value if unknown
+}
+
+// Returns weighted income amount expected on a given date
+// Handles one-time (matches expected_date) and recurring (frequency-based)
+function getForecastedIncomeForDate(date){
+  if(!INC||INC.length===0)return {total:0,items:[]};
+  var total=0;var items=[];
+  INC.forEach(function(inc){
+    if(!inc.amount||inc.amount<=0)return;
+    var hits=false;
+    if(inc.is_recurring){
+      if(!inc.expected_date)return;
+      var freq=(inc.frequency||'monthly').toLowerCase();
+      var startD=new Date(inc.expected_date+'T12:00:00');
+      var checkD=new Date(date+'T12:00:00');
+      if(checkD<startD)return;
+      var daysDiff=Math.round((checkD-startD)/86400000);
+      if(freq==='weekly'&&daysDiff%7===0)hits=true;
+      else if(freq==='biweekly'&&daysDiff%14===0)hits=true;
+      else if(freq==='monthly'&&checkD.getDate()===startD.getDate())hits=true;
+      else if(freq==='quarterly'&&checkD.getDate()===startD.getDate()&&((checkD.getMonth()-startD.getMonth())%3===0))hits=true;
+      else if(freq==='yearly'&&checkD.getDate()===startD.getDate()&&checkD.getMonth()===startD.getMonth())hits=true;
+    } else {
+      // One-time income
+      hits=(inc.expected_date===date);
+    }
+    if(hits){
+      var weight=incCertaintyWeight(inc.certainty);
+      var weighted=inc.amount*weight;
+      total+=weighted;
+      items.push({source:inc.source,amount:inc.amount,weighted:weighted,certainty:inc.certainty||'confirmed',is_recurring:!!inc.is_recurring});
+    }
+  });
+  return {total:total,items:items};
+}
+
+// Returns a flat list of upcoming income drops between two dates, weighted
+// Used for AI context — flattens recurring into individual occurrences
+function getUpcomingIncomeWindow(startDate,endDate){
+  if(!INC||INC.length===0)return [];
+  var drops=[];
+  INC.forEach(function(inc){
+    if(!inc.amount||inc.amount<=0)return;
+    if(!inc.expected_date)return;
+    var weight=incCertaintyWeight(inc.certainty);
+    if(!inc.is_recurring){
+      if(inc.expected_date>=startDate&&inc.expected_date<=endDate){
+        drops.push({date:inc.expected_date,source:inc.source,amount:inc.amount,weighted:inc.amount*weight,certainty:inc.certainty||'confirmed',recurring:false});
+      }
+    } else {
+      // Walk forward from expected_date through endDate, emitting hits
+      var freq=(inc.frequency||'monthly').toLowerCase();
+      var d=inc.expected_date;
+      var safety=0;
+      while(d<=endDate&&safety<366){
+        if(d>=startDate){
+          drops.push({date:d,source:inc.source,amount:inc.amount,weighted:inc.amount*weight,certainty:inc.certainty||'confirmed',recurring:true});
+        }
+        if(freq==='weekly')d=addDays(d,7);
+        else if(freq==='biweekly')d=addDays(d,14);
+        else if(freq==='monthly'){var dt=new Date(d+'T12:00:00');dt.setMonth(dt.getMonth()+1);d=dt.toISOString().split('T')[0];}
+        else if(freq==='quarterly'){var dq=new Date(d+'T12:00:00');dq.setMonth(dq.getMonth()+3);d=dq.toISOString().split('T')[0];}
+        else if(freq==='yearly'){var dy=new Date(d+'T12:00:00');dy.setFullYear(dy.getFullYear()+1);d=dy.toISOString().split('T')[0];}
+        else break;
+        safety++;
+      }
+    }
+  });
+  drops.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+  return drops;
+}
+// ===== END FORECASTED INCOME HELPERS =====
+
+// Formats upcoming income drops as a short string for AI prompts
+// horizonDays defaults to 90 if not specified
+function formatUpcomingIncomeForAI(horizonDays){
+  horizonDays=horizonDays||90;
+  var startDate=today();
+  var endDate=addDays(startDate,horizonDays);
+  var drops=getUpcomingIncomeWindow(startDate,endDate);
+  if(drops.length===0)return 'Upcoming additional income: None scheduled.';
+  // Limit to 20 entries to keep prompt focused
+  var capped=drops.slice(0,20);
+  var lines=capped.map(function(d){
+    var w=d.weighted!==d.amount?' (weighted '+fmt(d.weighted)+' at '+d.certainty+')':'';
+    return '  • '+fmtD(d.date,true)+': '+d.source+' '+fmt(d.amount)+w+(d.recurring?' [recurring]':'');
+  });
+  var totalWeighted=drops.reduce(function(s,d){return s+d.weighted;},0);
+  var header='Upcoming additional income (next '+horizonDays+' days, '+drops.length+' drops, '+fmt(totalWeighted)+' weighted total):';
+  if(drops.length>20)lines.push('  • ...and '+(drops.length-20)+' more');
+  return header+'\n'+lines.join('\n');
+}
+
 function calcTotalDueNow(exp){
   var pd=exp.is_past_due?(exp.past_due_amount||0):0;
   var lc=exp.late_charge_amount||0;
@@ -2698,7 +2799,8 @@ async function loadHealthExplanation(elId){
     +'- Monthly bills: '+fmt(monthly)+' | Paycheck: '+fmt(paycheck)+' biweekly\n'
     +'- Past due: '+(pd.length>0?pd.map(function(b){return b.name+' '+fmt(b.past_due_amount||b.amount);}).join(', '):'None')+'\n'
     +'- Active goals: '+activeGoals.length+'\n'
-    +'- Position: '+calcPos().toUpperCase();
+    +'- Position: '+calcPos().toUpperCase()+'\n'
+    +formatUpcomingIncomeForAI(90);
   try{
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,system:sys,messages:[{role:'user',content:prompt}]})});
     var data=await res.json();
@@ -2818,8 +2920,9 @@ async function checkGoalFeasibility(name,amount,saved,date,imp){
     +'Net per paycheck after bills: '+fmt(netPerCheck)+'\n'
     +'Existing goal contributions per check: '+fmt(existingGoalLoad)+'\n'
     +'True available for new goals per check: ~'+fmt(Math.max(0,netPerCheck-existingGoalLoad))+'\n'
-    +'Required per check to hit target date: '+fmt(checksLeft>0?Math.ceil(remaining/checksLeft):remaining)+'\n\n'
-    +'Note: household may currently be Behind (past due bills) but evaluate this goal based on forward-looking net income capacity, not current balance. Is this goal feasible? What should they contribute per check?';
+    +'Required per check to hit target date: '+fmt(checksLeft>0?Math.ceil(remaining/checksLeft):remaining)+'\n'
+    +formatUpcomingIncomeForAI(daysLeft||180)+'\n\n'
+    +'Note: household may currently be Behind (past due bills) but evaluate this goal based on forward-looking net income capacity, not current balance. Factor in any upcoming additional income above. Is this goal feasible? What should they contribute per check?';
   try{
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:sys,messages:[{role:'user',content:prompt}]})});
     var data=await res.json();
@@ -2861,6 +2964,14 @@ function renderFlow(){
     var date=addDays(td,i);var dom=new Date(date+'T12:00:00').getDate();
     var inflow=0,outflow=0,evts=[];
     if(payDates.indexOf(date)>=0){inflow+=paycheck;evts.push({label:'Paycheck',amount:paycheck,type:'income'});}
+    // Forecasted additional income (weighted by certainty)
+    var fcInc=getForecastedIncomeForDate(date);
+    if(fcInc.total>0){
+      inflow+=fcInc.total;
+      fcInc.items.forEach(function(it){
+        evts.push({label:it.source+(it.certainty!=='confirmed'?' ('+it.certainty+')':''),amount:it.weighted,type:'income',forecasted:true,certainty:it.certainty});
+      });
+    }
     EX.forEach(function(exp){
       // Check if arrangement is active and not expired
       var arrActive=exp.arrangement_active&&(!exp.arrangement_expires||exp.arrangement_expires>=date);
@@ -3467,16 +3578,22 @@ function showAddInc(){
   el.innerHTML='<div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">'
     +'<input class="inp" id="ai-src" placeholder="Source (e.g. Side hustle, Refund)"/>'
     +'<div style="display:flex;gap:8px"><input class="inp" type="number" id="ai-amt" placeholder="Amount" style="flex:1"/><input class="inp" type="date" id="ai-date" style="flex:1"/></div>'
-    +'<select class="sel" id="ai-cert"><option value="confirmed">Confirmed</option><option value="likely">Likely</option><option value="possible">Possible</option></select>'
+    +'<select class="sel" id="ai-cert"><option value="confirmed">Confirmed (full value in forecast)</option><option value="likely">Likely (80% in forecast)</option><option value="possible">Possible (50% in forecast)</option></select>'
+    +'<div style="display:flex;gap:8px;align-items:center"><label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ai-recur" onchange="document.getElementById(\x27ai-freq-wrap\x27).style.display=this.checked?\x27block\x27:\x27none\x27"/> Recurring</label></div>'
+    +'<div id="ai-freq-wrap" style="display:none"><select class="sel" id="ai-freq"><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly" selected>Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>'
     +'<div style="display:flex;gap:10px"><button class="btn btn-p" style="flex:1" onclick="addInc()">Add</button><button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\x27addIncForm\x27).innerHTML=\x27\x27">Cancel</button></div>'
     +'<div id="ai-msg" style="font-size:13px;font-weight:500"></div></div>';
 }
 async function addInc(){
   var src=document.getElementById('ai-src').value.trim();var amt=parseFloat(document.getElementById('ai-amt').value)||0;
   var date=document.getElementById('ai-date').value||today();var cert=document.getElementById('ai-cert').value;
+  var isRecur=document.getElementById('ai-recur').checked;
+  var freq=isRecur?document.getElementById('ai-freq').value:null;
   var msg=document.getElementById('ai-msg');
   if(!src||!amt){msg.style.color='var(--red)';msg.textContent='Source and amount required.';return;}
-  var r=await sb.from('additional_income').insert({user_id:CU.id,household_id:HID,source:src,amount:amt,expected_date:date,certainty:cert,is_recurring:false}).select('*').single();
+  var payload={user_id:CU.id,household_id:HID,source:src,amount:amt,expected_date:date,certainty:cert,is_recurring:isRecur};
+  if(isRecur)payload.frequency=freq;
+  var r=await sb.from('additional_income').insert(payload).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error.';return;}
   INC.unshift(r.data);await logAct('income_added',src+' '+fmt(amt)+' added','income',r.data.id,{amount:amt});renderLedger();
 }
@@ -4073,9 +4190,14 @@ function renderWhatIfSandbox(){
   });
   h+='</div>';
 
+  // Calculate already-forecasted monthly income from INC table for sandbox baseline context
+  var fc30=getUpcomingIncomeWindow(today(),addDays(today(),30));
+  var fc30Total=fc30.reduce(function(s,d){return s+d.weighted;},0);
+  var fcHint=fc30Total>0?' · '+fmt(fc30Total)+' already forecasted next 30d':'';
+
   // Sliders
   h+='<div id="sb-sliders" style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px">';
-  h+=sbSlider('extraIncome','💵 Additional Monthly Income',0,5000,100,_sandbox.extraIncome,'income','+'+fmt(paycheck*2)+'/mo current');
+  h+=sbSlider('extraIncome','💵 Additional Monthly Income',0,5000,100,_sandbox.extraIncome,'income','Beyond paychecks ('+fmt(paycheck*2)+'/mo)'+fcHint);
   h+=sbSlider('subAdj','📱 Subscriptions Adjustment',-Math.max(100,Math.round(subs)),Math.round(subs||500),50,_sandbox.subAdj,'expense','Current: '+fmt(subs)+'/mo · negative = cut');
   h+=sbSlider('foodAdj','🍔 Food & Drinks Adjustment',-Math.max(100,Math.round(food)),Math.round(food||500),50,_sandbox.foodAdj,'expense','Current: '+fmt(food)+'/mo · negative = spend less');
   h+=sbSlider('housingAdj','🏠 Housing Adjustment',-Math.max(100,Math.round(housing)),Math.round(housing||1000),50,_sandbox.housingAdj,'expense','Current: '+fmt(housing)+'/mo · negative = lower rent');
@@ -4143,15 +4265,17 @@ function calcSandboxResults(){
     return (a.importance==='need'?0:a.importance==='want'?1:2)-(b.importance==='need'?0:b.importance==='want'?1:2);
   })[0];
 
-  // Adjusted figures
-  var adjMonthlyIncome=(paycheck*2)+_sandbox.extraIncome;
+  // Adjusted figures — include forecasted income from INC table as part of baseline monthly income
+  var fcWindow=getUpcomingIncomeWindow(today(),addDays(today(),30));
+  var fcMonthlyBase=fcWindow.reduce(function(s,d){return s+d.weighted;},0);
+  var adjMonthlyIncome=(paycheck*2)+fcMonthlyBase+_sandbox.extraIncome;
   var adjMonthlyExpenses=monthly+_sandbox.subAdj+_sandbox.foodAdj+_sandbox.housingAdj+_sandbox.newExpense;
   var adjMonthlyNet=adjMonthlyIncome-adjMonthlyExpenses;
   var adjNetPerCheck=adjMonthlyNet/2;
   var adjSpendable=Math.max(0,(available-(earmarked+(_sandbox.subAdj+_sandbox.foodAdj+_sandbox.housingAdj+_sandbox.newExpense)/2)));
 
-  // Current figures
-  var currentNet=(paycheck*2)-monthly;
+  // Current figures (baseline includes forecasted income at full weighted value)
+  var currentNet=(paycheck*2)+fcMonthlyBase-monthly;
   var currentSpendable=calcSpendable();
   var currentPos=calcPos();
 
@@ -5136,6 +5260,14 @@ function renderPlan(){
     var date=addDays(td,i);var dom=new Date(date+'T12:00:00').getDate();
     var inflow=0,outflow=0,evts=[];
     if(payDates.indexOf(date)>=0){inflow+=paycheck;evts.push({label:'Paycheck',type:'income',amount:paycheck});}
+    // Forecasted additional income (weighted by certainty)
+    var fcIncP=getForecastedIncomeForDate(date);
+    if(fcIncP.total>0){
+      inflow+=fcIncP.total;
+      fcIncP.items.forEach(function(it){
+        evts.push({label:it.source+(it.certainty!=='confirmed'?' ('+it.certainty+')':''),type:'income',amount:it.weighted,forecasted:true,certainty:it.certainty});
+      });
+    }
     EX.forEach(function(exp){
       var arrActive=exp.arrangement_active&&(!exp.arrangement_expires||exp.arrangement_expires>=date);
       if(arrActive){
@@ -5526,7 +5658,8 @@ async function openClarityPlanAdvice(pid){
     +'Monthly bills: '+fmt(monthly)+'\n'
     +'Past due: '+fmt(pdTotal)+'\n'
     +'Paychecks until target date: '+checksLeft+'\n'
-    +'Per-check capacity (bills-only net): '+fmt(paycheck-(monthly/2));
+    +'Per-check capacity (bills-only net): '+fmt(paycheck-(monthly/2))+'\n'
+    +formatUpcomingIncomeForAI(Math.max(90,daysUntil(p.target_date)||90));
 
   try{
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:sys,messages:[{role:'user',content:prompt}]})});
@@ -6609,6 +6742,7 @@ async function sendMsg(text,fromInput){
     +'- Active goals: '+(activeGoals.length>0?activeGoals.map(function(g){return g.name+' ('+Math.round(g.current_amount/g.target_amount*100)+'% — '+g.importance+')';}).join(', '):'None')+'\n'
     +'- THREE-PAYCHECK MONTHS THIS YEAR: '+(threeCheckMonthsNow.length>0?threeCheckMonthsNow.join(', '):'None detected')+'\n'
     +'- CURRENTLY IN 3-CHECK MONTH: '+(inThreeCheckNow?'YES — extra '+fmt(UP.paycheck_amount||0)+' this month. Bills already covered by first 2 checks. This check is available for goals.':'No')+'\n\n'
+    +formatUpcomingIncomeForAI(180)+'\n\n'
     +'ALL ACCOUNTS:\n'
     +ACCOUNTS.filter(function(a){return a.is_active;}).map(function(a){return '- '+a.name+': '+fmt(a.balance||0)+' ('+a.account_purpose+')';}).join('\n')+'\n\n'
     +'KEY CONCEPTS:\n'
