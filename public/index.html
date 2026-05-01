@@ -634,20 +634,67 @@ var GOAL_TYPES=['Nest Egg','Vacation','Emergency Fund','New Car','Home Down Paym
 var wtActive=false;
 var wtStep=0;
 var wtDontShowAgain=false;
-var WALKTHROUGH_STEPS=[
-  {selector:'#topPill',eyebrow:'Step 1 of 9',title:'Your Position',body:'This pill shows where you stand. Behind, Current, On Track, or Ahead. Tap it anytime to see what it would take to move up.',placement:'below'},
-  {selector:'#userAv',eyebrow:'Step 2 of 9',title:'Your Profile',body:'Your initial. Tap here to access settings, edit your profile, replay this tour, or sign out.',placement:'below'},
-  {selector:'.hero',eyebrow:'Step 3 of 9',title:'Your Available Balance',body:'The big number is what is in your account right now. Earmarked is money already promised to bills. Spendable is what is truly yours to spend freely. Tap Update to enter your real bank balance.',placement:'below'},
-  {selector:'#nav-home',eyebrow:'Step 4 of 9',title:'Home',body:'Where you are right now. Your balance, the recovery roadmap, what is past due, what is coming up this week, and any check-in prompts for today.',placement:'above'},
-  {selector:'#nav-ledger',eyebrow:'Step 5 of 9',title:'Ledger',body:'Every bill, every paycheck, every transaction. Mark bills paid here, earmark money for upcoming bills, and review every dollar in or out.',placement:'above'},
-  {selector:'#nav-goals',eyebrow:'Step 6 of 9',title:'Goals',body:'Vacations, emergency funds, holidays, anything you are saving toward. Set a target, log contributions, and watch progress build.',placement:'above'},
-  {selector:'#nav-plan',eyebrow:'Step 7 of 9',title:'Plan',body:'Future expenses you know are coming, like a birthday party, a trip, or a car repair. Plan ahead, save toward them, and avoid surprises.',placement:'above'},
-  {selector:'#nav-insights',eyebrow:'Step 8 of 9',title:'Insights',body:'Six views of your finances most apps never show. Spending trends, recovery velocity, budget vs actual, and a what-if sandbox to model changes before making them.',placement:'above'},
-  {selector:'#clarityFab',eyebrow:'Step 9 of 9',title:'Clarity AI',body:'Your financial coach. Ask anything, log a transaction by talking to it, scan a receipt, or get a personalized plan. Tap this from anywhere in the app.',placement:'left'}
-];
+var wtCurrentTour='main'; // which tour is active
+
+var WT_TOURS={
+  main:{
+    storageKey:'clarity_walkthrough_done_',
+    profileFlag:'walkthrough_completed',
+    steps:[
+      {selector:'#topPill',title:'Your Position',body:'This pill shows where you stand. Behind, Current, On Track, or Ahead. Tap it anytime to see what it would take to move up.',placement:'below'},
+      {selector:'#userAv',title:'Your Profile',body:'Your initial. Tap here to access settings, edit your profile, replay this tour, or sign out.',placement:'below'},
+      {selector:'.hero',title:'Your Available Balance',body:'The big number is what is in your account right now. Earmarked is money already promised to bills. Spendable is what is truly yours to spend freely. Tap Update to enter your real bank balance.',placement:'below'},
+      {selector:'#nav-home',title:'Home',body:'Where you are right now. Your balance, the recovery roadmap, what is past due, what is coming up this week, and any check-in prompts for today.',placement:'above'},
+      {selector:'#nav-ledger',title:'Ledger',body:'Every bill, every paycheck, every transaction. Mark bills paid here, earmark money for upcoming bills, and review every dollar in or out.',placement:'above'},
+      {selector:'#nav-goals',title:'Goals',body:'Vacations, emergency funds, holidays, anything you are saving toward. Set a target, log contributions, and watch progress build.',placement:'above'},
+      {selector:'#nav-plan',title:'Plan',body:'Future expenses you know are coming, like a birthday party, a trip, or a car repair. Plan ahead, save toward them, and avoid surprises.',placement:'above'},
+      {selector:'#nav-insights',title:'Insights',body:'Six views of your finances most apps never show. Spending trends, recovery velocity, budget vs actual, and a what-if sandbox to model changes before making them.',placement:'above'},
+      {selector:'#clarityFab',title:'Clarity AI',body:'Your financial coach. Ask anything, log a transaction by talking to it, scan a receipt, or get a personalized plan. Tap this from anywhere in the app.',placement:'left'}
+    ]
+  },
+  ledger:{
+    storageKey:'clarity_tour_ledger_',
+    requiredTab:'ledger',
+    steps:[
+      {selector:'#tab-ledger .ph',title:'Welcome to the Ledger',body:'This is where every bill, paycheck, and transaction lives. The hub for managing the money flowing in and out of your household.',placement:'below'},
+      {selector:'#ledger-view-toggle',title:'Three Views',body:'Toggle between Expenses (your bills and recurring costs), Income (paychecks and side income), and Transactions (every individual purchase or deposit).',placement:'below'},
+      {selector:'#ledger-summary',title:'Quick Stats',body:'Your total monthly bills, anything past due, and how many bills currently have money earmarked for them. A quick health check at the top.',placement:'below'},
+      {selector:'#ledger-filters',title:'Filter by Category',body:'Tap any category pill to focus the list. Useful when you want to see just your subscriptions, just utilities, or just whatever is eating your check.',placement:'below'}
+    ]
+  },
+  goals:{
+    storageKey:'clarity_tour_goals_',
+    requiredTab:'goals',
+    steps:[
+      {selector:'#tab-goals .ph',title:'Welcome to Goals',body:'This is where you save toward the things that matter. Vacations, emergency funds, holidays, anything you want to build toward.',placement:'below'},
+      {selector:'#goals-hero',title:'Your Savings Picture',body:'Total saved across all your goals, your nest egg, and the share of progress against your overall target. Updates as you log contributions.',placement:'below'},
+      {selector:'#goals-add-btn',title:'Add a Goal',body:'Tap here to create a new goal. Set the type, the target amount, and a target date. Clarity will tell you what you need to save each pay period to hit it.',placement:'below'}
+    ]
+  },
+  plan:{
+    storageKey:'clarity_tour_plan_',
+    requiredTab:'plan',
+    steps:[
+      {selector:'#tab-plan .ph',title:'Welcome to Plan',body:'For future expenses you know are coming. A birthday party, a car repair, a vacation. Plan now, save toward it, and avoid being blindsided.',placement:'below'},
+      {selector:'#plan-add-btn',title:'Add a Planned Expense',body:'Set the name, target date, and estimated amount. Clarity slots it into your cash flow forecast and shows what to set aside each pay period to be ready.',placement:'below'}
+    ]
+  },
+  insights:{
+    storageKey:'clarity_tour_insights_',
+    requiredTab:'insights',
+    steps:[
+      {selector:'#tab-insights .ph',title:'Welcome to Insights',body:'Six views of your finances most apps never show. Each card answers a question that helps you understand patterns and make better decisions.',placement:'below'},
+      {selector:'#insights-card-1',title:'Paycheck Erosion',body:'How much of your check is gone before it even hits, claimed by bills due near payday. Lower is better. High erosion explains why money feels like it evaporates.',placement:'below'},
+      {selector:'#insights-card-2',title:'Bill-to-Income Ratio',body:'What share of your income goes to bills. Above 90% means one missed check creates a crisis. The lower this is, the more breathing room you have.',placement:'above'}
+    ]
+  }
+};
+
+function getCurrentTourSteps(){return (WT_TOURS[wtCurrentTour]||WT_TOURS.main).steps;}
 
 function startWalkthrough(){
   if(wtActive)return;
+  wtCurrentTour='main';
   wtActive=true;wtStep=0;wtDontShowAgain=false;
   document.getElementById('walkthroughOverlay').classList.add('on');
   goTab('home');
@@ -655,13 +702,26 @@ function startWalkthrough(){
   window.addEventListener('resize',wtResize);
   window.addEventListener('scroll',wtResize,true);
 }
+
+function startTabTour(tourName){
+  if(wtActive)return;
+  if(!WT_TOURS[tourName])return;
+  wtCurrentTour=tourName;
+  wtActive=true;wtStep=0;wtDontShowAgain=false;
+  document.getElementById('walkthroughOverlay').classList.add('on');
+  setTimeout(function(){showWalkthroughStep(0);},200);
+  window.addEventListener('resize',wtResize);
+  window.addEventListener('scroll',wtResize,true);
+}
+
 function wtResize(){if(wtActive)showWalkthroughStep(wtStep);}
 
 function showWalkthroughStep(i){
   if(!wtActive)return;
-  if(i<0||i>=WALKTHROUGH_STEPS.length){finishWalkthrough(false);return;}
+  var steps=getCurrentTourSteps();
+  if(i<0||i>=steps.length){finishWalkthrough(false);return;}
   wtStep=i;
-  var step=WALKTHROUGH_STEPS[i];
+  var step=steps[i];
   var target=document.querySelector(step.selector);
   if(!target){showWalkthroughStep(i+1);return;}
   var rect=target.getBoundingClientRect();
@@ -684,15 +744,16 @@ function showWalkthroughStep(i){
     +'<rect width="100%" height="100%" fill="rgba(15,23,42,0.72)" mask="url(#wtCutout)"/>'
     +'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+radius+'" ry="'+radius+'" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2"/>';
   var callout=document.getElementById('wtCallout');
-  var isLast=i===WALKTHROUGH_STEPS.length-1;
+  var isLast=i===steps.length-1;
+  var eyebrow='Step '+(i+1)+' of '+steps.length;
   callout.innerHTML=
-    '<div class="wt-callout-eye">'+step.eyebrow+'</div>'
+    '<div class="wt-callout-eye">'+eyebrow+'</div>'
     +'<div class="wt-callout-title">'+step.title+'</div>'
     +'<div class="wt-callout-body">'+step.body+'</div>'
     +(isLast?'<div class="wt-final-row"><div class="wt-checkbox'+(wtDontShowAgain?' on':'')+'" id="wtDontShow" onclick="toggleWtDontShow()"></div><label onclick="toggleWtDontShow()" style="cursor:pointer">Don\u0027t show me this again</label></div>':'')
     +'<div class="wt-callout-controls">'
     +'<div class="wt-progress">'
-    +WALKTHROUGH_STEPS.map(function(s,idx){return '<div class="wt-dot'+(idx===i?' on':'')+'"></div>';}).join('')
+    +steps.map(function(s,idx){return '<div class="wt-dot'+(idx===i?' on':'')+'"></div>';}).join('')
     +'</div>'
     +'<div class="wt-btns">'
     +(i>0?'<button class="wt-btn wt-btn-back" onclick="prevWalkthroughStep()">Back</button>':'')
@@ -734,7 +795,8 @@ function showWalkthroughStep(i){
 }
 
 function nextWalkthroughStep(){
-  if(wtStep>=WALKTHROUGH_STEPS.length-1){finishWalkthrough(wtDontShowAgain);}
+  var steps=getCurrentTourSteps();
+  if(wtStep>=steps.length-1){finishWalkthrough(wtDontShowAgain);}
   else {showWalkthroughStep(wtStep+1);}
 }
 function prevWalkthroughStep(){if(wtStep>0)showWalkthroughStep(wtStep-1);}
@@ -747,29 +809,53 @@ function toggleWtDontShow(){
   if(el){if(wtDontShowAgain)el.classList.add('on');else el.classList.remove('on');}
 }
 async function finishWalkthrough(persist){
+  var tour=WT_TOURS[wtCurrentTour]||WT_TOURS.main;
   wtActive=false;
   document.getElementById('walkthroughOverlay').classList.remove('on');
   window.removeEventListener('resize',wtResize);
   window.removeEventListener('scroll',wtResize,true);
-  if(persist&&CU){
+  // Always mark this tour as completed locally — auto-launch should not repeat
+  if(CU){
+    try{localStorage.setItem(tour.storageKey+CU.id,'1');}catch(e){}
+  }
+  // For the main tour with persist=true, also try to save to user_profiles
+  if(persist&&wtCurrentTour==='main'&&CU){
     try{
       var r=await sb.from('user_profiles').update({walkthrough_completed:true}).eq('id',CU.id);
-      if(r.error){
-        try{localStorage.setItem('clarity_walkthrough_done_'+CU.id,'1');}catch(e){}
-      } else if(UP){UP.walkthrough_completed=true;}
-    } catch(e){
-      try{localStorage.setItem('clarity_walkthrough_done_'+CU.id,'1');}catch(e2){}
-    }
+      if(!r.error&&UP){UP.walkthrough_completed=true;}
+    } catch(e){}
   }
+  wtCurrentTour='main';
 }
 function hasCompletedWalkthrough(){
   if(!CU)return true;
   if(UP&&UP.walkthrough_completed)return true;
   try{return localStorage.getItem('clarity_walkthrough_done_'+CU.id)==='1';}catch(e){return false;}
 }
+function hasCompletedTabTour(tourName){
+  if(!CU)return true;
+  var tour=WT_TOURS[tourName];
+  if(!tour)return true;
+  try{return localStorage.getItem(tour.storageKey+CU.id)==='1';}catch(e){return false;}
+}
 function replayWalkthrough(){
   try{localStorage.removeItem('clarity_walkthrough_done_'+CU.id);}catch(e){}
   startWalkthrough();
+}
+function replayTabTour(tourName){
+  var tour=WT_TOURS[tourName];if(!tour)return;
+  try{localStorage.removeItem(tour.storageKey+CU.id);}catch(e){}
+  // Make sure we are on the right tab before launching
+  if(tour.requiredTab){goTab(tour.requiredTab);setTimeout(function(){startTabTour(tourName);},300);}
+  else {startTabTour(tourName);}
+}
+function maybeAutoStartTabTour(tabId){
+  // Don't run if main tour hasn't been done yet, or if any walkthrough is active
+  if(wtActive||!hasCompletedWalkthrough())return;
+  var map={ledger:'ledger',goals:'goals',plan:'plan',insights:'insights'};
+  var tourName=map[tabId];if(!tourName)return;
+  if(hasCompletedTabTour(tourName))return;
+  setTimeout(function(){startTabTour(tourName);},400);
 }
 // ===== END WALKTHROUGH =====
 
@@ -1224,6 +1310,8 @@ function goTab(id,btn){
   else if(id==='activity')renderActivity();
   else if(id==='insights')renderInsights();
   else if(id==='settings')renderSettings();
+  // Auto-launch tab tour for first-time visitors to this tab
+  if(typeof maybeAutoStartTabTour==='function')maybeAutoStartTabTour(id);
 }
 
 // EARMARK ACTIVATION — runs after CSV import to mark earmarked bills as active
@@ -3009,19 +3097,19 @@ function renderLedger(){
   var filtered=filterCat==='All'?EX:EX.filter(function(e){return e.category===filterCat;});
 
   var html='<div class="ph"><div class="ph-eye">Ledger</div><div class="ph-title">Bills & Income</div><div class="ph-sub">Earmark, pay, and manage every expense. Synced for both of you.</div></div>';
-  html+='<div style="display:flex;gap:8px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:18px">';
+  html+='<div id="ledger-view-toggle" style="display:flex;gap:8px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:18px">';
   ['expenses','income','transactions'].forEach(function(v){
     html+='<button onclick="setLV(\x27'+v+'\x27)" style="flex:1;padding:10px 0;border-radius:8px;font-size:12px;font-weight:600;border:none;background:'+(ledgerView===v?'var(--surface)':'transparent')+';color:'+(ledgerView===v?'var(--primary)':'var(--muted)')+';box-shadow:'+(ledgerView===v?'var(--shadow)':'none')+';cursor:pointer;text-transform:capitalize">'+v+'</button>';
   });
   html+='</div>';
 
   if(ledgerView==='expenses'){
-    html+='<div class="g3" style="margin-bottom:16px">';
+    html+='<div id="ledger-summary" class="g3" style="margin-bottom:16px">';
     html+='<div class="mc"><div class="lbl" style="margin-bottom:4px">Monthly</div><div style="font-size:1.2rem;font-weight:800">'+fmt(total)+'</div></div>';
     html+='<div class="mc" style="background:'+(pdCount>0?'var(--rl)':'var(--gl)')+';border-color:'+(pdCount>0?'rgba(239,68,68,0.2)':'rgba(34,197,94,0.2)')+'"><div class="lbl" style="margin-bottom:4px">Past Due</div><div style="font-size:1.2rem;font-weight:800;color:'+(pdCount>0?'var(--red)':'var(--green)')+'">'+( pdCount>0?pdCount:'\u2713')+'</div></div>';
     html+='<div class="mc" style="background:var(--al);border-color:rgba(245,158,11,0.2)"><div class="lbl" style="margin-bottom:4px">Earmarked</div><div style="font-size:1.2rem;font-weight:800;color:var(--amber)">'+(emCount>0?emCount:'—')+'</div></div>';
     html+='</div>';
-    html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
+    html+='<div id="ledger-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
     ['All'].concat(CATS).forEach(function(cat){html+='<button onclick="setCF(\x27'+cat+'\x27)" class="fp'+(filterCat===cat?' on':'')+'">'+cat+'</button>';});
     html+='</div>';
     filtered.forEach(function(exp){html+=renderExpRow(exp);});
@@ -4719,7 +4807,7 @@ function renderGoals(){
   var html='<div class="ph"><div class="ph-eye">Goals & Savings</div><div class="ph-title">Your <span style="color:var(--primary)">Savings</span> Picture</div><div class="ph-sub">All goals combined, contribution history, and your nest egg.</div></div>';
 
   // SAVINGS HERO CARD
-  html+='<div class="card" style="margin-bottom:14px;padding:20px">';
+  html+='<div id="goals-hero" class="card" style="margin-bottom:14px;padding:20px">';
 
   // Total saved number
   html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">';
@@ -4799,7 +4887,7 @@ function renderGoals(){
   }
 
   // Add goal button
-  html+='<button onclick="showAddGoal()" class="btn btn-p" style="margin-bottom:14px">+ Add New Goal</button>';
+  html+='<button id="goals-add-btn" onclick="showAddGoal()" class="btn btn-p" style="margin-bottom:14px">+ Add New Goal</button>';
   html+='<div id="addGoalForm"></div>';
 
   // Active goals
@@ -5042,7 +5130,7 @@ function renderPlan(){
   var html='<div class="ph"><div class="ph-eye">Plan</div><div class="ph-title">Future <span style="color:var(--primary)">Expenses</span> & Forecast</div><div class="ph-sub">Plan big expenses, budget for them, and see the impact on your cash flow.</div></div>';
 
   // ADD PLANNED EXPENSE BUTTON
-  html+='<button onclick="openAddPlan()" class="btn btn-p" style="margin-bottom:16px">+ Add Planned Expense</button>';
+  html+='<button id="plan-add-btn" onclick="openAddPlan()" class="btn btn-p" style="margin-bottom:16px">+ Add Planned Expense</button>';
 
   // PLANNED EXPENSES LIST
   var upcoming=PLAN.filter(function(p){return !p.is_funded;}).sort(function(a,b){return a.target_date>b.target_date?1:-1;});
@@ -5601,7 +5689,7 @@ function renderInsights(){
   var gapDays=Object.entries(dayTotals).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
 
   function ibar(val,max,color){var p=Math.min((val/Math.max(max,1))*100,100);return '<div class="bar-t"><div class="bar-f" style="width:'+p+'%;background:'+color+'"></div></div>';}
-  function iCard(num,title,content){return '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div class="ins-num">'+num+'</div><div style="font-size:15px;font-weight:700">'+title+'</div></div>'+content+'</div>';}
+  function iCard(num,title,content,id){return '<div'+(id?' id="'+id+'"':'')+' class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div class="ins-num">'+num+'</div><div style="font-size:15px;font-weight:700">'+title+'</div></div>'+content+'</div>';}
 
   var html='<div class="ph"><div class="ph-eye">Insights</div><div class="ph-title">What Your Numbers <span style="color:var(--primary)">Reveal</span></div><div class="ph-sub">Six views of your finances most apps never show you.</div></div>';
   html+=acctBanner;
@@ -5610,7 +5698,7 @@ function renderInsights(){
     '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><div style="font-size:3rem;font-weight:800;color:'+eColor+';line-height:1;letter-spacing:-.03em">'+erosionPct+'<span style="font-size:1.5rem">%</span></div><div style="font-size:13px;color:var(--text2);margin-top:4px">of your check committed before it arrives</div></div><div style="text-align:right"><div class="lbl">Auto-committed</div><div style="font-size:1.3rem;font-weight:800;color:var(--red)">'+fmt(erosionTotal)+'</div></div></div>'
     +'<div style="height:10px;background:var(--bg);border-radius:99px;overflow:hidden;position:relative;margin-bottom:10px"><div style="position:absolute;inset:0;background:var(--gh);border-radius:99px"></div><div style="position:absolute;top:0;right:0;bottom:0;width:'+(100-erosionPct)+'%;background:var(--bg);border-radius:0 99px 99px 0"></div></div>'
     +'<div style="font-size:12px;color:var(--text2);line-height:1.5;padding:10px 14px;background:var(--bg);border-radius:10px">'+(erosionPct>50?'More than half your check is gone before you see it — this creates the feeling money evaporates immediately.':'Low erosion means most of your check is available when it lands. Protect this.')+'</div>'
-  );
+  ,'insights-card-1');
 
   // CARD 2 — Bill-to-Income Ratio (replaces Gap Map)
   var btiRatio=monthlyPay>0?Math.round((monthly/monthlyPay)*100):0;
@@ -5650,7 +5738,7 @@ function renderInsights(){
     btiH+='</div>';
   });
 
-  html+=iCard(2,'Bill-to-Income Ratio',btiH);
+  html+=iCard(2,'Bill-to-Income Ratio',btiH,'insights-card-2');
 
   // CARD 3 — Income Ceiling vs Expense Floor — visual bar rebuild
   var ceilH='';
@@ -6199,6 +6287,10 @@ function renderSettings(){
    {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
    {label:'Manage Budgets',sub:'Set monthly category budgets — Clarity suggests from your history',icon:'💰',fn:'openBudgetManager()'},
    {label:'Replay App Tour',sub:'Take the guided walkthrough again',icon:'🎬',fn:'replayWalkthrough()'},
+   {label:'Replay Ledger Tour',sub:'Walkthrough of the Ledger tab',icon:'📒',fn:'replayTabTour(\x27ledger\x27)'},
+   {label:'Replay Goals Tour',sub:'Walkthrough of the Goals tab',icon:'🎯',fn:'replayTabTour(\x27goals\x27)'},
+   {label:'Replay Plan Tour',sub:'Walkthrough of the Plan tab',icon:'🗓️',fn:'replayTabTour(\x27plan\x27)'},
+   {label:'Replay Insights Tour',sub:'Walkthrough of the Insights tab',icon:'📊',fn:'replayTabTour(\x27insights\x27)'},
   ].forEach(function(item,i,arr){
     html+='<div onclick="'+item.fn+'" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-bottom:'+(i<arr.length-1?'1px solid var(--bl)':'none')+'">';
     html+='<div style="width:36px;height:36px;border-radius:10px;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+item.icon+'</div>';
