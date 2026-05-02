@@ -1039,6 +1039,218 @@ function formatUpcomingIncomeForAI(horizonDays){
   return header+'\n'+lines.join('\n');
 }
 
+// ===== GOAL IMPACT REVIEW SYSTEM =====
+// Pure calculator: given a snapshot, returns per-goal feasibility for before/after diffs.
+function calcGoalsFeasibility(snap){
+  var paycheck=snap.paycheck||0;
+  var td=snap.today;
+  var allPayDates=(snap.payDates||[]).filter(function(d){return d>=td;}).sort();
+  var endH=addDays(td,1095);
+  if(allPayDates.length>0){
+    var lastP=allPayDates[allPayDates.length-1];
+    while(lastP<endH){lastP=addDays(lastP,14);allPayDates.push(lastP);}
+  }
+  var billsPerPeriod=0;
+  (snap.EX||[]).forEach(function(e){
+    if(!e.amount)return;
+    var cycle=e.pay_cycle||'monthly';
+    if(cycle==='monthly')billsPerPeriod+=e.amount/2.166;
+    else if(cycle==='biweekly')billsPerPeriod+=e.amount;
+    else if(cycle==='weekly')billsPerPeriod+=e.amount*2;
+  });
+  var activeGoals=(snap.GOALS||[]).filter(function(g){return !g.is_complete;});
+  return activeGoals.map(function(g){
+    var remaining=Math.max(0,(g.target_amount||0)-(g.current_amount||0));
+    var periodsLeft=null;
+    if(g.target_date){
+      periodsLeft=allPayDates.filter(function(d){return d>=td&&d<=g.target_date;}).length;
+      if(periodsLeft===0){
+        var daysL=Math.max(1,Math.round((new Date(g.target_date+'T12:00:00')-new Date())/86400000));
+        periodsLeft=Math.max(1,Math.floor(daysL/14));
+      }
+    }
+    var requiredPerCheck=periodsLeft&&periodsLeft>0?Math.ceil(remaining/periodsLeft):remaining;
+    var current=g.contribution_per_paycheck||0;
+    var gap=Math.max(0,requiredPerCheck-current);
+    var status;
+    if(remaining<=0)status='complete';
+    else if(!g.target_date)status='no_date';
+    else if(current===0&&requiredPerCheck>0)status='not_set';
+    else if(current>=requiredPerCheck)status='on_track';
+    else if(gap<=requiredPerCheck*0.2)status='slightly_short';
+    else status='short';
+    var optKeepDate={action:'increase_contribution',newPerCheck:requiredPerCheck,delta:requiredPerCheck-current};
+    var newPeriodsNeeded=current>0?Math.ceil(remaining/current):null;
+    var newTargetDate=null;
+    if(newPeriodsNeeded&&allPayDates.length>=newPeriodsNeeded){
+      newTargetDate=allPayDates[newPeriodsNeeded-1];
+    }
+    var optPushDate={action:'push_date',newTargetDate:newTargetDate,keepContribution:current};
+    var feasibleTarget=current*(periodsLeft||0)+(g.current_amount||0);
+    var optLowerTarget={action:'lower_target',newTarget:feasibleTarget,keepDate:g.target_date,keepContribution:current};
+    return {
+      id:g.id,name:g.name,
+      target:g.target_amount||0,current:g.current_amount||0,remaining:remaining,
+      targetDate:g.target_date,periodsLeft:periodsLeft,
+      requiredPerCheck:requiredPerCheck,currentPerCheck:current,gap:gap,
+      status:status,importance:g.importance,
+      options:{keepDate:optKeepDate,pushDate:optPushDate,lowerTarget:optLowerTarget}
+    };
+  });
+}
+
+function snapshotForGoalImpact(){
+  return {
+    EX:EX.map(function(e){return Object.assign({},e);}),
+    INC:INC.map(function(i){return Object.assign({},i);}),
+    PLAN:PLAN.map(function(p){return Object.assign({},p);}),
+    GOALS:GOALS.map(function(g){return Object.assign({},g);}),
+    paycheck:UP.paycheck_amount||0,
+    payDates:getArr(UP.pay_dates),
+    available:calcAvailable(),
+    today:today()
+  };
+}
+
+// Diff before/after — material if status changed OR requiredPerCheck shifted by ≥$25
+function diffGoalImpact(beforeFeasibility,afterFeasibility){
+  var diffs=[];
+  afterFeasibility.forEach(function(after){
+    var before=beforeFeasibility.find(function(b){return b.id===after.id;});
+    if(!before)return;
+    var statusChanged=before.status!==after.status;
+    var reqDelta=Math.abs(after.requiredPerCheck-before.requiredPerCheck);
+    if(statusChanged||reqDelta>=25){
+      diffs.push({
+        id:after.id,name:after.name,
+        before:before,after:after,
+        statusChanged:statusChanged,
+        reqDelta:after.requiredPerCheck-before.requiredPerCheck,
+        targetDate:after.targetDate,target:after.target,importance:after.importance
+      });
+    }
+  });
+  return diffs;
+}
+
+var _pendingGoalImpact={baseSnapshot:null,beforeFeasibility:null,timer:null,changeDescriptions:[]};
+
+function beginGoalImpactWatch(changeDesc){
+  if(!_pendingGoalImpact.baseSnapshot){
+    _pendingGoalImpact.baseSnapshot=snapshotForGoalImpact();
+    _pendingGoalImpact.beforeFeasibility=calcGoalsFeasibility(_pendingGoalImpact.baseSnapshot);
+  }
+  _pendingGoalImpact.changeDescriptions.push(changeDesc);
+  if(_pendingGoalImpact.timer)clearTimeout(_pendingGoalImpact.timer);
+  _pendingGoalImpact.timer=setTimeout(function(){finalizeGoalImpactReview();},1500);
+}
+
+function finalizeGoalImpactReview(){
+  if(!_pendingGoalImpact.baseSnapshot)return;
+  var afterSnap=snapshotForGoalImpact();
+  var afterFeas=calcGoalsFeasibility(afterSnap);
+  var diffs=diffGoalImpact(_pendingGoalImpact.beforeFeasibility,afterFeas);
+  var changeDescriptions=_pendingGoalImpact.changeDescriptions.slice();
+  _pendingGoalImpact={baseSnapshot:null,beforeFeasibility:null,timer:null,changeDescriptions:[]};
+  if(diffs.length===0)return;
+  openGoalImpactReviewModal(diffs,changeDescriptions);
+}
+
+function openGoalImpactReviewModal(diffs,changeDescriptions){
+  var existing=document.getElementById('goalImpactModal');if(existing)existing.remove();
+  var m=document.createElement('div');m.className='modal-ov';m.id='goalImpactModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)acknowledgeGoalImpact();};
+  var h='<div class="modal" style="max-width:520px"><div class="modal-handle"></div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:4px;color:var(--text)">Goal Impact Review</div>';
+  h+='<div style="font-size:12px;color:var(--muted);margin-bottom:14px">'+changeDescriptions.join(' · ')+'</div>';
+  diffs.forEach(function(d){
+    var statusLabel={complete:'Complete',no_date:'No target date',not_set:'No contribution set',on_track:'On track',slightly_short:'Slightly short',short:'Short'};
+    var statusColor={on_track:'var(--green)',slightly_short:'var(--amber)',short:'var(--red)',not_set:'var(--red)',no_date:'var(--muted)',complete:'var(--green)'};
+    var deltaTxt=d.reqDelta>0?'+'+fmt(d.reqDelta)+'/check needed':d.reqDelta<0?fmt(d.reqDelta)+'/check freed':'no $/check change';
+    h+='<div data-goal-card="'+d.id+'" style="background:var(--surface);border:1px solid var(--bl);border-radius:14px;padding:14px;margin-bottom:12px">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
+    h+='<div style="font-size:14px;font-weight:700">'+d.name+'</div>';
+    h+='<div style="font-size:11px;font-weight:700;color:'+(statusColor[d.after.status]||'var(--muted)')+'">'+statusLabel[d.after.status]+'</div>';
+    h+='</div>';
+    h+='<div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5">';
+    h+='Required per check: <strong>'+fmt(d.before.requiredPerCheck)+' → '+fmt(d.after.requiredPerCheck)+'</strong> ('+deltaTxt+')<br/>';
+    h+='Currently saving: '+fmt(d.after.currentPerCheck)+'/check';
+    if(d.targetDate)h+=' · Target '+fmtD(d.targetDate,true);
+    h+='</div>';
+    if(d.after.gap>0){
+      h+='<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Choose adjustment</div>';
+      h+='<div style="display:flex;flex-direction:column;gap:6px">';
+      h+='<button onclick="applyGoalImpact(\x27'+d.id+'\x27,\x27increase\x27,'+d.after.options.keepDate.newPerCheck+',null,null,this)" style="text-align:left;padding:10px;background:var(--bg);border:1px solid var(--bl);border-radius:10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">';
+      h+='<strong>Increase to '+fmt(d.after.options.keepDate.newPerCheck)+'/check</strong><br/><span style="color:var(--muted);font-size:11px">Stay on schedule for '+(d.targetDate?fmtD(d.targetDate,true):'target')+'</span></button>';
+      if(d.after.options.pushDate.newTargetDate&&d.after.currentPerCheck>0){
+        h+='<button onclick="applyGoalImpact(\x27'+d.id+'\x27,\x27push_date\x27,null,\x27'+d.after.options.pushDate.newTargetDate+'\x27,null,this)" style="text-align:left;padding:10px;background:var(--bg);border:1px solid var(--bl);border-radius:10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">';
+        h+='<strong>Keep saving '+fmt(d.after.currentPerCheck)+'/check, push to '+fmtD(d.after.options.pushDate.newTargetDate,true)+'</strong><br/><span style="color:var(--muted);font-size:11px">Same contribution, later target</span></button>';
+      }
+      if(d.after.options.lowerTarget.newTarget>0&&d.after.options.lowerTarget.newTarget<d.target){
+        h+='<button onclick="applyGoalImpact(\x27'+d.id+'\x27,\x27lower_target\x27,null,null,'+d.after.options.lowerTarget.newTarget+',this)" style="text-align:left;padding:10px;background:var(--bg);border:1px solid var(--bl);border-radius:10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">';
+        h+='<strong>Lower target to '+fmt(d.after.options.lowerTarget.newTarget)+'</strong><br/><span style="color:var(--muted);font-size:11px">Hit '+(d.targetDate?fmtD(d.targetDate,true):'target')+' at current pace</span></button>';
+      }
+      h+='<button onclick="applyGoalImpact(\x27'+d.id+'\x27,\x27acknowledge\x27,null,null,null,this)" style="text-align:left;padding:10px;background:transparent;border:1px dashed var(--bl);border-radius:10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--muted)">';
+      h+='Do nothing for now (acknowledge gap)</button>';
+      h+='</div>';
+    } else if(d.reqDelta<0){
+      h+='<div style="font-size:12px;color:var(--green);background:var(--gl);border-radius:8px;padding:8px 10px;margin-top:6px">+ '+fmt(Math.abs(d.reqDelta))+'/check freed up. Redirect from Goals tab if you want to apply it elsewhere.</div>';
+    }
+    h+='</div>';
+  });
+  h+='<button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="acknowledgeGoalImpact()">Skip All</button>';
+  h+='</div>';
+  m.innerHTML=h;document.body.appendChild(m);
+}
+
+function acknowledgeGoalImpact(){
+  var m=document.getElementById('goalImpactModal');if(m)m.remove();
+  logAct('goal_impact_skipped','Goal impact review dismissed without changes','goal',null,{});
+}
+
+async function applyGoalImpact(goalId,action,newPerCheck,newDate,newTarget,btn){
+  var goal=GOALS.find(function(g){return g.id===goalId;});
+  if(!goal)return;
+  var updates={};
+  var summary='';
+  if(action==='increase'){
+    updates.contribution_per_paycheck=newPerCheck;
+    summary=goal.name+': contribution increased to '+fmt(newPerCheck)+'/check';
+  } else if(action==='push_date'){
+    updates.target_date=newDate;
+    summary=goal.name+': target date pushed to '+fmtD(newDate,true);
+  } else if(action==='lower_target'){
+    updates.target_amount=newTarget;
+    summary=goal.name+': target lowered to '+fmt(newTarget);
+  } else if(action==='acknowledge'){
+    summary=goal.name+': gap acknowledged, no change made';
+    await logAct('goal_gap_acknowledged',summary,'goal',goalId,{});
+    if(btn){var card=btn.closest('div[data-goal-card]');if(card){card.style.opacity='0.5';card.innerHTML='<div style="font-size:13px;color:var(--muted);text-align:center;padding:8px">✓ Acknowledged</div>';}}
+    checkAllGoalImpactsHandled();
+    return;
+  }
+  if(Object.keys(updates).length>0){
+    var r=await sb.from('goals').update(updates).eq('id',goalId).select('*').single();
+    if(!r.error){
+      var idx=GOALS.findIndex(function(g){return g.id===goalId;});
+      if(idx>=0)GOALS[idx]=r.data;
+      await logAct('goal_updated_from_impact',summary,'goal',goalId,updates);
+      if(btn){var cardB=btn.closest('div[data-goal-card]');if(cardB){cardB.style.opacity='0.5';cardB.innerHTML='<div style="font-size:13px;color:var(--green);text-align:center;padding:8px">✓ '+summary+'</div>';}}
+      checkAllGoalImpactsHandled();
+    } else {
+      alert('Could not update goal. Try again.');
+    }
+  }
+}
+
+function checkAllGoalImpactsHandled(){
+  var m=document.getElementById('goalImpactModal');if(!m)return;
+  var cards=m.querySelectorAll('div[data-goal-card]');
+  var allDone=Array.prototype.every.call(cards,function(c){return c.style.opacity==='0.5';});
+  if(allDone)setTimeout(function(){m.remove();renderAll();},800);
+}
+// ===== END GOAL IMPACT REVIEW =====
+
 function calcTotalDueNow(exp){
   var pd=exp.is_past_due?(exp.past_due_amount||0):0;
   var lc=exp.late_charge_amount||0;
@@ -3519,6 +3731,11 @@ async function saveExpEdit(id){
   };
   var r=await sb.from('expenses').update(updates).eq('id',id);
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
+  // Snapshot BEFORE local mutation so the diff reflects pre-edit state
+  var origEx=EX.find(function(e){return e.id===id;});
+  if(origEx&&(origEx.amount!==updates.amount||origEx.due_day!==updates.due_day||origEx.pay_cycle!==updates.pay_cycle)){
+    beginGoalImpactWatch('Edited bill: '+updates.name+' (was '+fmt(origEx.amount)+', now '+fmt(updates.amount)+')');
+  }
   EX=EX.map(function(e){return e.id===id?Object.assign({},e,updates):e;});
   await logAct('expense_updated',updates.name+' updated','expense',id,updates);
   document.getElementById('editExpModal').remove();
@@ -3527,6 +3744,8 @@ async function saveExpEdit(id){
 }
 async function removeExp(id){
   if(!confirm('Remove this expense?'))return;
+  var ex=EX.find(function(e){return e.id===id;});
+  if(ex)beginGoalImpactWatch('Removed bill: '+ex.name+' '+fmt(ex.amount));
   await sb.from('expenses').update({is_active:false}).eq('id',id);
   EX=EX.filter(function(e){return e.id!==id;});
   document.getElementById('editExpModal').remove();renderLedger();
@@ -3548,6 +3767,7 @@ async function addExp(){
   var type=document.getElementById('ae-type').value;var cycle=document.getElementById('ae-cycle').value;
   var msg=document.getElementById('ae-msg');
   if(!name||!amt){msg.style.color='var(--red)';msg.textContent='Name and amount required.';return;}
+  beginGoalImpactWatch('Added bill: '+name+' '+fmt(amt));
   var r=await sb.from('expenses').insert({household_id:HID,name:name,amount:amt,due_day:due,category:cat,type:type,pay_cycle:cycle,is_recurring:true,consequence:'late_fee',partial_ok:false,minimum_partial:0,is_active:true,payment_strategy:'full'}).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error adding.';return;}
   EX.push(r.data);await logAct('expense_added',name+' added — '+fmt(amt)+'/mo','expense',r.data.id,{});
@@ -3594,13 +3814,20 @@ async function addInc(){
   var freq=isRecur?document.getElementById('ai-freq').value:null;
   var msg=document.getElementById('ai-msg');
   if(!src||!amt){msg.style.color='var(--red)';msg.textContent='Source and amount required.';return;}
+  beginGoalImpactWatch('Added income: '+src+' '+fmt(amt)+(isRecur?' ('+freq+')':''));
   var payload={user_id:CU.id,household_id:HID,source:src,amount:amt,expected_date:date,certainty:cert,is_recurring:isRecur};
   if(isRecur)payload.frequency=freq;
   var r=await sb.from('additional_income').insert(payload).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error.';return;}
   INC.unshift(r.data);await logAct('income_added',src+' '+fmt(amt)+' added','income',r.data.id,{amount:amt});renderLedger();
 }
-async function removeInc(id){await sb.from('additional_income').delete().eq('id',id);INC=INC.filter(function(i){return i.id!==id;});renderLedger();}
+async function removeInc(id){
+  var inc=INC.find(function(i){return i.id===id;});
+  if(inc)beginGoalImpactWatch('Removed income: '+inc.source+' '+fmt(inc.amount));
+  await sb.from('additional_income').delete().eq('id',id);
+  INC=INC.filter(function(i){return i.id!==id;});
+  renderLedger();
+}
 
 // TRANSACTIONS VIEW
 function openAddTxModal(){
@@ -5654,6 +5881,7 @@ async function savePlan(){
   var cat=document.getElementById('np-cat').value||'Other';
   var notes=(document.getElementById('np-notes').value||'').trim();
   if(!name||!date||!amt){alert('Please fill in name, date, and amount.');return;}
+  beginGoalImpactWatch('Added planned expense: '+name+' '+fmt(amt)+' on '+date);
   // Sub items
   var subs=[];var wrap=document.getElementById('np-subs');
   if(wrap){Array.from(wrap.children).forEach(function(row,i){
@@ -5841,6 +6069,10 @@ async function saveEditPlan(pid){
   var amt=parseFloat(document.getElementById('ep-amt').value||0);
   var notes=(document.getElementById('ep-notes').value||'').trim();
   if(!name||!date||!amt)return;
+  var origPlan=PLAN.find(function(x){return x.id===pid;});
+  if(origPlan&&(origPlan.estimated_amount!==amt||origPlan.target_date!==date)){
+    beginGoalImpactWatch('Edited planned expense: '+name+' (was '+fmt(origPlan.estimated_amount)+' on '+origPlan.target_date+', now '+fmt(amt)+' on '+date+')');
+  }
   var r=await sb.from('planned_expenses').update({name:name,target_date:date,estimated_amount:amt,notes:notes||null}).eq('id',pid).select('*').single();
   if(r.error){alert('Error: '+r.error.message);return;}
   var idx=PLAN.findIndex(function(x){return x.id===pid;});if(idx>=0)PLAN[idx]=r.data;
@@ -5850,6 +6082,8 @@ async function saveEditPlan(pid){
 
 async function deletePlan(pid){
   if(!confirm('Delete this planned expense?'))return;
+  var pln=PLAN.find(function(x){return x.id===pid;});
+  if(pln)beginGoalImpactWatch('Deleted planned expense: '+pln.name+' '+fmt(pln.estimated_amount));
   await sb.from('planned_expenses').delete().eq('id',pid);
   PLAN=PLAN.filter(function(x){return x.id!==pid;});
   document.getElementById('editPlanModal').remove();
@@ -6679,6 +6913,11 @@ async function saveProfile(){
   var pay=payEl?parseFloat(payEl.value)||0:UP.paycheck_amount||0;
   var npd=dateEl?dateEl.value:UP.next_pay_date;
   var payDates=npd?genPay(npd):[];
+  var prevPay=UP.paycheck_amount||0;
+  var prevNpd=UP.next_pay_date;
+  if(prevPay!==pay||prevNpd!==npd){
+    beginGoalImpactWatch('Updated paycheck: '+(prevPay!==pay?fmt(prevPay)+' → '+fmt(pay):'')+(prevNpd!==npd?' next pay date '+npd:''));
+  }
   var updates={employment_status:emp,paycheck_amount:pay,next_pay_date:npd||null,pay_dates:JSON.stringify(payDates)};
   var r=await sb.from('user_profiles').update(updates).eq('id',CU.id);
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
@@ -6896,49 +7135,290 @@ async function sendMsg(text,fromInput){
     return '  • '+fmtD(t.transaction_date,true)+': '+t.name+' '+dir+fmt(t.amount)+' ['+t.category+']';
   }).join('\n'):'  No transactions logged yet.';
 
-  // 60-day cash flow projection summary
-  var bal=cash;var cfPoints=[];
-  for(var di2=0;di2<60;di2++){
-    var dStr2=addDays(td_chat,di2);var dom2=new Date(dStr2+'T12:00:00').getDate();
-    var inflow2=0,outflow2=0;
-    if(payDates2.indexOf(dStr2)>=0)inflow2+=UP.paycheck_amount||0;
-    var fc2=getForecastedIncomeForDate(dStr2);inflow2+=fc2.total;
-    EX.forEach(function(exp){
-      if(exp.is_recurring&&exp.due_day===dom2)outflow2+=exp.amount;
+  // ===== PAY-PERIOD WORKSHEET (6 PERIODS / ~12 WEEKS) =====
+  // Pre-computed window-by-window cash flow so Claude doesn't have to do math in its head
+  var allUpcomingChecks=payDates2.filter(function(d){return d>=td_chat;}).sort();
+  // Take next 6 paychecks plus a "current period" before the first upcoming check
+  var checksForWorksheet=allUpcomingChecks.slice(0,7); // 7 boundaries = 6 windows
+  var worksheet=[];
+  var runningBal=cash;
+  var bills60=[];
+  EX.forEach(function(e){
+    if(!e.due_day&&!e.due_day_2)return;
+    var cycle=e.pay_cycle||'monthly';
+    var dom=e.due_day;var dom2=e.due_day_2;
+    for(var di=0;di<90;di++){
+      var dStr=addDays(td_chat,di);
+      var dObj=new Date(dStr+'T12:00:00');
+      var dayOfMonth=dObj.getDate();
+      var dayOfWeek=dObj.getDay();
+      var hits=false;
+      if(cycle==='monthly'&&dayOfMonth===dom)hits=true;
+      else if(cycle==='biweekly'&&(dayOfMonth===dom||(dom2&&dayOfMonth===dom2)))hits=true;
+      else if(cycle==='weekly'&&dayOfWeek===dom)hits=true;
+      else if(!cycle&&dayOfMonth===dom)hits=true;
+      if(hits)bills60.push({date:dStr,name:e.name,amount:e.amount,category:e.category,past_due:!!e.is_past_due});
+    }
+  });
+  bills60.sort(function(a,b){return a.date<b.date?-1:1;});
+  // Forecasted income drops in the 90-day window
+  var fcDrops=getUpcomingIncomeWindow(td_chat,addDays(td_chat,90));
+  // Planned expenses in window
+  var planDrops=PLAN.filter(function(pp){return !pp.is_funded&&pp.target_date>=td_chat&&pp.target_date<=addDays(td_chat,90);});
+
+  for(var pi=0;pi<6;pi++){
+    var periodStart=pi===0?td_chat:checksForWorksheet[pi-1];
+    var periodEnd=checksForWorksheet[pi]?addDays(checksForWorksheet[pi],-1):addDays(periodStart,14);
+    if(!periodStart||!periodEnd)break;
+    // Paycheck for this window — fires AT periodStart for windows 1-5, none for window 0 (if today != a payday)
+    var paycheckHit=pi>0?(UP.paycheck_amount||0):(payDates2.indexOf(td_chat)>=0?(UP.paycheck_amount||0):0);
+    // Bills in window
+    var billsInWin=bills60.filter(function(b){return b.date>=periodStart&&b.date<=periodEnd;});
+    var billsTotal=billsInWin.reduce(function(s,b){return s+b.amount;},0);
+    // Forecasted income drops in window
+    var fcInWin=fcDrops.filter(function(f){return f.date>=periodStart&&f.date<=periodEnd;});
+    var fcTotal=fcInWin.reduce(function(s,f){return s+f.weighted;},0);
+    // Planned expenses in window
+    var plansInWin=planDrops.filter(function(pp){return pp.target_date>=periodStart&&pp.target_date<=periodEnd;});
+    var plansTotal=plansInWin.reduce(function(s,p){return s+p.estimated_amount;},0);
+    var startBal=runningBal;
+    var inflow=paycheckHit+fcTotal;
+    var outflow=billsTotal+plansTotal;
+    var endBal=startBal+inflow-outflow;
+    runningBal=endBal;
+    worksheet.push({
+      idx:pi+1,
+      start:periodStart,end:periodEnd,
+      startBal:startBal,
+      paycheck:paycheckHit,
+      fcInWin:fcInWin,fcTotal:fcTotal,
+      billsInWin:billsInWin,billsTotal:billsTotal,
+      plansInWin:plansInWin,plansTotal:plansTotal,
+      inflow:inflow,outflow:outflow,
+      endBal:endBal
     });
-    PLAN.forEach(function(pp){if(pp.target_date===dStr2&&!pp.is_funded)outflow2+=pp.estimated_amount;});
-    bal+=inflow2-outflow2;
-    cfPoints.push({d:dStr2,bal:bal});
   }
-  var cfMin=cfPoints.length>0?Math.min.apply(null,cfPoints.map(function(x){return x.bal;})):cash;
-  var cfMinPoint=cfPoints.find(function(x){return x.bal===cfMin;});
-  var cfEnd=cfPoints[cfPoints.length-1];
-  var cfStr='Today: '+fmt(cash)+' | 30 days: '+fmt((cfPoints[29]||{}).bal||cash)+' | 60 days: '+fmt((cfEnd||{}).bal||cash)+' | Lowest: '+fmt(cfMin)+(cfMinPoint?' on '+fmtD(cfMinPoint.d,true):'');
+
+  // Render worksheet for prompt
+  var worksheetStr=worksheet.map(function(w){
+    var s='\n--- PAY PERIOD '+w.idx+' ('+fmtD(w.start,true)+' through '+fmtD(w.end,true)+') ---\n';
+    s+='  Starting balance: '+fmt(w.startBal)+'\n';
+    if(w.paycheck>0)s+='  + Paycheck on '+fmtD(w.start,true)+': '+fmt(w.paycheck)+'\n';
+    if(w.fcInWin.length>0){
+      s+='  + Forecasted income:\n';
+      w.fcInWin.forEach(function(f){s+='      • '+fmtD(f.date,true)+' '+f.source+': '+fmt(f.amount)+(f.certainty!=='confirmed'?' (weighted '+fmt(f.weighted)+' at '+f.certainty+')':'')+'\n';});
+    }
+    if(w.billsInWin.length>0){
+      s+='  - Bills due in this window ('+w.billsInWin.length+' bills, total '+fmt(w.billsTotal)+'):\n';
+      w.billsInWin.forEach(function(b){s+='      • '+fmtD(b.date,true)+' '+b.name+': '+fmt(b.amount)+(b.past_due?' (PAST DUE)':'')+'\n';});
+    } else {
+      s+='  - No bills due in this window.\n';
+    }
+    if(w.plansInWin.length>0){
+      s+='  - Planned expenses in this window:\n';
+      w.plansInWin.forEach(function(p){s+='      • '+fmtD(p.target_date,true)+' '+p.name+': '+fmt(p.estimated_amount)+'\n';});
+    }
+    s+='  ENDING BALANCE: '+fmt(w.endBal)+(w.endBal<0?' ⚠️ NEGATIVE':'')+'\n';
+    return s;
+  }).join('');
+  // Expose worksheet for debugging
+  window._lastWorksheet=worksheet;
+
+  // ===== LONG-HORIZON PROJECTION (36 MONTHS / ~78 PAY PERIODS) =====
+  // Lower-resolution per-period summaries for goal-timeline questions.
+  // Each period: paycheck, monthly bills (prorated), planned expenses in window,
+  // forecasted income in window, existing goal contributions, discretionary capacity.
+  var longHorizon=[];
+  var longRunningBal=cash;
+  var paycheck_amt=UP.paycheck_amount||0;
+  // Build the full pay-date list out to 36 months. UP.pay_dates may not cover that far;
+  // generate biweekly dates from the last known one if we run out.
+  var allPayDates=getArr(UP.pay_dates).filter(function(d){return d>=td_chat;}).sort();
+  var endHorizon=addDays(td_chat,1095); // ~36 months
+  if(allPayDates.length>0){
+    var lastPay=allPayDates[allPayDates.length-1];
+    while(lastPay<endHorizon){
+      lastPay=addDays(lastPay,14);
+      allPayDates.push(lastPay);
+    }
+  }
+  // Bills snapshot — convert each recurring bill to a per-pay-period equivalent
+  // Monthly bills: amount / 2.166 (biweekly periods per month avg)
+  // Biweekly bills: full amount per period (most reliably hits each cycle)
+  // Weekly bills: amount * 2 per period
+  // One-time bills: handled as planned expenses, skip here
+  var billsPerPeriod=0;
+  EX.forEach(function(e){
+    if(!e.amount)return;
+    var cycle=e.pay_cycle||'monthly';
+    if(cycle==='monthly')billsPerPeriod+=e.amount/2.166;
+    else if(cycle==='biweekly')billsPerPeriod+=e.amount;
+    else if(cycle==='weekly')billsPerPeriod+=e.amount*2;
+  });
+  // Total existing goal contributions per pay period
+  var goalContribPerPeriod=activeGoals.reduce(function(s,g){return s+(g.contribution_per_paycheck||0);},0);
+
+  // Plans across the horizon, indexed by date
+  var allPlans=PLAN.filter(function(pp){return !pp.is_funded&&pp.target_date>=td_chat&&pp.target_date<=endHorizon;});
+  // Forecasted income across horizon
+  var allFcDrops=getUpcomingIncomeWindow(td_chat,endHorizon);
+
+  // Walk pay periods. The first long-horizon period starts today; subsequent ones start at each paycheck.
+  var ptr=td_chat;
+  for(var lpi=0;lpi<78&&ptr<=endHorizon;lpi++){
+    var nextPayIdx=allPayDates.findIndex(function(d){return d>ptr;});
+    var periodEnd=nextPayIdx>=0?addDays(allPayDates[nextPayIdx],-1):addDays(ptr,14);
+    if(periodEnd>endHorizon)periodEnd=endHorizon;
+    // Paycheck if any falls in this window (typically at ptr if not the first iteration)
+    var payInWin=allPayDates.filter(function(d){return d>=ptr&&d<=periodEnd;});
+    var paycheckThisPeriod=payInWin.length*paycheck_amt;
+    // Bills in window (prorated)
+    var billsThisPeriod=billsPerPeriod * (payInWin.length||1);
+    // Plans in window
+    var plansInWin=allPlans.filter(function(pp){return pp.target_date>=ptr&&pp.target_date<=periodEnd;});
+    var plansTotal=plansInWin.reduce(function(s,p){return s+p.estimated_amount;},0);
+    // Forecasted income in window
+    var fcInWin=allFcDrops.filter(function(f){return f.date>=ptr&&f.date<=periodEnd;});
+    var fcTotalLong=fcInWin.reduce(function(s,f){return s+f.weighted;},0);
+    // Existing goal contributions in window
+    var goalContribTotal=goalContribPerPeriod * (payInWin.length||1);
+    // Discretionary capacity = what's left after obligations
+    var discretionary=paycheckThisPeriod + fcTotalLong - billsThisPeriod - plansTotal - goalContribTotal;
+    var startBalLong=longRunningBal;
+    longRunningBal+=paycheckThisPeriod + fcTotalLong - billsThisPeriod - plansTotal - goalContribTotal;
+    longHorizon.push({
+      idx:lpi+1,
+      start:ptr,end:periodEnd,
+      startBal:startBalLong,
+      paycheck:paycheckThisPeriod,
+      bills:billsThisPeriod,
+      plans:plansInWin,plansTotal:plansTotal,
+      fcInWin:fcInWin,fcTotal:fcTotalLong,
+      goalContrib:goalContribTotal,
+      discretionary:discretionary,
+      endBal:longRunningBal
+    });
+    ptr=nextPayIdx>=0?allPayDates[nextPayIdx]:addDays(ptr,14);
+  }
+
+  // Render the long-horizon worksheet — compact format
+  var longHorizonStr='';
+  // Show first 12 periods in detail, then condense quarterly summaries through 36 months
+  longHorizon.slice(0,12).forEach(function(w){
+    var s='\n  Period '+w.idx+' ('+fmtD(w.start,true)+'–'+fmtD(w.end,true)+'): start '+fmt(w.startBal);
+    s+=' | +paycheck '+fmt(w.paycheck);
+    if(w.fcTotal>0)s+=' +forecast '+fmt(w.fcTotal);
+    s+=' -bills '+fmt(w.bills);
+    if(w.plansTotal>0)s+=' -plans '+fmt(w.plansTotal)+' ('+w.plans.map(function(p){return p.name;}).join(',')+')';
+    if(w.goalContrib>0)s+=' -goal contribs '+fmt(w.goalContrib);
+    s+=' = end '+fmt(w.endBal)+' | discretionary '+fmt(w.discretionary)+(w.endBal<0?' ⚠️':'');
+    longHorizonStr+=s;
+  });
+  // Condense periods 13+ into quarterly summaries
+  if(longHorizon.length>12){
+    longHorizonStr+='\n\n  --- QUARTERLY SUMMARIES (months 6+) ---';
+    // Bucket remaining periods into 3-month chunks
+    var remainingPeriods=longHorizon.slice(12);
+    var quarters={};
+    remainingPeriods.forEach(function(w){
+      var q=w.start.substring(0,7); // YYYY-MM
+      var qDate=new Date(w.start+'T12:00:00');
+      var qLabel=qDate.getFullYear()+' Q'+(Math.floor(qDate.getMonth()/3)+1);
+      if(!quarters[qLabel])quarters[qLabel]={periods:0,paycheck:0,bills:0,plans:0,fc:0,goalContrib:0,discretionary:0,endBal:0,planList:[]};
+      quarters[qLabel].periods++;
+      quarters[qLabel].paycheck+=w.paycheck;
+      quarters[qLabel].bills+=w.bills;
+      quarters[qLabel].plans+=w.plansTotal;
+      quarters[qLabel].fc+=w.fcTotal;
+      quarters[qLabel].goalContrib+=w.goalContrib;
+      quarters[qLabel].discretionary+=w.discretionary;
+      quarters[qLabel].endBal=w.endBal;
+      w.plans.forEach(function(p){quarters[qLabel].planList.push(p.name+' '+fmt(p.estimated_amount));});
+    });
+    Object.keys(quarters).forEach(function(qL){
+      var q=quarters[qL];
+      longHorizonStr+='\n  '+qL+' ('+q.periods+' periods): paycheck '+fmt(q.paycheck)+' -bills '+fmt(q.bills)+(q.plans>0?' -plans '+fmt(q.plans)+' ['+q.planList.join('; ')+']':'')+(q.goalContrib>0?' -goal contribs '+fmt(q.goalContrib):'')+' = end '+fmt(q.endBal)+' | discretionary '+fmt(q.discretionary);
+    });
+  }
+  window._lastLongHorizon=longHorizon;
+
+  // ===== GOAL FEASIBILITY TABLE =====
+  // Pre-compute per-goal status so Claude can reason about trade-offs
+  var goalTable=activeGoals.map(function(g){
+    var remaining=Math.max(0,(g.target_amount||0)-(g.current_amount||0));
+    var periodsLeft=null;
+    if(g.target_date){
+      var daysL=daysUntil(g.target_date);
+      // Count actual paychecks between today and target
+      periodsLeft=allPayDates.filter(function(d){return d>=td_chat&&d<=g.target_date;}).length;
+      if(periodsLeft===0)periodsLeft=Math.max(1,Math.floor(daysL/14));
+    }
+    var requiredPerCheck=periodsLeft&&periodsLeft>0?Math.ceil(remaining/periodsLeft):remaining;
+    var current=g.contribution_per_paycheck||0;
+    var gap=Math.max(0,requiredPerCheck-current);
+    var status;
+    if(remaining<=0)status='COMPLETE';
+    else if(!g.target_date)status='NO TARGET DATE — flexible timeline';
+    else if(current===0)status='NO CONTRIBUTIONS SET';
+    else if(current>=requiredPerCheck)status='ON TRACK';
+    else if(gap<=requiredPerCheck*0.2)status='SLIGHTLY SHORT';
+    else status='SHORT BY '+fmt(gap)+'/check';
+    return {name:g.name,target:g.target_amount,current:g.current_amount||0,remaining:remaining,targetDate:g.target_date,periodsLeft:periodsLeft,requiredPerCheck:requiredPerCheck,currentPerCheck:current,gap:gap,status:status,importance:g.importance};
+  });
+  var goalTableStr=goalTable.length>0?goalTable.map(function(g){
+    return '  • '+g.name+' ['+g.importance+' priority]\n'
+      +'    Target: '+fmt(g.target)+' by '+(g.targetDate?fmtD(g.targetDate,true):'no date set')+'\n'
+      +'    Saved: '+fmt(g.current)+' | Remaining: '+fmt(g.remaining)+'\n'
+      +'    Periods until target: '+(g.periodsLeft||'n/a')+'\n'
+      +'    Required per check: '+fmt(g.requiredPerCheck)+' | Currently saving per check: '+fmt(g.currentPerCheck)+'\n'
+      +'    Status: '+g.status;
+  }).join('\n\n'):'  No active goals.';
+  window._lastGoalTable=goalTable;
 
   // Bills by category breakdown
   var byCat={};
   EX.forEach(function(e){if(e.is_recurring){byCat[e.category]=(byCat[e.category]||0)+e.amount;}});
   var byCatStr=Object.keys(byCat).map(function(c){return '  • '+c+': '+fmt(byCat[c])+'/mo';}).join('\n');
 
-  var sys='You are Clarity, a sharp, direct, no-nonsense personal financial recovery coach for the Moseberry household. You have FULL access to their financial data — use specific numbers, dates, and bill names in your answers. Real answers only. No lectures. No fluff. Never say you don\'t have access to data unless it\'s genuinely missing from the briefing below.\n\n'
+  var sys='You are Clarity, the financial recovery coach for the Moseberry household. You have access to their full financial data below. Read it carefully — every answer must be grounded in this data.\n\n'
+    +'═══ ABSOLUTE RULES (NEVER VIOLATE) ═══\n'
+    +'1. NEVER invent bill names or amounts. If a bill is not listed below, it does not exist. Do not pattern-match plausible bills (Netflix, Hulu, Amazon Prime) unless they appear by name in the data.\n'
+    +'2. When discussing money in a specific time window, USE THE PAY-PERIOD WORKSHEET below. The math is already done. Quote the worksheet numbers verbatim. Do not recalculate.\n'
+    +'3. When the user introduces a new commitment mid-conversation (a planned saving, a deferred bill, an excluded payment), update your running model: track what they\'ve said and carry forward across turns. Do not lose track of money you already discussed.\n'
+    +'4. Do not present an answer, then pivot to a contradicting answer in the next message without explicitly acknowledging the change. If the user corrects you, restate the corrected math from scratch using the worksheet, do not silently edit.\n'
+    +'5. If you do not have enough data to answer accurately, say so plainly. Do not fabricate to fill the gap.\n'
+    +'6. When asked "which bills are due before [date]" — list ONLY bills from the PAY-PERIOD WORKSHEET, with their exact dates and amounts.\n\n'
     +(selAcct?'CURRENTLY VIEWING: '+selAcct.name+' account ('+fmt(selAcct.balance||0)+' balance)\n'
       +'- Account spending (all time): '+fmt(acctSpend)+'\n'
       +'- Account income/credits (all time): '+fmt(acctIncome)+'\n'
       +'- Account type: '+selAcct.account_purpose+'\n\n'
       :'')
     +'═══ HOUSEHOLD SNAPSHOT ═══\n'
+    +'Today: '+fmtD(td_chat,true)+'\n'
     +'Position: '+p.toUpperCase()+'\n'
-    +'Available: '+fmt(cash)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
+    +'Available now: '+fmt(cash)+' | Earmarked: '+fmt(earmarked)+' | Spendable: '+fmt(spendable)+'\n'
     +'Jay: Employed, '+fmt(UP.paycheck_amount||0)+' biweekly net | Next paycheck: '+(UP.next_pay_date?fmtD(UP.next_pay_date,true):'TBD')+'\n'
     +'Chari: Not currently employed\n'
-    +'Monthly bills: '+fmt(monthly)+' | Net per pay period (after half-monthly bills): '+fmt(net)+' ('+(net>=0?'GAINING':'DEFICIT')+')\n'
+    +'Monthly bills total: '+fmt(monthly)+'\n'
     +'Subscriptions: '+fmt(subs)+'/mo | Confirmed passive income: '+fmt(passive)+'/mo\n'
-    +'Decision spending breakdown — Jay-decided: '+fmt(jayTx)+' | Chari-decided: '+fmt(chariTx)+'\n'
-    +'Three-paycheck months in '+new Date().getFullYear()+': '+(threeCheckMonthsNow.length>0?threeCheckMonthsNow.join(', '):'None detected')+'\n'
-    +'In a 3-check month right now: '+(inThreeCheckNow?'YES — extra '+fmt(UP.paycheck_amount||0)+' available':'No')+'\n\n'
-    +'═══ UPCOMING PAYCHECKS (next 60 days) ═══\n'+upcomingChecksStr+'\n\n'
+    +'Three-paycheck months in '+new Date().getFullYear()+': '+(threeCheckMonthsNow.length>0?threeCheckMonthsNow.join(', '):'None detected')+'\n\n'
+    +'═══ PAY-PERIOD WORKSHEET (NEXT 6 PERIODS — high-resolution) ═══\n'
+    +'This is your single source of truth for SHORT-TERM time-window questions (next 12 weeks). Each period shows starting balance, paycheck, all bills/plans hitting in that window, and ending balance. The math is already done.\n'
+    +worksheetStr+'\n'
+    +'═══ END WORKSHEET ═══\n\n'
+    +'═══ LONG-HORIZON PROJECTION (36 MONTHS / 78 PAY PERIODS) ═══\n'
+    +'Use THIS section for goal-timeline questions ("how long to save $X", "is goal Y reachable by date Z"). It includes paycheck, prorated recurring bills, planned expenses, forecasted income, and existing goal contributions per period. "Discretionary" = capacity available for new savings beyond current obligations. First 12 periods detailed; remainder shown as quarterly summaries.\n'
+    +longHorizonStr+'\n'
+    +'═══ END LONG-HORIZON ═══\n\n'
+    +'═══ GOAL FEASIBILITY TABLE ═══\n'
+    +'Pre-computed status of each active goal. Use this to reason about trade-offs.\n'
+    +goalTableStr+'\n\n'
     +'═══ PAST DUE BILLS ═══\n'+pdDetailStr+'\n\n'
-    +'═══ BILL CALENDAR (next 30 hits, chronological) ═══\n'+billCalStr+'\n\n'
+    +'═══ ALL RECURRING BILLS (full list — these are the ONLY bills you can reference) ═══\n'
+    +(EX.length>0?EX.map(function(e){
+      var dueStr=e.due_day?'day '+e.due_day+(e.due_day_2?' & '+e.due_day_2:'')+' of month':'no due day set';
+      return '  • '+e.name+': '+fmt(e.amount)+' ('+e.category+', '+(e.pay_cycle||'monthly')+', '+dueStr+')'+(e.is_past_due?' [PAST DUE]':'');
+    }).join('\n'):'  None.')+'\n\n'
     +'═══ MONTHLY BILLS BY CATEGORY ═══\n'+byCatStr+'\n\n'
     +'═══ PLANNED EXPENSES (upcoming) ═══\n'+plansStr+'\n\n'
     +'═══ ACTIVE GOALS ═══\n'+(activeGoals.length>0?activeGoals.map(function(g){return '  • '+g.name+': '+fmt(g.current_amount||0)+' of '+fmt(g.target_amount)+' ('+Math.round((g.current_amount||0)/g.target_amount*100)+'%)'+(g.target_date?' by '+fmtD(g.target_date,true):'')+' — '+g.importance+' priority';}).join('\n'):'  No active goals.')+'\n\n'
@@ -6946,21 +7426,35 @@ async function sendMsg(text,fromInput){
     +ACCOUNTS.filter(function(a){return a.is_active;}).map(function(a){return '  • '+a.name+': '+fmt(a.balance||0)+' ('+a.account_purpose+(a.is_private?', private':'')+')';}).join('\n')+'\n\n'
     +'═══ RECENT TRANSACTIONS (last 15) ═══\n'+recentTxStr+'\n\n'
     +'═══ '+formatUpcomingIncomeForAI(180)+' ═══\n\n'
-    +'═══ 60-DAY CASH FLOW PROJECTION ═══\n'+cfStr+'\n\n'
     +'═══ KEY CONCEPTS ═══\n'
     +'• Available = balance across all joint/spending accounts + cash on hand\n'
     +'• Earmarked = bills flagged for payment (money spoken for, not yet deducted)\n'
-    +'• Spendable = Available minus Earmarked (what you can truly spend freely)\n'
+    +'• Spendable = Available minus Earmarked\n'
     +'• 3rd check months: bills covered by first 2 checks, the 3rd is genuinely free for goals unless Behind\n'
-    +'• Position: Behind=past due or deficit | Current=all paid | On Track=Spendable $600+ | Ahead=Spendable $1000+\n'
-    +'• Forecasted income certainty: confirmed=full value, likely=80%, possible=50%\n\n'
+    +'• Position: Behind=past due or deficit | Current=all paid | On Track=Spendable $600+ | Ahead=Spendable $1000+\n\n'
+    +'═══ HOW TO REASON THROUGH MULTI-TURN PLANNING ═══\n'
+    +'When the user is planning across multiple paychecks (saving, paying off a balance, funding a trip):\n'
+    +'1. Start from the worksheet. Identify which pay periods are in scope.\n'
+    +'2. Apply the user-stated commitments to those periods (e.g. "rent $3,300 from May 20 check," "skip past due car payment for now").\n'
+    +'3. Recompute the periods affected by their commitments — quote the worksheet values, then adjust.\n'
+    +'4. Track running balances explicitly. If you said "$1,303 cushion" in turn 1, carry it forward in turn 2.\n'
+    +'5. When the user adjusts a previous assumption, restate the full plan from the worksheet — do not patch in place.\n\n'
+    +'═══ HOW TO REASON ABOUT GOALS AND TRADE-OFFS ═══\n'
+    +'For "how long to save $X" or "can I afford goal Y" questions, use the LONG-HORIZON PROJECTION and GOAL FEASIBILITY TABLE together.\n'
+    +'1. Look at the discretionary capacity per period in the long-horizon view. That\'s what\'s LEFT after current goal contributions.\n'
+    +'2. If the user wants to add a NEW goal, calculate: target_amount / discretionary_per_period = periods needed. Convert to months (~2.17 periods per month).\n'
+    +'3. Check the GOAL FEASIBILITY TABLE for any goal currently SHORT or NO CONTRIBUTIONS SET — those are at risk regardless.\n'
+    +'4. If the user is over-committed, propose specific trade-offs: "If you paused Goal A (currently $X/check, has $Y of buffer to its target date) for N periods, you could redirect $X to this new goal, finishing it in Z fewer periods. You\'d resume Goal A on date W at a revised $V/check and still hit its target date."\n'
+    +'5. Always quote the goal name, current contribution, and target date when proposing trade-offs.\n'
+    +'6. Be specific. "Pause Goal A" is vague. "Pause your Vacation goal ($150/check, target Aug 15) for 4 periods, you\'ll have $600 extra for Goal B, finishing 2 periods sooner" is useful.\n'
+    +'7. Flag goals with NO TARGET DATE as the safest to deprioritize — no deadline pressure.\n'
+    +'8. Flag goals labeled HIGH priority as the LAST to suggest pausing.\n\n'
     +'═══ TONE & FORMAT ═══\n'
-    +'• Direct coach voice. Use real numbers from the data above — never say "approximately" or hedge if a real number is in the briefing.\n'
-    +'• Bold key amounts with **markdown** so they highlight.\n'
-    +'• If the user asks "when does X bill come due" — look in the BILL CALENDAR section and give the exact date.\n'
-    +'• If the user asks "can I afford X" — look at the 60-DAY CASH FLOW PROJECTION and give a specific yes/no with the projected balance number.\n'
-    +'• If the user asks about a specific date — calculate using the cash flow projection.\n'
-    +'• Keep most answers under 180 words. Detailed answers can go to 250.\n'
+    +'• Direct coach voice. Real numbers from the data.\n'
+    +'• **Bold** key amounts.\n'
+    +'• Show your reasoning briefly when doing multi-period math: "Period 1 ends at X. Period 2 starts at X, paycheck Y, bills Z, ends at..."\n'
+    +'• When user introduces a new constraint, restate the affected periods with the new math.\n'
+    +'• Keep most answers under 200 words. For multi-period planning, up to 350 is fine.\n'
     +'• If user says "log a transaction" — ask one question at a time: name, amount, category, decision maker, date, account.';
 
   // Debug: expose the system prompt so you can verify what Claude is actually getting
@@ -6968,7 +7462,7 @@ async function sendMsg(text,fromInput){
 
   try{
     var msgs2=chatHist.slice(-10).map(function(m){return{role:m.role,content:m.content};});
-    var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:msgs2})});
+    var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,system:sys,messages:msgs2})});
     var data=await res.json();
     var reply=(data.content&&data.content[0]&&data.content[0].text)||'Something went wrong.';
     var t2=document.getElementById('typing');if(t2)t2.remove();
