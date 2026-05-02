@@ -4352,18 +4352,19 @@ function renderExpRow(exp){
     html+='<div style="font-size:11px;color:var(--muted)">/mo</div>';
   }
   html+='</div>';
-  html+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">';
   html+='<button onclick="openEditExp(\x27'+exp.id+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Edit</button>';
-  // Next cycle event affordance
+  html+='</div>';
+  // Next cycle event affordance — separate row below header so it doesn't break flex layout
   var nextEv=getNextScheduledEvent(exp.id);
   if(nextEv){
     var hyd=getEffectiveBillEvent(nextEv);
     var isOverridden=nextEv.source!=='auto_generated'||nextEv.assume_late!=null||nextEv.expected_late_fee!=null||nextEv.payment_strategy!=null||(nextEv.scheduled_amount&&nextEv.scheduled_amount!==exp.amount);
-    var nextLabel=isOverridden?'Cycle: '+hyd.cycle_label+' (custom)':'Next: '+fmtD(nextEv.scheduled_date,true);
+    var nextLabel=isOverridden?'Cycle: '+hyd.cycle_label+' (custom)':'Next cycle: '+fmtD(nextEv.scheduled_date,true);
     var nextColor=isOverridden?'var(--purple)':'var(--muted)';
-    html+='<button onclick="openEditCycle(\x27'+nextEv.id+'\x27)" style="background:transparent;border:1px solid '+(isOverridden?'rgba(124,58,237,0.3)':'var(--bl)')+';border-radius:8px;padding:4px 8px;color:'+nextColor+';font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>';
+    var nextBg=isOverridden?'rgba(124,58,237,0.06)':'transparent';
+    var nextBorder=isOverridden?'rgba(124,58,237,0.25)':'var(--bl)';
+    html+='<div style="margin-bottom:10px"><button onclick="openEditCycle(\x27'+nextEv.id+'\x27)" style="background:'+nextBg+';border:1px solid '+nextBorder+';border-radius:6px;padding:3px 8px;color:'+nextColor+';font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap">'+nextLabel+'</button></div>';
   }
-  html+='</div>';
 
   // Past Due + Late Charge breakdown
   if(exp.is_past_due||hasLateCharge){
