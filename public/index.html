@@ -1654,6 +1654,94 @@ function openMyPlans(){
   m.innerHTML=h;document.body.appendChild(m);
   renderMyPlans();
 }
+
+// ===== RECONCILE ACCOUNT BALANCES =====
+// Walks every active account, sums its transactions (credits - debits), compares
+// to stored balance, surfaces drift, and lets user accept the corrected balance.
+async function openReconcileBalances(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='reconcileModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal" style="max-width:560px"><div class="modal-handle"></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  h+='<div style="font-size:16px;font-weight:800">Reconcile Balances</div>';
+  h+='<button onclick="document.getElementById(\x27reconcileModal\x27).remove()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button>';
+  h+='</div>';
+  h+='<div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">Compares each account\'s stored balance to the sum of all its logged transactions. Useful when balances drift from direct database edits or import errors. You decide which (if any) corrections to apply.</div>';
+  h+='<div id="reconcileContent"><div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Calculating...</div></div>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  // Compute drift for each active account
+  var rows=[];
+  ACCOUNTS.filter(function(a){return a.is_active;}).forEach(function(acct){
+    var txs=TX.filter(function(t){return t.account_id===acct.id;});
+    var debits=txs.filter(function(t){var ic=t.notes&&t.notes.indexOf('Credit')>=0;var it=t.category==='Transfer';return !ic&&!it;}).reduce(function(s,t){return s+t.amount;},0);
+    var credits=txs.filter(function(t){return t.notes&&t.notes.indexOf('Credit')>=0;}).reduce(function(s,t){return s+t.amount;},0);
+    var transfersIn=txs.filter(function(t){return t.category==='Transfer'&&t.notes&&t.notes.indexOf('to '+acct.name)>=0;}).reduce(function(s,t){return s+t.amount;},0);
+    var transfersOut=txs.filter(function(t){return t.category==='Transfer'&&t.notes&&t.notes.indexOf('from '+acct.name)>=0;}).reduce(function(s,t){return s+t.amount;},0);
+    // Implied balance from transactions = starting (unknown — assume 0 for delta) + credits + transfersIn - debits - transfersOut
+    // We don't know the starting balance, so what we really want to highlight is: does the sum of net activity
+    // plus a hypothetical starting balance match the stored balance?
+    // Simpler approach: report the *net activity* and the *current balance* and let user judge.
+    var netActivity=credits+transfersIn-debits-transfersOut;
+    rows.push({
+      acct:acct,
+      txCount:txs.length,
+      debits:debits,credits:credits,
+      transfersIn:transfersIn,transfersOut:transfersOut,
+      netActivity:netActivity,
+      stored:acct.balance||0
+    });
+  });
+  // Render the rows
+  var content='';
+  if(rows.length===0){
+    content='<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">No active accounts found.</div>';
+  } else {
+    rows.forEach(function(r){
+      content+='<div style="background:var(--surface);border:1px solid var(--bl);border-radius:14px;padding:14px;margin-bottom:10px">';
+      content+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">';
+      content+='<div><div style="font-size:14px;font-weight:700">'+r.acct.name+'</div>';
+      content+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+r.txCount+' transaction'+(r.txCount===1?'':'s')+' logged</div></div>';
+      content+='<div style="text-align:right"><div style="font-size:1.1rem;font-weight:900">'+fmt(r.stored)+'</div>';
+      content+='<div style="font-size:10px;color:var(--muted)">stored balance</div></div></div>';
+      content+='<div style="font-size:11px;color:var(--text2);line-height:1.6;background:var(--bg);border-radius:8px;padding:10px">';
+      content+='Credits/Income: <strong style="color:var(--green)">+'+fmt(r.credits)+'</strong> · ';
+      content+='Debits/Spending: <strong style="color:var(--red)">-'+fmt(r.debits)+'</strong>';
+      if(r.transfersIn>0||r.transfersOut>0){
+        content+=' · Transfers: +'+fmt(r.transfersIn)+' / -'+fmt(r.transfersOut);
+      }
+      content+='<br/>Net activity: <strong style="color:'+(r.netActivity>=0?'var(--green)':'var(--red)')+'">'+(r.netActivity>=0?'+':'')+fmt(r.netActivity)+'</strong>';
+      content+='</div>';
+      // Manual adjustment input
+      content+='<div style="margin-top:10px;display:flex;gap:8px;align-items:flex-end">';
+      content+='<div style="flex:1"><label class="lbl" style="font-size:10px">Set balance to:</label><input class="inp" type="number" id="rec-'+r.acct.id+'" value="'+r.stored+'" style="font-size:13px;padding:8px"/></div>';
+      content+='<button onclick="applyReconcileBalance(\x27'+r.acct.id+'\x27)" style="background:var(--gp);border:none;border-radius:10px;padding:9px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Apply</button>';
+      content+='</div>';
+      content+='</div>';
+    });
+    content+='<div style="background:rgba(67,97,238,0.05);border:1px solid rgba(67,97,238,0.15);border-radius:10px;padding:10px 12px;margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5">Note: Clarity can\'t perfectly reconcile because starting balances aren\'t stored. Use the net activity number to sanity-check whether your stored balance matches reality, then enter the correct balance and tap Apply.</div>';
+  }
+  document.getElementById('reconcileContent').innerHTML=content;
+}
+
+async function applyReconcileBalance(acctId){
+  var inp=document.getElementById('rec-'+acctId);if(!inp)return;
+  var newBal=parseFloat(inp.value);
+  if(isNaN(newBal)){alert('Invalid balance.');return;}
+  var acct=ACCOUNTS.find(function(a){return a.id===acctId;});if(!acct)return;
+  var oldBal=acct.balance||0;
+  if(Math.abs(newBal-oldBal)<0.005){alert('No change to apply.');return;}
+  if(!confirm('Set '+acct.name+' balance to '+fmt(newBal)+' (was '+fmt(oldBal)+', delta '+(newBal-oldBal>=0?'+':'')+fmt(newBal-oldBal)+')?'))return;
+  await updateAccountBalance(acctId,newBal);
+  await logAct('balance_reconciled',acct.name+' balance reconciled '+fmt(oldBal)+' → '+fmt(newBal),'account',acctId,{old:oldBal,new:newBal});
+  inp.value=newBal;
+  updateTopBar();renderHome();
+  // Visual confirmation
+  var btn=event&&event.currentTarget;
+  if(btn){btn.textContent='✓ Applied';btn.style.background='var(--green)';setTimeout(function(){btn.textContent='Apply';btn.style.background='var(--gp)';},2000);}
+}
+// ===== END RECONCILE BALANCES =====
+
 // ===== END ACTION PLAN SYSTEM =====
 
 function calcTotalDueNow(exp){
@@ -5518,18 +5606,34 @@ async function saveEditTx(id){
 }
 
 async function deleteTx(id,amt){
-  if(!confirm('Delete this transaction? This will add '+fmt(amt)+' back to your Available balance.'))return;
+  var t=TX.find(function(x){return x.id===id;});if(!t){alert('Transaction not found.');return;}
+  // Figure out the direction so we know whether to credit or debit on delete
+  var isCredit=t.notes&&t.notes.indexOf('Credit')>=0;
+  var isTransfer=t.category==='Transfer';
+  var directionLabel=isCredit?'subtract '+fmt(amt)+' from':'add '+fmt(amt)+' back to';
+  if(isTransfer)directionLabel='reverse '+fmt(amt)+' transfer for';
+  // Determine which account to reverse from — prefer the original account if recorded
+  var targetAcct=null;var targetAcctName='joint account';
+  if(t.account_id){
+    targetAcct=ACCOUNTS.find(function(a){return a.id===t.account_id;});
+    if(targetAcct)targetAcctName=targetAcct.name;
+  }
+  if(!targetAcct){targetAcct=getJointAccount();if(targetAcct)targetAcctName=targetAcct.name;}
+  if(!confirm('Delete this transaction? This will '+directionLabel+' '+targetAcctName+'.'))return;
   var r=await sb.from('transactions').delete().eq('id',id);
-  if(r.error){alert('Error deleting transaction.');return;}
-  // Add amount back to joint account or cash_on_hand
-  var jATx=getJointAccount();
-  if(jATx){await updateAccountBalance(jATx.id,(jATx.balance||0)+amt);}
-  else{var newCash=(SET.cash_on_hand||0)+amt;await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);SET.cash_on_hand=newCash;}
+  if(r.error){alert('Error deleting transaction: '+r.error.message);return;}
+  // Reverse the balance impact in the right direction on the right account
+  if(targetAcct){
+    var newBal=(targetAcct.balance||0)+(isCredit?-amt:amt);
+    await updateAccountBalance(targetAcct.id,newBal);
+  } else {
+    var newCash=(SET.cash_on_hand||0)+(isCredit?-amt:amt);
+    await sb.from('household_settings').update({cash_on_hand:newCash}).eq('household_id',HID);
+    SET.cash_on_hand=newCash;
+  }
   TX=TX.filter(function(t){return t.id!==id;});
-  // Remove receipt image from localStorage if exists
   try{localStorage.removeItem('receipt_img_'+id);}catch(e){}
-  await logAct('transaction_deleted','Transaction deleted — '+fmt(amt)+' returned to Available','transaction',id,{amount:amt});
-  sendNotification('transaction_deleted',name+' — '+fmt(amt)+' returned',amt);
+  await logAct('transaction_deleted','Transaction deleted — '+(isCredit?'-':'+')+fmt(amt)+' on '+targetAcctName,'transaction',id,{amount:amt,was_credit:isCredit,account_id:targetAcct?targetAcct.id:null});
   updateTopBar();renderHome();renderLedger();
 }
 
@@ -7226,6 +7330,7 @@ function renderSettings(){
   html+='<div class="card" style="padding:0;margin-bottom:12px">';
   var activePlanCount=PLANS.filter(function(p){return p.status==='active';}).length;
   [{label:'My Action Plans',sub:activePlanCount>0?activePlanCount+' active plan'+(activePlanCount===1?'':'s')+' — tap to manage':'Plans Clarity helped you commit to',icon:'🎯',fn:'openMyPlans()'},
+   {label:'Reconcile Balances',sub:'Compare stored balances to logged transactions, fix drift',icon:'⚖️',fn:'openReconcileBalances()'},
    {label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\x27activity\x27)'},
    {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
    {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
