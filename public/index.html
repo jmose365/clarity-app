@@ -939,6 +939,15 @@ function isPaidCycle2(exp){
 }
 function calcSpendable(){return Math.max(0,calcAvailable()-calcEarmarked());}
 
+// Returns the bill's effective amount including assumed late fee.
+// Single source of truth for "what does this bill actually cost when it hits."
+function getEffectiveBillAmount(exp){
+  if(!exp)return 0;
+  var base=exp.amount||0;
+  if(exp.assume_late&&exp.expected_late_fee)return base+(exp.expected_late_fee||0);
+  return base;
+}
+
 // ===== FORECASTED INCOME HELPERS =====
 // Certainty weights: confirmed = full value, likely = 80%, possible = 50%
 function incCertaintyWeight(certainty){
@@ -3232,18 +3241,20 @@ async function markPaid(expId,isHalf,halfNum){
   var isBiweekly=exp.pay_cycle==='biweekly'&&exp.due_day_2;
   var cycleNum=halfNum||1; // for biweekly, 1=first occurrence, 2=second
   var prealloc=exp.preallocated_amount||0;
-  var fullAmt=isHalf?(halfNum===1?(exp.split_amount_1||exp.amount/2):(exp.split_amount_2||exp.amount/2)):exp.amount;
+  // Determine the late fee being applied (if assumed late, fold it in)
+  var lateFeeApplied=(exp.assume_late&&exp.expected_late_fee&&!isHalf&&!isBiweekly)?(exp.expected_late_fee||0):0;
+  var fullAmt=isHalf?(halfNum===1?(exp.split_amount_1||exp.amount/2):(exp.split_amount_2||exp.amount/2)):(exp.amount+lateFeeApplied);
   // Deduct only the gap after pre-allocation from Available
   // Pre-allocation already in Available from income logging — only deduct remaining
   var deductAmt=isBiweekly?Math.max(0,(exp.amount/2)-prealloc/2):Math.max(0,fullAmt-prealloc);
   var today_s=today();var payMonth=new Date().toISOString().slice(0,7);
   var payAcct=getPayFromAccount();
   var payAcctId=payAcct?payAcct.id:null;
-  // Log to expense_payments — full amount for records
-  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:fullAmt,payment_date:today_s,payment_month:payMonth,is_partial:isHalf||isBiweekly,account_id:payAcctId});
+  // Log to expense_payments — full amount including late fee, with late_fee_amount tracked separately
+  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:fullAmt,payment_date:today_s,payment_month:payMonth,is_partial:isHalf||isBiweekly,account_id:payAcctId,late_fee_amount:lateFeeApplied});
   // Log to transactions — full amount for records
-  var txLabel=exp.name+(isBiweekly?' (Occurrence '+(cycleNum)+')':isHalf?' (Half '+(halfNum||1)+')':'')+' — Bill Paid';
-  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:txLabel,amount:fullAmt,category:exp.category,transaction_date:today_s,notes:'Bill payment'+(prealloc>0?' ('+fmt(prealloc)+' pre-allocated)':''),account_id:payAcctId}).select('*').single();
+  var txLabel=exp.name+(isBiweekly?' (Occurrence '+(cycleNum)+')':isHalf?' (Half '+(halfNum||1)+')':'')+' — Bill Paid'+(lateFeeApplied>0?' (incl. '+fmt(lateFeeApplied)+' late fee)':'');
+  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:txLabel,amount:fullAmt,category:exp.category,transaction_date:today_s,notes:'Bill payment'+(prealloc>0?' ('+fmt(prealloc)+' pre-allocated)':'')+(lateFeeApplied>0?' · late fee '+fmt(lateFeeApplied):''),account_id:payAcctId}).select('*').single();
   if(!txR.error)TX.unshift(txR.data);
   // Deduct from selected account (or joint fallback, or cash_on_hand)
   if(payAcct){
@@ -3272,10 +3283,12 @@ async function markPaid(expId,isHalf,halfNum){
     updates.preallocated_by={};
     if(isHalf){if(halfNum===1)updates.split_paid_1=true;else updates.split_paid_2=true;}
     if(exp.is_past_due)updates.is_past_due=false;
+    // If we just paid a bill that was flagged as assume_late, clear the flag — it's been paid this cycle
+    if(exp.assume_late)updates.assume_late=false;
   }
   await sb.from('expenses').update(updates).eq('id',expId);
   EX=EX.map(function(e){return e.id===expId?Object.assign({},e,updates):e;});
-  await logAct('expense_paid',exp.name+(isBiweekly?' occurrence '+cycleNum:isHalf?' half '+halfNum:'')+' paid — '+fmt(fullAmt)+(prealloc>0?' ('+fmt(prealloc)+' was pre-allocated)':''),'expense',expId,{amount:fullAmt,deducted:deductAmt});
+  await logAct('expense_paid',exp.name+(isBiweekly?' occurrence '+cycleNum:isHalf?' half '+halfNum:'')+' paid — '+fmt(fullAmt)+(lateFeeApplied>0?' (incl. '+fmt(lateFeeApplied)+' late fee)':'')+(prealloc>0?' ('+fmt(prealloc)+' was pre-allocated)':''),'expense',expId,{amount:fullAmt,deducted:deductAmt,late_fee:lateFeeApplied});
   sendNotification('expense_paid',exp.name+' — '+fmt(fullAmt),fullAmt);
   var newBadges=await checkBadges('payment',{streak:1});
   updateTopBar();renderLedger();renderHome();
@@ -3599,10 +3612,11 @@ function renderFlow(){
           if(amt2>0){outflow+=amt2;evts.push({label:exp.name+' (Arrangement 2)',amount:amt2,type:'expense'});}
         }
       } else {
-        // Normal billing
-        if(exp.is_recurring&&exp.due_day===dom){outflow+=exp.amount;evts.push({label:exp.name,amount:exp.amount,type:'expense',pd:exp.is_past_due,em:exp.is_earmarked});}
+        // Normal billing — use effective amount (includes assumed late fee)
+        var effAmt=getEffectiveBillAmount(exp);
+        if(exp.is_recurring&&exp.due_day===dom){outflow+=effAmt;evts.push({label:exp.name+(exp.assume_late?' +late':''),amount:effAmt,type:'expense',pd:exp.is_past_due,em:exp.is_earmarked});}
         if(exp.is_recurring&&exp.pay_cycle==='biweekly'&&exp.due_day_2&&exp.due_day_2===dom&&exp.due_day!==dom){
-          outflow+=exp.amount;evts.push({label:exp.name+' (2nd)',amount:exp.amount,type:'expense'});
+          outflow+=effAmt;evts.push({label:exp.name+' (2nd)',amount:effAmt,type:'expense'});
         }
       }
     });
@@ -3896,11 +3910,18 @@ function renderExpRow(exp){
     if(exp.arrangement_due_2)html+=' · Pmt 2: '+fmt(exp.arrangement_amount_2||0)+' on '+exp.arrangement_due_2+(exp.arrangement_due_2===1?'st':exp.arrangement_due_2===2?'nd':exp.arrangement_due_2===3?'rd':'th');
   }
   if(conseqLabel&&conseqSev>=2)html+=' · <span style="color:'+(conseqSev>=4?'var(--red)':conseqSev>=3?'var(--amber)':'var(--muted)')+';font-weight:600">'+conseqLabel+'</span>';
+  if(exp.assume_late&&exp.expected_late_fee>0)html+=' · <span style="color:var(--amber);font-weight:700">Assuming Late: +'+fmt(exp.expected_late_fee)+'</span>';
   html+='</div></div>';
   html+='<div style="text-align:right">';
   html+='<div style="font-size:1rem;font-weight:800;color:var(--muted);text-decoration:line-through">'+(exp.is_past_due?fmt(exp.amount):'')+'</div>';
-  html+='<div style="font-size:1rem;font-weight:800;color:'+(exp.is_past_due?'var(--red)':isEM&&emState==='active'?'var(--amber)':'var(--text)')+'">'+fmt(exp.amount)+'</div>';
-  html+='<div style="font-size:11px;color:var(--muted)">/mo</div></div>';
+  var displayAmt=getEffectiveBillAmount(exp);
+  html+='<div style="font-size:1rem;font-weight:800;color:'+(exp.is_past_due?'var(--red)':exp.assume_late?'var(--amber)':isEM&&emState==='active'?'var(--amber)':'var(--text)')+'">'+fmt(displayAmt)+'</div>';
+  if(exp.assume_late&&exp.expected_late_fee>0){
+    html+='<div style="font-size:10px;color:var(--muted)">'+fmt(exp.amount)+' + '+fmt(exp.expected_late_fee)+' late</div>';
+  } else {
+    html+='<div style="font-size:11px;color:var(--muted)">/mo</div>';
+  }
+  html+='</div>';
   html+='<button onclick="openEditExp(\x27'+exp.id+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Edit</button>';
   html+='</div>';
 
@@ -4055,6 +4076,16 @@ function openEditExp(id){
   h+='<div class="tog-wrap"><button class="tog-btn'+(rfpOn?'':' on')+'" onclick="eeRFP(false,this)">Partial OK</button><button class="tog-btn'+(rfpOn?' on':'')+'" onclick="eeRFP(true,this)">Full Only</button></div></div>';
   h+='<div id="ee-min-wrap" style="display:'+((!rfpOn&&partOn)?'block':'none')+'"><label class="lbl">Minimum Partial Amount</label><input class="inp" type="number" id="ee-min" value="'+(exp.minimum_partial||0)+'"/></div>';
   h+='</div>';
+  // LATE FEE SECTION
+  var lateOn=!!exp.assume_late;
+  h+='<div style="border-top:1px solid var(--bl);padding-top:14px;margin-top:4px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  h+='<div><div style="font-size:13px;font-weight:700">Assume Late This Cycle</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-top:1px">When on, this bill is treated as costing amount + late fee everywhere in the app. Useful when you know you\'ll be late.</div></div>';
+  h+='<div id="ee-late-toggle" onclick="eeToggleLate(this)" style="width:40px;height:22px;border-radius:99px;background:'+(lateOn?'var(--amber)':'rgba(200,210,240,0.5)')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">';
+  h+='<div style="position:absolute;top:3px;left:'+(lateOn?'21px':'3px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div></div></div>';
+  h+='<div><label class="lbl">Expected Late Fee Amount</label><div class="hint">Standard late fee for this bill (used when "Assume Late" is on, or when you mark this bill paid late)</div><input class="inp" type="number" id="ee-late-fee" value="'+(exp.expected_late_fee||0)+'"/></div>';
+  h+='</div>';
   // PAYMENT ARRANGEMENT SECTION
   var arrOn=exp.arrangement_active||false;
   h+='<div style="border-top:1px solid var(--bl);padding-top:14px;margin-top:4px">';
@@ -4079,7 +4110,13 @@ function openEditExp(id){
   h+='<button class="btn btn-red" onclick="removeExp(\x27'+id+'\x27)">Remove Expense</button>';
   h+='<div id="ee-msg" style="font-size:13px;font-weight:500"></div></div></div></div>';
   m.innerHTML=h;document.body.appendChild(m);
-  window._eeState={pd:pdOn,partial:partOn,strategy:strategy,rfp:exp.requires_full_payment||false};
+  window._eeState={pd:pdOn,partial:partOn,strategy:strategy,rfp:exp.requires_full_payment||false,assumeLate:!!exp.assume_late};
+}
+function eeToggleLate(el){
+  var nowOn=!window._eeState.assumeLate;
+  window._eeState.assumeLate=nowOn;
+  el.style.background=nowOn?'var(--amber)':'rgba(200,210,240,0.5)';
+  el.querySelector('div').style.left=nowOn?'21px':'3px';
 }
 function eeToggleArr(el){
   var on=el.style.background.indexOf('var(--primary)')>=0||el.style.background.indexOf('#4361ee')>=0||el.style.background.indexOf('67,97,238')>=0;
@@ -4106,6 +4143,7 @@ async function saveExpEdit(id){
   var msg=document.getElementById('ee-msg');msg.style.color='var(--muted)';msg.textContent='Saving...';
   var s1El=document.getElementById('ee-split1'),s2El=document.getElementById('ee-split2');
   var lcEl=document.getElementById('ee-late-charge');
+  var lfEl=document.getElementById('ee-late-fee');
   var updates={
     name:document.getElementById('ee-name').value,amount:parseFloat(document.getElementById('ee-amt').value)||0,
     due_day:parseInt(document.getElementById('ee-due').value)||1,
@@ -4116,6 +4154,8 @@ async function saveExpEdit(id){
     is_past_due:window._eeState.pd,
     past_due_amount:window._eeState.pd?(parseFloat(document.getElementById('ee-pd-amt').value)||0):0,
     late_charge_amount:window._eeState.pd&&lcEl?(parseFloat(lcEl.value)||0):0,
+    expected_late_fee:lfEl?(parseFloat(lfEl.value)||0):0,
+    assume_late:!!window._eeState.assumeLate,
     requires_full_payment:window._eeState.rfp||false,
     partial_ok:window._eeState.partial,
     minimum_partial:window._eeState.partial?(parseFloat(document.getElementById('ee-min').value)||0):0,
@@ -4131,8 +4171,8 @@ async function saveExpEdit(id){
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error saving.';return;}
   // Snapshot BEFORE local mutation so the diff reflects pre-edit state
   var origEx=EX.find(function(e){return e.id===id;});
-  if(origEx&&(origEx.amount!==updates.amount||origEx.due_day!==updates.due_day||origEx.pay_cycle!==updates.pay_cycle)){
-    beginGoalImpactWatch('Edited bill: '+updates.name+' (was '+fmt(origEx.amount)+', now '+fmt(updates.amount)+')');
+  if(origEx&&(origEx.amount!==updates.amount||origEx.due_day!==updates.due_day||origEx.pay_cycle!==updates.pay_cycle||origEx.assume_late!==updates.assume_late||origEx.expected_late_fee!==updates.expected_late_fee)){
+    beginGoalImpactWatch('Edited bill: '+updates.name+(updates.assume_late?' (assuming late: +'+fmt(updates.expected_late_fee)+')':''));
   }
   EX=EX.map(function(e){return e.id===id?Object.assign({},e,updates):e;});
   await logAct('expense_updated',updates.name+' updated','expense',id,updates);
@@ -5881,7 +5921,8 @@ function renderPlan(){
         if(exp.arrangement_due_1===dom){var a=exp.arrangement_amount_1||exp.amount;outflow+=a;evts.push({label:exp.name+' (Arr.)',type:'bill',amount:a});}
         if(exp.arrangement_due_2===dom){var a2=exp.arrangement_amount_2||0;if(a2>0){outflow+=a2;evts.push({label:exp.name+' (Arr.2)',type:'bill',amount:a2});}}
       } else if(exp.is_recurring&&exp.due_day===dom){
-        outflow+=exp.amount;evts.push({label:exp.name,type:'bill',amount:exp.amount,pd:exp.is_past_due});
+        var effAmtP=getEffectiveBillAmount(exp);
+        outflow+=effAmtP;evts.push({label:exp.name+(exp.assume_late?' +late':''),type:'bill',amount:effAmtP,pd:exp.is_past_due});
       }
     });
     // Planned expenses hitting this date
@@ -6328,7 +6369,7 @@ async function openClarityPlanAdvice(pid){
         if(exp.arrangement_due_1===dom)outflow+=exp.arrangement_amount_1||exp.amount;
         if(exp.arrangement_due_2===dom)outflow+=exp.arrangement_amount_2||0;
       } else if(exp.is_recurring&&exp.due_day===dom){
-        outflow+=exp.amount;
+        outflow+=getEffectiveBillAmount(exp);
       }
     });
     PLAN.forEach(function(pp){
@@ -6582,6 +6623,18 @@ function renderInsights(){
 
   var html='<div class="ph"><div class="ph-eye">Insights</div><div class="ph-title">What Your Numbers <span style="color:var(--primary)">Reveal</span></div><div class="ph-sub">Six views of your finances most apps never show you.</div></div>';
   html+=acctBanner;
+  // Late fees expected this cycle (sum of bills marked assume_late)
+  var lateFeesExpected=EX.filter(function(e){return e.assume_late&&e.expected_late_fee;}).reduce(function(s,e){return s+(e.expected_late_fee||0);},0);
+  var lateFeeBills=EX.filter(function(e){return e.assume_late&&e.expected_late_fee;});
+  if(lateFeesExpected>0){
+    html+='<div style="background:linear-gradient(135deg,rgba(217,119,6,0.08),rgba(245,158,11,0.05));border:1px solid rgba(217,119,6,0.2);border-radius:14px;padding:14px;margin-bottom:14px">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">';
+    html+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--amber);margin-bottom:4px">Late Fees Expected</div>';
+    html+='<div style="font-size:1.6rem;font-weight:900;color:var(--amber);line-height:1">'+fmt(lateFeesExpected)+'</div>';
+    html+='<div style="font-size:11px;color:var(--text2);margin-top:6px">'+lateFeeBills.length+' bill'+(lateFeeBills.length===1?'':'s')+' currently flagged to be paid late: '+lateFeeBills.map(function(b){return b.name+' (+'+fmt(b.expected_late_fee)+')';}).join(', ')+'</div></div>';
+    html+='<div style="text-align:right"><div style="font-size:10px;color:var(--muted)">cost of being behind</div></div>';
+    html+='</div></div>';
+  }
 
   html+=iCard(1,'Paycheck Erosion Rate',
     '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px"><div><div style="font-size:3rem;font-weight:800;color:'+eColor+';line-height:1;letter-spacing:-.03em">'+erosionPct+'<span style="font-size:1.5rem">%</span></div><div style="font-size:13px;color:var(--text2);margin-top:4px">of your check committed before it arrives</div></div><div style="text-align:right"><div class="lbl">Auto-committed</div><div style="font-size:1.3rem;font-weight:800;color:var(--red)">'+fmt(erosionTotal)+'</div></div></div>'
@@ -7515,7 +7568,7 @@ async function sendMsg(text,fromInput){
         if(dayOfMonth===dom)hitToday=true;
       }
       if(hitToday){
-        billCalendar.push({date:dStr,name:e.name,amount:e.amount,category:e.category,past_due:!!e.is_past_due});
+        billCalendar.push({date:dStr,name:e.name,amount:getEffectiveBillAmount(e),baseAmount:e.amount,lateFee:e.assume_late?(e.expected_late_fee||0):0,assumedLate:!!e.assume_late,category:e.category,past_due:!!e.is_past_due});
       }
     }
   });
@@ -7574,7 +7627,7 @@ async function sendMsg(text,fromInput){
       else if(cycle==='biweekly'&&(dayOfMonth===dom||(dom2&&dayOfMonth===dom2)))hits=true;
       else if(cycle==='weekly'&&dayOfWeek===dom)hits=true;
       else if(!cycle&&dayOfMonth===dom)hits=true;
-      if(hits)bills60.push({date:dStr,name:e.name,amount:e.amount,category:e.category,past_due:!!e.is_past_due});
+      if(hits)bills60.push({date:dStr,name:e.name,amount:getEffectiveBillAmount(e),baseAmount:e.amount,lateFee:e.assume_late?(e.expected_late_fee||0):0,assumedLate:!!e.assume_late,category:e.category,past_due:!!e.is_past_due});
     }
   });
   bills60.sort(function(a,b){return a.date<b.date?-1:1;});
@@ -7627,7 +7680,7 @@ async function sendMsg(text,fromInput){
     }
     if(w.billsInWin.length>0){
       s+='  - Bills due in this window ('+w.billsInWin.length+' bills, total '+fmt(w.billsTotal)+'):\n';
-      w.billsInWin.forEach(function(b){s+='      • '+fmtD(b.date,true)+' '+b.name+': '+fmt(b.amount)+(b.past_due?' (PAST DUE)':'')+'\n';});
+      w.billsInWin.forEach(function(b){s+='      • '+fmtD(b.date,true)+' '+b.name+': '+fmt(b.amount)+(b.assumedLate?' (incl. '+fmt(b.lateFee)+' assumed late fee)':'')+(b.past_due?' (PAST DUE)':'')+'\n';});
     } else {
       s+='  - No bills due in this window.\n';
     }
@@ -7805,7 +7858,14 @@ async function sendMsg(text,fromInput){
     +'4. When discussing money in a specific time window, USE THE PAY-PERIOD WORKSHEET. The math is already done. Quote the worksheet numbers verbatim.\n'
     +'5. When the user introduces a new commitment mid-conversation (a planned saving, a deferred bill, an excluded payment), update your running model: track what they\'ve said and carry forward across turns.\n'
     +'6. Do not present an answer, then pivot to a contradicting answer in the next message without explicitly acknowledging the change. If the user corrects you, restate the corrected math from scratch using the worksheet, do not silently edit.\n'
-    +'7. If you do not have enough data to answer accurately, say so plainly. Do not fabricate to fill the gap.\n\n'
+    +'7. If you do not have enough data to answer accurately, say so plainly. Do not fabricate to fill the gap.\n'
+    +'8. SHOW YOUR ARITHMETIC. When summing bills across a date window, do not jump to a total. List each bill with its name and amount, then show the addition:\n'
+    +'   Example: "Bills May 20 to Jun 2 from worksheet:\n'
+    +'     $16 Amazon Prime + $20 Hulu + $20 Peacock + $10 Starz + $16 Spotify + $130 DTE + $175 Primerica + $11 Microsoft + $624 Car Lease + $150 Water + $310 USAA + $3,000 Rent\n'
+    +'     = $4,482"\n'
+    +'   When the user asks "exclude X," show: total minus X. ($4,482 - $624 Car Lease = $3,858).\n'
+    +'   This makes errors visible. Do not skip this step.\n'
+    +'9. When a bill in the worksheet shows "incl. $X assumed late fee," that means the user has flagged this bill as expected to be paid late, and the amount already includes the late fee. Use the amount as shown — do not subtract or adjust it.\n\n'
     +(selAcct?'CURRENTLY VIEWING: '+selAcct.name+' account ('+fmt(selAcct.balance||0)+' balance)\n'
       +'- Account spending (all time): '+fmt(acctSpend)+'\n'
       +'- Account income/credits (all time): '+fmt(acctIncome)+'\n'
@@ -7835,7 +7895,8 @@ async function sendMsg(text,fromInput){
     +'═══ ALL RECURRING BILLS (full list — these are the ONLY bills you can reference) ═══\n'
     +(EX.length>0?EX.map(function(e){
       var dueStr=e.due_day?'day '+e.due_day+(e.due_day_2?' & '+e.due_day_2:'')+' of month':'no due day set';
-      return '  • '+e.name+': '+fmt(e.amount)+' ('+e.category+', '+(e.pay_cycle||'monthly')+', '+dueStr+')'+(e.is_past_due?' [PAST DUE]':'');
+      var lateInfo=e.assume_late?' [ASSUMING LATE: +'+fmt(e.expected_late_fee||0)+' late fee, effective '+fmt(getEffectiveBillAmount(e))+']':(e.expected_late_fee>0?' (late fee if applicable: '+fmt(e.expected_late_fee)+')':'');
+      return '  • '+e.name+': '+fmt(e.amount)+' ('+e.category+', '+(e.pay_cycle||'monthly')+', '+dueStr+')'+lateInfo+(e.is_past_due?' [PAST DUE]':'');
     }).join('\n'):'  None.')+'\n\n'
     +'═══ MONTHLY BILLS BY CATEGORY ═══\n'+byCatStr+'\n\n'
     +'═══ PLANNED EXPENSES (upcoming) ═══\n'+plansStr+'\n\n'
