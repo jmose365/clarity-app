@@ -5509,6 +5509,8 @@ function openTxDetail(txId){
   h+='</div>';
   h+='<button onclick="document.getElementById(\x27txDetailModal\x27).remove();openMerchantRecategorize(\x27'+txId+'\x27)" style="width:100%;margin-top:8px;background:var(--al);border:1.5px solid rgba(217,119,6,0.3);border-radius:12px;padding:10px;font-size:12px;font-weight:700;color:var(--amber);cursor:pointer">🏷 Recategorize All '+sameName.length+' from this merchant</button>';
   h+='</div></div>';
+  m.innerHTML=h;
+  document.body.appendChild(m);
 }
 
 async function saveTxEdit(txId,namePrefix){
