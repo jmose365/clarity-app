@@ -540,7 +540,13 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.4) sepia(1) 
     <div class="modal-handle"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div><div style="line-height:1"><span style="display:inline-flex;align-items:flex-end;line-height:1"><span style="font-size:2rem;font-weight:900;background:var(--gp);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.04em;line-height:1">¢</span><span style="font-size:1rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;padding-bottom:0.15em">larity</span></span></div><div style="font-size:12px;color:var(--muted)">Your financial coach</div></div>
-      <button onclick="closeAdvisor()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Close</button>
+      <div style="display:flex;gap:8px;align-items:center;position:relative">
+        <button onclick="toggleChatMenu(event)" aria-label="Chat options" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;color:var(--muted);padding:0">⋯</button>
+        <div id="chatHeaderMenu" style="display:none;position:absolute;right:0;top:38px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.1);min-width:180px;z-index:10;overflow:hidden">
+          <button onclick="clearChatHistory();toggleChatMenu()" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:none;padding:10px 14px;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit">🗑️ Clear chat history</button>
+        </div>
+        <button onclick="closeAdvisor()" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Close</button>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <button id="voiceBtn" onclick="toggleVoice()" style="display:flex;align-items:center;gap:8px;background:var(--pl);border:1.5px solid var(--primary);border-radius:10px;padding:9px 14px;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer">
@@ -7685,6 +7691,7 @@ function renderSettings(){
   var activePlanCount=PLANS.filter(function(p){return p.status==='active';}).length;
   [{label:'My Action Plans',sub:activePlanCount>0?activePlanCount+' active plan'+(activePlanCount===1?'':'s')+' — tap to manage':'Plans Clarity helped you commit to',icon:'🎯',fn:'openMyPlans()'},
    {label:'Reconcile Balances',sub:'Compare stored balances to logged transactions, fix drift',icon:'⚖️',fn:'openReconcileBalances()'},
+   {label:'Clear Clarity Chat',sub:'Wipe Clarity\'s memory and start fresh',icon:'🗑️',fn:'clearChatHistory()'},
    {label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\x27activity\x27)'},
    {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
    {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
@@ -7893,16 +7900,30 @@ async function clearChatHistory(){
   renderChatHistory();
 }
 
+function toggleChatMenu(e){
+  if(e)e.stopPropagation();
+  var menu=document.getElementById('chatHeaderMenu');
+  if(!menu)return;
+  var open=menu.style.display==='block';
+  menu.style.display=open?'none':'block';
+  // Close on outside click
+  if(!open){
+    setTimeout(function(){
+      document.addEventListener('click',closeChatMenuOnce);
+    },0);
+  }
+}
+
+function closeChatMenuOnce(e){
+  var menu=document.getElementById('chatHeaderMenu');
+  if(!menu)return;
+  if(menu.contains(e.target))return;
+  menu.style.display='none';
+  document.removeEventListener('click',closeChatMenuOnce);
+}
+
 function renderChatHistory(){
   var msgs=document.getElementById('chatMsgs');if(!msgs)return;msgs.innerHTML='';
-
-  // Add clear history button at top if there are messages
-  if(chatHist.length>2){
-    var clearBtn=document.createElement('div');
-    clearBtn.style.cssText='text-align:center;margin-bottom:8px';
-    clearBtn.innerHTML='<button onclick="clearChatHistory()" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">Clear history</button>';
-    msgs.appendChild(clearBtn);
-  }
 
   chatHist.forEach(function(m){
     var content=m.content||'';
