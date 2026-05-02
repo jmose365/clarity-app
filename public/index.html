@@ -1034,8 +1034,13 @@ async function generateEventsForBill(exp,fromDate,toDate){
 // Idempotent — duplicate inserts are blocked by the UNIQUE(expense_id, scheduled_date, source) constraint
 // AND by the local existing-date check above.
 async function backfillBillEvents(){
-  var fromDate=today();
-  var toDate=addDays(fromDate,365);
+  // Start from the 1st of the current month so unpaid current-cycle bills get events.
+  // Past-dated events for already-paid cycles are harmless — they remain status=scheduled
+  // but the user can ignore them or update their status manually.
+  var td=today();
+  var monthStart=td.substring(0,8)+'01';
+  var fromDate=monthStart;
+  var toDate=addDays(td,365);
   var totalCreated=0;
   for(var i=0;i<EX.length;i++){
     var exp=EX[i];
@@ -1118,10 +1123,19 @@ async function regenerateAutoEventsForBill(billId){
 
 // Find the soonest upcoming scheduled event for a bill (for "Edit this cycle" affordances)
 function getNextScheduledEvent(expenseId){
+  // Return the soonest unpaid scheduled event — including past-dated ones, since
+  // a scheduled event that hasn't been marked paid is something the user still owes,
+  // not something to hide. Sort by date so the closest in time wins.
+  var unpaid=EVENTS
+    .filter(function(ev){
+      return ev.expense_id===expenseId&&['scheduled','partial','deferred'].indexOf(ev.status)>=0;
+    })
+    .sort(function(a,b){return a.scheduled_date<b.scheduled_date?-1:1;});
+  // Prefer future dates, but fall back to most recent past-dated if no future event exists
   var td=today();
-  return EVENTS.find(function(ev){
-    return ev.expense_id===expenseId&&ev.scheduled_date>=td&&['scheduled','partial','deferred'].indexOf(ev.status)>=0;
-  });
+  var future=unpaid.find(function(ev){return ev.scheduled_date>=td;});
+  if(future)return future;
+  return unpaid.length>0?unpaid[unpaid.length-1]:null;
 }
 
 // Mark an event as paid. Updates status, paid_date, amount_paid, late_fee_paid, links to expense_payment.
@@ -6417,7 +6431,7 @@ function renderPlan(){
   } else {
     if(upcoming.length>0){
       html+='<div class="sec-t">Upcoming Plans</div>';
-      upcoming.forEach(function(p){html+=renderPlanCard(p,cf);});
+      upcoming.forEach(function(p){html+=renderPlannedExpenseCard(p,cf);});
     }
     if(funded.length>0){
       html+='<div class="sec-t">Funded</div>';
@@ -6436,7 +6450,7 @@ function renderPlan(){
   document.getElementById('tab-plan').innerHTML=html;
 }
 
-function renderPlanCard(p,cf){
+function renderPlannedExpenseCard(p,cf){
   var td2=today();
   var daysAway=Math.round((new Date(p.target_date+'T12:00:00')-new Date())/86400000);
   var payDates=getArr(UP.pay_dates);var paycheck=UP.paycheck_amount||0;
@@ -8507,22 +8521,36 @@ async function sendMsg(text,fromInput){
     var t2=document.getElementById('typing');if(t2)t2.remove();
     chatHist.push({role:'assistant',content:reply});
     saveChatMessage('assistant',reply);
-    // Parse for plan blocks
-    var parsed=parsePlanBlocks(reply);
+    // Parse for plan blocks — wrap in try so a bad plan block doesn't kill the whole reply
+    var parsed;
+    try{parsed=parsePlanBlocks(reply);}
+    catch(parseErr){console.warn('Plan parse failed:',parseErr);parsed={cleanText:reply,plans:[]};}
     var ab=document.createElement('div');ab.className='msg-bubble msg-ai';
     ab.innerHTML=parsed.cleanText.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--primary)">$1</strong>').replace(/\n/g,'<br/>');
     msgs.appendChild(ab);
-    // Render plan cards if any
+    // Render plan cards if any — also wrapped so a bad render doesn't kill the rest
     parsed.plans.forEach(function(planObj){
-      var cardWrap=document.createElement('div');
-      cardWrap.innerHTML=renderPlanCard(planObj,{unsaved:true});
-      msgs.appendChild(cardWrap.firstElementChild);
+      try{
+        var cardWrap=document.createElement('div');
+        cardWrap.innerHTML=renderPlanCard(planObj,{unsaved:true});
+        var card=cardWrap.firstElementChild;
+        if(card)msgs.appendChild(card);
+      } catch(renderErr){
+        console.warn('Plan render failed:',renderErr,planObj);
+        var errBubble=document.createElement('div');errBubble.className='msg-bubble msg-ai';
+        errBubble.style.background='var(--al)';errBubble.style.color='var(--amber)';errBubble.style.fontSize='12px';
+        errBubble.textContent='⚠️ Clarity proposed a plan but the card couldn\'t render. The text above has the details — the card-rendering bug is logged.';
+        msgs.appendChild(errBubble);
+      }
     });
     msgs.scrollTop=msgs.scrollHeight;
     speakText(parsed.cleanText);
   }catch(e){
+    console.error('Chat handler error:',e);
     var t3=document.getElementById('typing');if(t3)t3.remove();
-    var eb=document.createElement('div');eb.className='msg-bubble msg-ai';eb.textContent='Connection issue. Try again.';msgs.appendChild(eb);
+    var eb=document.createElement('div');eb.className='msg-bubble msg-ai';
+    eb.textContent='Something failed when handling Clarity\'s reply. Check the browser console for details. Error: '+(e&&e.message?e.message:String(e));
+    msgs.appendChild(eb);
   }
 }
 
