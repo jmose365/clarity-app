@@ -620,7 +620,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[],BUDGETS=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[],BUDGETS=[],PLANS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var selectedAccountId=null; // null = household/joint view
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
@@ -1251,6 +1251,402 @@ function checkAllGoalImpactsHandled(){
 }
 // ===== END GOAL IMPACT REVIEW =====
 
+// ===== ACTION PLAN SYSTEM =====
+// Plans are emitted by Clarity in chat as <plan>{...json...}</plan> blocks.
+// We parse them, render as cards, save to DB, and execute steps via existing UI.
+
+var ACTION_TYPES={
+  earmark_bill:{label:'Earmark Bill',icon:'📌'},
+  partial_payment:{label:'Split Bill Payment',icon:'✂️'},
+  delay_bill:{label:'Delay Bill',icon:'⏳'},
+  postpone_plan:{label:'Postpone Planned Expense',icon:'📅'},
+  pause_goal_contribution:{label:'Pause Goal Contribution',icon:'⏸️'},
+  redirect_funds:{label:'Redirect Funds',icon:'➡️'}
+};
+
+// Parse a chat message for embedded plan blocks
+// Returns {cleanText, plans:[{name, goal_summary, steps:[]}, ...]}
+function parsePlanBlocks(text){
+  if(!text)return {cleanText:text,plans:[]};
+  var plans=[];
+  var cleanText=text;
+  // Match <plan>...</plan> non-greedy across newlines
+  var re=/<plan>([\s\S]*?)<\/plan>/g;
+  var m;
+  while((m=re.exec(text))!==null){
+    try{
+      var jsonStr=m[1].trim();
+      // Tolerate code-fenced JSON: ```json ... ```
+      jsonStr=jsonStr.replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim();
+      var parsed=JSON.parse(jsonStr);
+      if(parsed&&parsed.name&&Array.isArray(parsed.steps)){
+        // Ensure each step has an id and pending status
+        parsed.steps.forEach(function(s,i){
+          if(!s.id)s.id='step_'+(i+1);
+          if(!s.status)s.status='pending';
+        });
+        plans.push(parsed);
+      }
+    } catch(e){
+      // Ignore malformed plan blocks — just leave them out
+      console.warn('Failed to parse plan block:',e);
+    }
+  }
+  cleanText=cleanText.replace(/<plan>[\s\S]*?<\/plan>/g,'').trim();
+  return {cleanText:cleanText,plans:plans};
+}
+
+async function savePlanToDb(planObj){
+  if(!planObj||!planObj.name||!Array.isArray(planObj.steps))return null;
+  var payload={
+    household_id:HID,
+    created_by:CU.id,
+    name:planObj.name,
+    goal_summary:planObj.goal_summary||null,
+    steps:planObj.steps,
+    status:'active',
+    source:'clarity_chat'
+  };
+  var r=await sb.from('action_plans').insert(payload).select('*').single();
+  if(r.error){console.error('Failed to save plan:',r.error);return null;}
+  PLANS.unshift(r.data);
+  await logAct('plan_saved','Saved action plan: '+planObj.name,'plan',r.data.id,{stepCount:planObj.steps.length});
+  return r.data;
+}
+
+// Update a single step's status in a saved plan
+async function updatePlanStep(planId,stepId,newStatus,extraData){
+  var plan=PLANS.find(function(p){return p.id===planId;});
+  if(!plan)return;
+  var steps=(plan.steps||[]).map(function(s){
+    if(s.id===stepId){
+      var updated=Object.assign({},s,{status:newStatus});
+      if(newStatus==='completed')updated.completed_at=new Date().toISOString();
+      if(extraData)updated.execution_result=extraData;
+      return updated;
+    }
+    return s;
+  });
+  // Auto-complete plan if all steps are done
+  var allDone=steps.every(function(s){return s.status==='completed'||s.status==='skipped';});
+  var updates={steps:steps,updated_at:new Date().toISOString()};
+  if(allDone){updates.status='completed';updates.completed_at=new Date().toISOString();}
+  var r=await sb.from('action_plans').update(updates).eq('id',planId).select('*').single();
+  if(!r.error){
+    var idx=PLANS.findIndex(function(p){return p.id===planId;});
+    if(idx>=0)PLANS[idx]=r.data;
+  }
+  if(allDone)await logAct('plan_completed','Completed action plan: '+plan.name,'plan',planId,{});
+  return r.data;
+}
+
+// Render the plan card UI (used both in chat and in My Plans view)
+function renderPlanCard(plan,opts){
+  opts=opts||{};
+  var unsaved=opts.unsaved===true; // a plan that hasn't been saved yet (just emitted in chat)
+  var compact=opts.compact===true;
+  var h='<div class="plan-card" data-plan-id="'+(plan.id||'unsaved')+'" style="background:linear-gradient(135deg,rgba(67,97,238,0.06),rgba(124,58,237,0.04));border:1px solid rgba(67,97,238,0.2);border-radius:14px;padding:14px;margin:10px 0">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
+  h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--primary);margin-bottom:4px">Action Plan</div>';
+  h+='<div style="font-size:15px;font-weight:800;color:var(--text)">'+(plan.name||'Untitled Plan')+'</div></div>';
+  if(plan.status&&plan.status!=='active'){
+    var statColor={completed:'var(--green)',abandoned:'var(--muted)',superseded:'var(--amber)'}[plan.status]||'var(--muted)';
+    h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:'+statColor+'">'+plan.status+'</div>';
+  }
+  h+='</div>';
+  if(plan.goal_summary){h+='<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">'+plan.goal_summary+'</div>';}
+  // Steps
+  h+='<div style="display:flex;flex-direction:column;gap:6px">';
+  (plan.steps||[]).forEach(function(s){
+    var done=s.status==='completed';
+    var skipped=s.status==='skipped';
+    var typeMeta=ACTION_TYPES[s.type]||{label:'Action',icon:'•'};
+    var bg=done?'var(--gl)':skipped?'rgba(200,200,200,0.2)':'#fff';
+    var borderC=done?'rgba(22,163,74,0.3)':skipped?'rgba(150,150,150,0.3)':'var(--bl)';
+    h+='<div style="background:'+bg+';border:1px solid '+borderC+';border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;'+(done||skipped?'opacity:0.7':'')+'">';
+    h+='<div style="font-size:16px;flex-shrink:0">'+(done?'✅':skipped?'⏭️':typeMeta.icon)+'</div>';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-size:12px;font-weight:600;color:var(--text);'+(done?'text-decoration:line-through':'')+'">'+s.label+'</div>';
+    h+='<div style="font-size:10px;color:var(--muted);margin-top:2px">'+typeMeta.label+'</div>';
+    h+='</div>';
+    if(!done&&!skipped&&!unsaved){
+      h+='<button onclick="executePlanStep(\x27'+plan.id+'\x27,\x27'+s.id+'\x27)" style="background:var(--gp);border:none;border-radius:8px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Do it</button>';
+      h+='<button onclick="skipPlanStep(\x27'+plan.id+'\x27,\x27'+s.id+'\x27)" style="background:transparent;border:1px solid var(--bl);border-radius:8px;padding:6px 8px;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">Skip</button>';
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  // Footer
+  if(unsaved){
+    h+='<div style="display:flex;gap:8px;margin-top:12px">';
+    h+='<button onclick="commitPlanFromChat(this)" data-plan-json="'+encodeURIComponent(JSON.stringify(plan))+'" style="flex:1;background:var(--gp);border:none;border-radius:10px;padding:9px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Use this plan</button>';
+    h+='</div>';
+  } else if(plan.status==='active'&&!compact){
+    h+='<div style="display:flex;gap:8px;margin-top:12px">';
+    h+='<button onclick="abandonPlan(\x27'+plan.id+'\x27)" style="background:transparent;border:1px solid var(--bl);border-radius:10px;padding:8px;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;flex:1">Abandon plan</button>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+async function commitPlanFromChat(btn){
+  var json=decodeURIComponent(btn.dataset.planJson||'');
+  if(!json)return;
+  var planObj;try{planObj=JSON.parse(json);}catch(e){return;}
+  btn.disabled=true;btn.textContent='Saving...';
+  var saved=await savePlanToDb(planObj);
+  if(!saved){btn.textContent='Failed';btn.disabled=false;return;}
+  // Replace the unsaved card with a saved one
+  var card=btn.closest('.plan-card');
+  if(card){
+    var newHtml=renderPlanCard(saved);
+    var wrapper=document.createElement('div');wrapper.innerHTML=newHtml;
+    card.replaceWith(wrapper.firstElementChild);
+  }
+}
+
+async function abandonPlan(planId){
+  if(!confirm('Abandon this plan? Steps already done will stay done.'))return;
+  var r=await sb.from('action_plans').update({status:'abandoned',updated_at:new Date().toISOString()}).eq('id',planId).select('*').single();
+  if(!r.error){
+    var idx=PLANS.findIndex(function(p){return p.id===planId;});
+    if(idx>=0)PLANS[idx]=r.data;
+    await logAct('plan_abandoned','Abandoned action plan','plan',planId,{});
+    if(typeof renderMyPlans==='function')renderMyPlans();
+  }
+}
+
+async function skipPlanStep(planId,stepId){
+  await updatePlanStep(planId,stepId,'skipped');
+  // Re-render the card in place
+  var card=document.querySelector('[data-plan-id="'+planId+'"]');
+  if(card){
+    var plan=PLANS.find(function(p){return p.id===planId;});
+    if(plan){var w=document.createElement('div');w.innerHTML=renderPlanCard(plan);card.replaceWith(w.firstElementChild);}
+  }
+  if(typeof renderMyPlans==='function')renderMyPlans();
+}
+
+// Execute a step. Each action type has its own dispatch.
+async function executePlanStep(planId,stepId){
+  var plan=PLANS.find(function(p){return p.id===planId;});
+  if(!plan)return;
+  var step=(plan.steps||[]).find(function(s){return s.id===stepId;});
+  if(!step)return;
+  switch(step.type){
+    case 'earmark_bill':executeEarmarkBill(planId,stepId,step);break;
+    case 'partial_payment':executePartialPayment(planId,stepId,step);break;
+    case 'delay_bill':executeDelayBill(planId,stepId,step);break;
+    case 'postpone_plan':executePostponePlan(planId,stepId,step);break;
+    case 'pause_goal_contribution':executePauseGoalContrib(planId,stepId,step);break;
+    case 'redirect_funds':executeRedirectFunds(planId,stepId,step);break;
+    default:alert('Unknown action type: '+step.type);
+  }
+}
+
+// === Action handlers ===
+
+// Helper to find a bill by name (case-insensitive partial match)
+function findBillByName(name){
+  if(!name)return null;
+  var lower=name.toLowerCase();
+  return EX.find(function(e){return e.name&&e.name.toLowerCase()===lower;})
+    ||EX.find(function(e){return e.name&&e.name.toLowerCase().indexOf(lower)>=0;})
+    ||EX.find(function(e){return e.name&&lower.indexOf(e.name.toLowerCase())>=0;});
+}
+
+function findPlanItemByName(name){
+  if(!name)return null;
+  var lower=name.toLowerCase();
+  return PLAN.find(function(p){return p.name&&p.name.toLowerCase()===lower;})
+    ||PLAN.find(function(p){return p.name&&p.name.toLowerCase().indexOf(lower)>=0;});
+}
+
+function findGoalByName(name){
+  if(!name)return null;
+  var lower=name.toLowerCase();
+  return GOALS.find(function(g){return g.name&&g.name.toLowerCase()===lower;})
+    ||GOALS.find(function(g){return g.name&&g.name.toLowerCase().indexOf(lower)>=0;});
+}
+
+async function executeEarmarkBill(planId,stepId,step){
+  var p=step.params||{};
+  var bill=p.expense_id?EX.find(function(e){return e.id===p.expense_id;}):findBillByName(p.bill_name);
+  if(!bill){alert('Could not find that bill in your expenses.');return;}
+  var amt=p.amount||bill.amount;
+  if(!confirm('Earmark '+fmt(amt)+' for '+bill.name+'?'))return;
+  var updates={is_earmarked:true,earmark_state:'active',preallocated_amount:amt};
+  var r=await sb.from('expenses').update(updates).eq('id',bill.id);
+  if(r.error){alert('Error: '+r.error.message);return;}
+  EX=EX.map(function(e){return e.id===bill.id?Object.assign({},e,updates):e;});
+  await logAct('expense_earmarked',bill.name+' earmarked '+fmt(amt)+' (via plan)','expense',bill.id,{amount:amt,plan_id:planId});
+  await updatePlanStep(planId,stepId,'completed',{earmarked_amount:amt,bill_id:bill.id});
+  refreshPlanCard(planId);
+  updateTopBar();renderLedger();renderHome();
+}
+
+async function executePartialPayment(planId,stepId,step){
+  var p=step.params||{};
+  var bill=p.expense_id?EX.find(function(e){return e.id===p.expense_id;}):findBillByName(p.bill_name);
+  if(!bill){alert('Could not find that bill in your expenses.');return;}
+  var amt=p.amount||0;
+  if(!amt){alert('No amount specified for this partial payment.');return;}
+  if(!confirm('Log a partial payment of '+fmt(amt)+' for '+bill.name+'? This will be recorded as a transaction and reduce that account\'s balance.'))return;
+  // Need account selection — keep it simple, default to joint or ask
+  var jAcct=getJointAccount();
+  var acctId=jAcct?jAcct.id:null;
+  if(!acctId){alert('No joint account found. Set one up in Settings first.');return;}
+  // Insert payment record + transaction
+  var payDate=p.payment_date||today();
+  var payMonth=payDate.slice(0,7);
+  await sb.from('expense_payments').insert({expense_id:bill.id,household_id:HID,paid_by:CU.id,amount_paid:amt,payment_date:payDate,payment_month:payMonth,is_partial:true,account_id:acctId});
+  var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:bill.name+' — Partial Payment',amount:amt,category:bill.category,transaction_date:payDate,notes:'Partial payment via action plan',account_id:acctId}).select('*').single();
+  if(!txR.error)TX.unshift(txR.data);
+  await applyTransactionToBalance(acctId,amt,'debit');
+  await logAct('partial_payment',bill.name+' partial '+fmt(amt)+' (via plan)','expense',bill.id,{amount:amt,plan_id:planId});
+  await updatePlanStep(planId,stepId,'completed',{paid_amount:amt,bill_id:bill.id});
+  refreshPlanCard(planId);
+  updateTopBar();renderLedger();renderHome();
+}
+
+async function executeDelayBill(planId,stepId,step){
+  var p=step.params||{};
+  var bill=p.expense_id?EX.find(function(e){return e.id===p.expense_id;}):findBillByName(p.bill_name);
+  if(!bill){alert('Could not find that bill in your expenses.');return;}
+  var newDate=p.new_due_date||p.delay_to;
+  var note=p.note||'Delayed via action plan';
+  if(!confirm('Mark '+bill.name+' as delayed'+(newDate?' to '+fmtD(newDate,true):'')+'? Bill stays in your ledger but flagged for late payment.'))return;
+  // We don't have a "delayed" state on expenses — best we can do is add a note and acknowledge.
+  // Use bill_acknowledgments to record the user's intent to pay late.
+  var ackPayload={household_id:HID,expense_id:bill.id,acknowledged_by:CU.id,note:note+(newDate?' (planned date: '+newDate+')':''),expires_at:newDate||addDays(today(),14)};
+  await sb.from('bill_acknowledgments').insert(ackPayload);
+  await logAct('bill_delayed',bill.name+' marked for delayed payment'+(newDate?' to '+newDate:'')+' (via plan)','expense',bill.id,{plan_id:planId,new_date:newDate});
+  await updatePlanStep(planId,stepId,'completed',{new_due_date:newDate});
+  refreshPlanCard(planId);
+  renderLedger();renderHome();
+}
+
+async function executePostponePlan(planId,stepId,step){
+  var p=step.params||{};
+  var pln=p.plan_item_id?PLAN.find(function(x){return x.id===p.plan_item_id;}):findPlanItemByName(p.plan_name);
+  if(!pln){alert('Could not find that planned expense.');return;}
+  var newDate=p.new_target_date;
+  if(!newDate){alert('No new target date specified.');return;}
+  if(!confirm('Move '+pln.name+' from '+fmtD(pln.target_date,true)+' to '+fmtD(newDate,true)+'?'))return;
+  // Snapshot for goal impact watcher
+  beginGoalImpactWatch('Postponed '+pln.name+' to '+newDate+' (via plan)');
+  var r=await sb.from('planned_expenses').update({target_date:newDate}).eq('id',pln.id).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  var idx=PLAN.findIndex(function(x){return x.id===pln.id;});if(idx>=0)PLAN[idx]=r.data;
+  await logAct('plan_postponed',pln.name+' moved to '+newDate+' (via plan)','plan',pln.id,{old_date:pln.target_date,new_date:newDate,plan_id:planId});
+  await updatePlanStep(planId,stepId,'completed',{new_target_date:newDate});
+  refreshPlanCard(planId);
+  renderPlan();renderHome();
+}
+
+async function executePauseGoalContrib(planId,stepId,step){
+  var p=step.params||{};
+  var goal=p.goal_id?GOALS.find(function(g){return g.id===p.goal_id;}):findGoalByName(p.goal_name);
+  if(!goal){alert('Could not find that goal.');return;}
+  var prev=goal.contribution_per_paycheck||0;
+  var newContrib=p.new_contribution!==undefined?p.new_contribution:0;
+  if(!confirm('Change '+goal.name+' contribution from '+fmt(prev)+'/check to '+fmt(newContrib)+'/check?'))return;
+  beginGoalImpactWatch('Adjusted '+goal.name+' contribution to '+fmt(newContrib)+'/check (via plan)');
+  var r=await sb.from('goals').update({contribution_per_paycheck:newContrib}).eq('id',goal.id).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  var idx=GOALS.findIndex(function(g){return g.id===goal.id;});if(idx>=0)GOALS[idx]=r.data;
+  await logAct('goal_contribution_changed',goal.name+': '+fmt(prev)+' → '+fmt(newContrib)+'/check (via plan)','goal',goal.id,{old:prev,new:newContrib,plan_id:planId});
+  await updatePlanStep(planId,stepId,'completed',{old_contribution:prev,new_contribution:newContrib});
+  refreshPlanCard(planId);
+  renderGoals();renderHome();
+}
+
+async function executeRedirectFunds(planId,stepId,step){
+  var p=step.params||{};
+  var amt=p.amount||0;
+  if(!amt){alert('No amount specified.');return;}
+  // Two flavors: redirect TO a goal (log a contribution) or redirect TO a planned expense (log saving)
+  if(p.target_goal_id||p.target_goal_name){
+    var goal=p.target_goal_id?GOALS.find(function(g){return g.id===p.target_goal_id;}):findGoalByName(p.target_goal_name);
+    if(!goal){alert('Could not find target goal.');return;}
+    if(!confirm('Add '+fmt(amt)+' contribution to '+goal.name+'?'))return;
+    var newSaved=(goal.current_amount||0)+amt;
+    var gR=await sb.from('goals').update({current_amount:newSaved}).eq('id',goal.id).select('*').single();
+    if(gR.error){alert('Error: '+gR.error.message);return;}
+    await sb.from('goal_contributions').insert({household_id:HID,goal_id:goal.id,amount:amt,contributed_by:CU.id,contribution_date:today(),note:'Via action plan'});
+    var idx=GOALS.findIndex(function(g){return g.id===goal.id;});if(idx>=0)GOALS[idx]=gR.data;
+    await logAct('goal_contribution',goal.name+' +'+fmt(amt)+' (via plan)','goal',goal.id,{amount:amt,plan_id:planId});
+    await updatePlanStep(planId,stepId,'completed',{redirected_to:'goal',goal_id:goal.id,amount:amt});
+  } else if(p.target_plan_item_id||p.target_plan_name){
+    var pln=p.target_plan_item_id?PLAN.find(function(x){return x.id===p.target_plan_item_id;}):findPlanItemByName(p.target_plan_name);
+    if(!pln){alert('Could not find target planned expense.');return;}
+    if(!confirm('Add '+fmt(amt)+' saving toward '+pln.name+'?'))return;
+    var newPlanSaved=(pln.amount_saved||0)+amt;
+    var isFunded=newPlanSaved>=pln.estimated_amount;
+    var pR=await sb.from('planned_expenses').update({amount_saved:newPlanSaved,is_funded:isFunded}).eq('id',pln.id).select('*').single();
+    if(pR.error){alert('Error: '+pR.error.message);return;}
+    var pidx=PLAN.findIndex(function(x){return x.id===pln.id;});if(pidx>=0)PLAN[pidx]=pR.data;
+    await logAct('plan_saving',pln.name+' +'+fmt(amt)+' (via plan)','plan',pln.id,{amount:amt,plan_id:planId});
+    await updatePlanStep(planId,stepId,'completed',{redirected_to:'plan',plan_id:pln.id,amount:amt});
+  } else {
+    alert('Step is missing a target goal or planned expense.');return;
+  }
+  refreshPlanCard(planId);
+  renderHome();renderGoals();renderPlan();
+}
+
+// Re-render a plan card in place (for chat or My Plans)
+function refreshPlanCard(planId){
+  var plan=PLANS.find(function(p){return p.id===planId;});
+  if(!plan)return;
+  var cards=document.querySelectorAll('[data-plan-id="'+planId+'"]');
+  cards.forEach(function(card){
+    var w=document.createElement('div');w.innerHTML=renderPlanCard(plan);
+    card.replaceWith(w.firstElementChild);
+  });
+}
+
+// My Plans view (rendered in Settings)
+function renderMyPlans(){
+  var container=document.getElementById('myPlansContent');if(!container)return;
+  var active=PLANS.filter(function(p){return p.status==='active';});
+  var completed=PLANS.filter(function(p){return p.status==='completed';}).slice(0,5);
+  var abandoned=PLANS.filter(function(p){return p.status==='abandoned';}).slice(0,3);
+  var html='';
+  if(active.length===0&&completed.length===0&&abandoned.length===0){
+    html='<div style="text-align:center;color:var(--muted);padding:30px 12px;font-size:13px">No action plans yet. When Clarity proposes options in chat, save one and it will appear here.</div>';
+  } else {
+    if(active.length>0){
+      html+='<div class="sec-t">Active</div>';
+      active.forEach(function(p){html+=renderPlanCard(p);});
+    }
+    if(completed.length>0){
+      html+='<div class="sec-t" style="margin-top:18px">Completed</div>';
+      completed.forEach(function(p){html+=renderPlanCard(p,{compact:true});});
+    }
+    if(abandoned.length>0){
+      html+='<div class="sec-t" style="margin-top:18px">Abandoned</div>';
+      abandoned.forEach(function(p){html+=renderPlanCard(p,{compact:true});});
+    }
+  }
+  container.innerHTML=html;
+}
+
+function openMyPlans(){
+  var m=document.createElement('div');m.className='modal-ov';m.id='myPlansModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal" style="max-width:560px"><div class="modal-handle"></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
+  h+='<div style="font-size:16px;font-weight:800">My Action Plans</div>';
+  h+='<button onclick="document.getElementById(\x27myPlansModal\x27).remove()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button>';
+  h+='</div>';
+  h+='<div id="myPlansContent"></div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  renderMyPlans();
+}
+// ===== END ACTION PLAN SYSTEM =====
+
 function calcTotalDueNow(exp){
   var pd=exp.is_past_due?(exp.past_due_amount||0):0;
   var lc=exp.late_charge_amount||0;
@@ -1388,12 +1784,14 @@ async function loadApp(){
     sb.from('bill_acknowledgments').select('*').eq('household_id',HID).gte('expires_at',today()),
     sb.from('accounts').select('*').eq('household_id',HID).order('sort_order',{ascending:true}),
     sb.from('statement_imports').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(20),
-    sb.from('budgets').select('*').eq('household_id',HID)
+    sb.from('budgets').select('*').eq('household_id',HID),
+    sb.from('action_plans').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(50)
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
   BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
   PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];IMPORTS=res[15].data||[];BUDGETS=res[16].data||[];
+  PLANS=res[17].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -6773,7 +7171,9 @@ function renderSettings(){
   // History & Logs section
   html+='<div class="sec-t">History & Logs</div>';
   html+='<div class="card" style="padding:0;margin-bottom:12px">';
-  [{label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\x27activity\x27)'},
+  var activePlanCount=PLANS.filter(function(p){return p.status==='active';}).length;
+  [{label:'My Action Plans',sub:activePlanCount>0?activePlanCount+' active plan'+(activePlanCount===1?'':'s')+' — tap to manage':'Plans Clarity helped you commit to',icon:'🎯',fn:'openMyPlans()'},
+   {label:'Activity Log',sub:'Every action in the app',icon:'📋',fn:'goTab(\x27activity\x27)'},
    {label:'Check-In History',sub:'Past Wednesday, Friday and Sunday check-ins',icon:'✅',fn:'openCheckinHistory()'},
    {label:'Import History',sub:'CSV imports with undo capability',icon:'📥',fn:'openImportHistory()'},
    {label:'Manage Budgets',sub:'Set monthly category budgets — Clarity suggests from your history',icon:'💰',fn:'openBudgetManager()'},
@@ -6993,9 +7393,26 @@ function renderChatHistory(){
   }
 
   chatHist.forEach(function(m){
-    var div=document.createElement('div');div.className='msg-bubble '+(m.role==='user'?'msg-user':'msg-ai');
-    div.innerHTML=m.content.replace(/\*\*(.*?)\*\*/g,'<strong style="color:'+(m.role==='user'?'rgba(255,255,255,0.9)':'var(--primary)')+'">$1</strong>').replace(/\n/g,'<br/>');
-    msgs.appendChild(div);
+    var content=m.content||'';
+    if(m.role==='assistant'){
+      // Parse and render text + any plan cards (lookup by name in PLANS for saved state)
+      var parsed=parsePlanBlocks(content);
+      var div=document.createElement('div');div.className='msg-bubble msg-ai';
+      div.innerHTML=parsed.cleanText.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--primary)">$1</strong>').replace(/\n/g,'<br/>');
+      msgs.appendChild(div);
+      parsed.plans.forEach(function(planObj){
+        // If a saved plan exists matching this name, show the saved version (with state).
+        // Otherwise show as unsaved.
+        var saved=PLANS.find(function(p){return p.name===planObj.name;});
+        var cardWrap=document.createElement('div');
+        cardWrap.innerHTML=saved?renderPlanCard(saved):renderPlanCard(planObj,{unsaved:true});
+        msgs.appendChild(cardWrap.firstElementChild);
+      });
+    } else {
+      var udiv=document.createElement('div');udiv.className='msg-bubble msg-user';
+      udiv.innerHTML=content.replace(/\*\*(.*?)\*\*/g,'<strong style="color:rgba(255,255,255,0.9)">$1</strong>').replace(/\n/g,'<br/>');
+      msgs.appendChild(udiv);
+    }
   });
   msgs.scrollTop=msgs.scrollHeight;
 }
@@ -7449,6 +7866,54 @@ async function sendMsg(text,fromInput){
     +'• THREE-PAYCHECK MONTH LEVERAGE: If a 3-check month is coming, a chunk of one check is genuinely free for one-time goals.\n\n'
     +'When the user says things like "it\'s ok if I\'m late on bills here and there as long as they get paid" — that\'s a green light to use partial/delayed payment levers. Use them.\n\n'
     +'When you propose alternatives, label each plan clearly: "Plan A," "Plan B," "Plan C" or "Option 1," "Option 2." Show what each costs. Then ask which one the user wants to proceed with. DO NOT pick for them. They decide.\n\n'
+    +'═══ ACTIONABLE PLAN FORMAT (CRITICAL) ═══\n'
+    +'When you propose a plan with concrete steps the user could execute (earmark a bill, postpone something, split a payment, pause a goal contribution, redirect funds), emit a STRUCTURED PLAN BLOCK alongside your prose. The user will see a "Use this plan" button next to your message that turns the steps into one-tap actions.\n\n'
+    +'Format: append a <plan> JSON block AFTER your prose explanation. The JSON has:\n'
+    +'  {\n'
+    +'    "name": "Short plan name (5-8 words)",\n'
+    +'    "goal_summary": "One sentence describing what this plan achieves",\n'
+    +'    "steps": [ {step1}, {step2}, ... ]\n'
+    +'  }\n\n'
+    +'Each step has: {"id":"step_N", "type":"<action_type>", "label":"Human-readable description", "params":{...}}\n\n'
+    +'The 6 supported action types and their params:\n\n'
+    +'1. earmark_bill — flag a bill\'s amount as set aside on a specific paycheck.\n'
+    +'   params: {"bill_name":"<exact name from data>", "amount":<number>, "paycheck_date":"YYYY-MM-DD"}\n'
+    +'   Example label: "Earmark $1,500 of May 20 check for rent"\n\n'
+    +'2. partial_payment — log a partial payment toward a bill.\n'
+    +'   params: {"bill_name":"<exact name>", "amount":<number>, "payment_date":"YYYY-MM-DD"}\n'
+    +'   Example label: "Pay $1,500 toward rent on May 20"\n\n'
+    +'3. delay_bill — flag a bill for late payment with a target new date.\n'
+    +'   params: {"bill_name":"<exact name>", "new_due_date":"YYYY-MM-DD", "note":"why it\'s being delayed"}\n'
+    +'   Example label: "Delay rent payment to June 3"\n\n'
+    +'4. postpone_plan — push a planned expense to a later date.\n'
+    +'   params: {"plan_name":"<exact planned expense name>", "new_target_date":"YYYY-MM-DD"}\n'
+    +'   Example label: "Postpone NC trip from May to August"\n\n'
+    +'5. pause_goal_contribution — change a goal\'s per-check contribution amount (set to 0 to fully pause).\n'
+    +'   params: {"goal_name":"<exact goal name>", "new_contribution":<number>}\n'
+    +'   Example label: "Pause Vacation goal contribution ($150 → $0/check)"\n\n'
+    +'6. redirect_funds — log a one-time saving toward a goal or planned expense.\n'
+    +'   params: {"amount":<number>, "target_goal_name":"..."} OR {"amount":<number>, "target_plan_name":"..."}\n'
+    +'   Example label: "Add $500 to daycare savings from May 6 check"\n\n'
+    +'CRITICAL RULES for plan blocks:\n'
+    +'• Use EXACT names from the data — bill names from ALL RECURRING BILLS, plan names from PLANNED EXPENSES, goal names from GOAL FEASIBILITY TABLE. Do not paraphrase.\n'
+    +'• Only emit plan blocks when the user has agreed to a path or asked for actionable steps. Don\'t emit them on every message.\n'
+    +'• If you offer multiple plans (Plan A / Plan B / Plan C), emit only ONE <plan> block matching the path you recommend OR the path the user picks. The user can re-ask if they want a different option.\n'
+    +'• When user says "let\'s go with Plan B" or "yes do that" or "let\'s do option 2," emit the corresponding <plan> block.\n'
+    +'• Steps execute in order. Make sure the order makes sense (earmark money before scheduling the payment, etc).\n'
+    +'• Keep step labels concrete and specific — include amounts and dates in the label so the user knows what they\'re tapping.\n\n'
+    +'Example output for "let\'s go with the partial rent split plan":\n'
+    +'"Got it. Here\'s your plan to clear daycare while splitting rent:"\n'
+    +'<plan>\n'
+    +'{\n'
+    +'  "name": "Split rent, clear daycare by June 3",\n'
+    +'  "goal_summary": "Pay rent in two halves, attack daycare with the freed-up cash, accept 8 days late on rent in May",\n'
+    +'  "steps": [\n'
+    +'    {"type":"partial_payment","label":"Pay $1,500 toward Rent on May 20","params":{"bill_name":"Rent","amount":1500,"payment_date":"2026-05-20"}},\n'
+    +'    {"type":"earmark_bill","label":"Earmark $1,460 of May 20 check for daycare","params":{"bill_name":"Daycare","amount":1460,"paycheck_date":"2026-05-20"}},\n'
+    +'    {"type":"partial_payment","label":"Pay remaining $1,800 toward Rent on June 3","params":{"bill_name":"Rent","amount":1800,"payment_date":"2026-06-03"}}\n'
+    +'  ]\n'
+    +'}\n'
+    +'</plan>\n\n'
     +'═══ HOW TO REASON THROUGH MULTI-TURN PLANNING ═══\n'
     +'When the user is planning across multiple paychecks (saving, paying off a balance, funding a trip):\n'
     +'1. Start from the worksheet. Identify which pay periods are in scope.\n'
@@ -7481,17 +7946,31 @@ async function sendMsg(text,fromInput){
   window._lastClaritySys=sys;
 
   try{
-    var msgs2=chatHist.slice(-10).map(function(m){return{role:m.role,content:m.content};});
+    var msgs2=chatHist.slice(-10).map(function(m){
+      // Strip plan blocks from prior assistant messages so Claude doesn't re-emit them
+      var content=m.content||'';
+      if(m.role==='assistant')content=content.replace(/<plan>[\s\S]*?<\/plan>/g,'').trim();
+      return{role:m.role,content:content};
+    });
     var res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,system:sys,messages:msgs2})});
     var data=await res.json();
     var reply=(data.content&&data.content[0]&&data.content[0].text)||'Something went wrong.';
     var t2=document.getElementById('typing');if(t2)t2.remove();
     chatHist.push({role:'assistant',content:reply});
     saveChatMessage('assistant',reply);
+    // Parse for plan blocks
+    var parsed=parsePlanBlocks(reply);
     var ab=document.createElement('div');ab.className='msg-bubble msg-ai';
-    ab.innerHTML=reply.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--primary)">$1</strong>').replace(/\n/g,'<br/>');
-    msgs.appendChild(ab);msgs.scrollTop=msgs.scrollHeight;
-    speakText(reply);
+    ab.innerHTML=parsed.cleanText.replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--primary)">$1</strong>').replace(/\n/g,'<br/>');
+    msgs.appendChild(ab);
+    // Render plan cards if any
+    parsed.plans.forEach(function(planObj){
+      var cardWrap=document.createElement('div');
+      cardWrap.innerHTML=renderPlanCard(planObj,{unsaved:true});
+      msgs.appendChild(cardWrap.firstElementChild);
+    });
+    msgs.scrollTop=msgs.scrollHeight;
+    speakText(parsed.cleanText);
   }catch(e){
     var t3=document.getElementById('typing');if(t3)t3.remove();
     var eb=document.createElement('div');eb.className='msg-bubble msg-ai';eb.textContent='Connection issue. Try again.';msgs.appendChild(eb);
