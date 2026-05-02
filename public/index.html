@@ -620,7 +620,7 @@ var sb=supabase.createClient(SB_URL,SB_KEY);
 var API_URL='/api/claude';
 
 // STATE
-var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[],BUDGETS=[],PLANS=[];
+var CU=null,UP=null,HID=null,HM=[],EX=[],INC=[],ACT=[],TX=[],SET={},GOALS=[],BADGES=[],PAYLOG=[],NOTIFS=[],GC=[],PLAN=[],CHECKINS=[],ACKS=[],ACCOUNTS=[],IMPORTS=[],BUDGETS=[],PLANS=[],EVENTS=[];
 var chatHist=[],selectedDM='jay',filterCat='All',ledgerView='expenses';
 var selectedAccountId=null; // null = household/joint view
 var timePeriod='month',flowDays=60,isSpeaking=false,voiceRec=null;
@@ -947,6 +947,321 @@ function getEffectiveBillAmount(exp){
   if(exp.assume_late&&exp.expected_late_fee)return base+(exp.expected_late_fee||0);
   return base;
 }
+
+// ===== BILL PAYMENT EVENTS SYSTEM =====
+// Bills are templates. Events are concrete instances of bill payments scheduled on
+// specific dates. Templates project forward into events; events can override the template
+// for any specific cycle (different date, different amount, different strategy, late, etc).
+// The worksheet, projections, and AI context all read from events when available.
+
+// Generate the dates a bill would naturally hit between fromDate and toDate
+function generateBillDates(exp,fromDate,toDate){
+  if(!exp||(!exp.due_day&&!exp.due_day_2))return [];
+  var cycle=exp.pay_cycle||'monthly';
+  var dom=exp.due_day;var dom2=exp.due_day_2;
+  var dates=[];
+  // Walk day by day — simple, accurate, handles month-end edge cases naturally
+  var maxDays=Math.min(400,Math.round((new Date(toDate+'T12:00:00')-new Date(fromDate+'T12:00:00'))/86400000)+1);
+  for(var di=0;di<maxDays;di++){
+    var dStr=addDays(fromDate,di);
+    if(dStr>toDate)break;
+    var dObj=new Date(dStr+'T12:00:00');
+    var dayOfMonth=dObj.getDate();
+    var dayOfWeek=dObj.getDay();
+    var hits=false;
+    if(cycle==='monthly'&&dayOfMonth===dom)hits=true;
+    else if(cycle==='biweekly'&&(dayOfMonth===dom||(dom2&&dayOfMonth===dom2)))hits=true;
+    else if(cycle==='weekly'&&dayOfWeek===dom)hits=true;
+    else if(cycle==='one-time')hits=false; // one-time bills don't auto-recur
+    else if(!cycle&&dayOfMonth===dom)hits=true;
+    if(hits)dates.push(dStr);
+  }
+  return dates;
+}
+
+// Build a cycle label like "May 2026" or "May 2026 — Mid Month"
+function buildCycleLabel(date,cycle){
+  var d=new Date(date+'T12:00:00');
+  var monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var label=monthNames[d.getMonth()]+' '+d.getFullYear();
+  if(cycle==='biweekly'){
+    var dom=d.getDate();
+    label+=' — '+(dom<=15?'1st Half':'2nd Half');
+  } else if(cycle==='weekly'){
+    label+=' — Wk of '+d.getDate();
+  }
+  return label;
+}
+
+// Generate auto events for a single bill from fromDate to toDate.
+// Skips dates that already have an event (any source) for that expense_id.
+async function generateEventsForBill(exp,fromDate,toDate){
+  if(!exp.is_active)return [];
+  var dates=generateBillDates(exp,fromDate,toDate);
+  if(dates.length===0)return [];
+  // Find existing events for this expense
+  var existingDates={};
+  EVENTS.filter(function(ev){return ev.expense_id===exp.id;}).forEach(function(ev){existingDates[ev.scheduled_date]=true;});
+  var toCreate=dates.filter(function(d){return !existingDates[d];}).map(function(d){
+    return {
+      household_id:HID,
+      expense_id:exp.id,
+      cycle_label:buildCycleLabel(d,exp.pay_cycle||'monthly'),
+      scheduled_date:d,
+      scheduled_amount:exp.amount||0,
+      status:'scheduled',
+      source:'auto_generated'
+    };
+  });
+  if(toCreate.length===0)return [];
+  var r=await sb.from('bill_payment_events').insert(toCreate).select('*');
+  if(r.error){console.warn('Event insert failed for '+exp.name+':',r.error);return [];}
+  // Add to local EVENTS array
+  if(r.data&&r.data.length>0){
+    EVENTS=EVENTS.concat(r.data);
+    EVENTS.sort(function(a,b){return a.scheduled_date<b.scheduled_date?-1:1;});
+  }
+  return r.data||[];
+}
+
+// Backfill: walk every active bill, generate auto events 12 months out.
+// Idempotent — duplicate inserts are blocked by the UNIQUE(expense_id, scheduled_date, source) constraint
+// AND by the local existing-date check above.
+async function backfillBillEvents(){
+  var fromDate=today();
+  var toDate=addDays(fromDate,365);
+  var totalCreated=0;
+  for(var i=0;i<EX.length;i++){
+    var exp=EX[i];
+    if(!exp.is_active)continue;
+    if(!exp.is_recurring)continue;
+    var created=await generateEventsForBill(exp,fromDate,toDate);
+    totalCreated+=created.length;
+  }
+  if(totalCreated>0){
+    console.log('Backfill: created '+totalCreated+' bill payment events');
+  }
+  return totalCreated;
+}
+
+// Merge template defaults into an event so callers always get a complete view
+function getEffectiveBillEvent(event){
+  if(!event)return null;
+  var template=EX.find(function(e){return e.id===event.expense_id;});
+  if(!template){
+    // Template was deleted — return event as-is with defaults
+    return Object.assign({},event,{
+      _name:'Unknown bill',_category:'Other',_consequence:'other',
+      effective_amount:event.scheduled_amount,effective_late_fee:event.expected_late_fee||0
+    });
+  }
+  // Per-event overrides take precedence; null fields fall back to template
+  var assumeLate=event.assume_late!=null?event.assume_late:!!template.assume_late;
+  var lateFee=event.expected_late_fee!=null?event.expected_late_fee:(template.expected_late_fee||0);
+  var effectiveAmount=event.scheduled_amount+(assumeLate?lateFee:0);
+  return Object.assign({},event,{
+    _name:template.name,
+    _category:template.category,
+    _consequence:template.consequence,
+    _is_past_due:!!template.is_past_due,
+    _pay_link:template.pay_link,
+    _use_pay_link:template.use_pay_link,
+    _template:template,
+    effective_amount:effectiveAmount,
+    effective_late_fee:assumeLate?lateFee:0,
+    effective_assume_late:assumeLate
+  });
+}
+
+// Get all events in a date window, fully hydrated with template data
+function getEventsForWindow(fromDate,toDate,opts){
+  opts=opts||{};
+  var includeStatuses=opts.statuses||['scheduled','partial','split','deferred'];
+  return EVENTS
+    .filter(function(ev){
+      if(ev.scheduled_date<fromDate||ev.scheduled_date>toDate)return false;
+      if(includeStatuses.indexOf(ev.status)<0)return false;
+      return true;
+    })
+    .map(getEffectiveBillEvent)
+    .filter(function(e){return e!==null;});
+}
+
+// When a bill template changes (amount, due_day, pay_cycle, etc), regenerate
+// future auto events to reflect the new defaults. User-overridden events are preserved.
+async function regenerateAutoEventsForBill(billId){
+  var fromDate=today();
+  var toDate=addDays(fromDate,365);
+  // Delete future auto events for this bill (preserves user_created and split_from)
+  var r=await sb.from('bill_payment_events').delete()
+    .eq('expense_id',billId)
+    .eq('source','auto_generated')
+    .eq('status','scheduled')
+    .gte('scheduled_date',fromDate);
+  if(r.error){console.warn('Could not clear auto events for regenerate:',r.error);return;}
+  // Remove from local
+  EVENTS=EVENTS.filter(function(ev){
+    return !(ev.expense_id===billId&&ev.source==='auto_generated'&&ev.status==='scheduled'&&ev.scheduled_date>=fromDate);
+  });
+  // Regenerate from current template state
+  var exp=EX.find(function(e){return e.id===billId;});
+  if(exp&&exp.is_active&&exp.is_recurring){
+    await generateEventsForBill(exp,fromDate,toDate);
+  }
+}
+
+// Find the soonest upcoming scheduled event for a bill (for "Edit this cycle" affordances)
+function getNextScheduledEvent(expenseId){
+  var td=today();
+  return EVENTS.find(function(ev){
+    return ev.expense_id===expenseId&&ev.scheduled_date>=td&&['scheduled','partial','deferred'].indexOf(ev.status)>=0;
+  });
+}
+
+// Mark an event as paid. Updates status, paid_date, amount_paid, late_fee_paid, links to expense_payment.
+async function markEventPaid(eventId,paymentData){
+  paymentData=paymentData||{};
+  var status=paymentData.status||'paid';
+  var updates={
+    status:status,
+    paid_date:paymentData.paid_date||today(),
+    amount_paid:paymentData.amount_paid||0,
+    late_fee_paid:paymentData.late_fee_paid||0,
+    paid_account_id:paymentData.paid_account_id||null,
+    expense_payment_id:paymentData.expense_payment_id||null,
+    updated_at:new Date().toISOString()
+  };
+  var r=await sb.from('bill_payment_events').update(updates).eq('id',eventId).select('*').single();
+  if(!r.error&&r.data){
+    var idx=EVENTS.findIndex(function(ev){return ev.id===eventId;});
+    if(idx>=0)EVENTS[idx]=r.data;
+  }
+  return r.data;
+}
+
+// Edit-this-cycle modal — change date/amount/late-fee for a single bill payment event
+// without affecting the template. Used for "May rent is lump sum on the 30th this time."
+function openEditCycle(eventId){
+  var event=EVENTS.find(function(ev){return ev.id===eventId;});
+  if(!event){alert('Event not found.');return;}
+  var template=EX.find(function(e){return e.id===event.expense_id;});
+  if(!template){alert('Bill template not found.');return;}
+  var hyd=getEffectiveBillEvent(event);
+  var m=document.createElement('div');m.className='modal-ov';m.id='editCycleModal';m.style.display='flex';
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  var h='<div class="modal" style="max-width:480px"><div class="modal-handle"></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
+  h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--purple);margin-bottom:4px">Edit This Cycle Only</div>';
+  h+='<div style="font-size:16px;font-weight:800">'+template.name+'</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+event.cycle_label+'</div></div>';
+  h+='<button onclick="document.getElementById(\x27editCycleModal\x27).remove()" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer">×</button>';
+  h+='</div>';
+  h+='<div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.5">Changes here only affect this single payment cycle. The bill template stays the same. Use this when this month is different from your usual pattern.</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:12px">';
+  h+='<div><label class="lbl">Scheduled Date</label><input class="inp" type="date" id="ec-date" value="'+event.scheduled_date+'"/></div>';
+  h+='<div><label class="lbl">Scheduled Amount</label><input class="inp" type="number" id="ec-amt" value="'+event.scheduled_amount+'" step="0.01"/></div>';
+  // Late fee section
+  var lateOn=hyd.effective_assume_late;
+  var feeAmt=event.expected_late_fee!=null?event.expected_late_fee:(template.expected_late_fee||0);
+  h+='<div style="background:rgba(217,119,6,0.05);border:1px solid rgba(217,119,6,0.15);border-radius:10px;padding:12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+  h+='<div><div style="font-size:13px;font-weight:700">Assume Late This Cycle</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-top:1px">Treats this payment as base + late fee in projections</div></div>';
+  h+='<div id="ec-late-toggle" onclick="ecToggleLate(this)" style="width:40px;height:22px;border-radius:99px;background:'+(lateOn?'var(--amber)':'rgba(200,210,240,0.5)')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">';
+  h+='<div style="position:absolute;top:3px;left:'+(lateOn?'21px':'3px')+';width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div></div></div>';
+  h+='<div><label class="lbl">Expected Late Fee</label><input class="inp" type="number" id="ec-late-fee" value="'+feeAmt+'" step="0.01"/></div>';
+  h+='</div>';
+  // Status / strategy
+  h+='<div><label class="lbl">Payment Strategy (this cycle)</label><select class="sel" id="ec-strategy">';
+  ['','full','split','lump','partial'].forEach(function(s){
+    var label=s===''?'(use template default)':s.charAt(0).toUpperCase()+s.slice(1);
+    h+='<option value="'+s+'"'+((event.payment_strategy||'')===s?' selected':'')+'>'+label+'</option>';
+  });
+  h+='</select></div>';
+  h+='<div><label class="lbl">Notes (cycle-specific)</label><input class="inp" id="ec-notes" value="'+(event.notes||'').replace(/"/g,'&quot;')+'" placeholder="e.g. Paying lump on last check this month"/></div>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;margin-top:16px">';
+  h+='<button onclick="saveEditCycle(\x27'+eventId+'\x27)" class="btn btn-p" style="flex:1">Save Override</button>';
+  h+='<button onclick="resetCycleToTemplate(\x27'+eventId+'\x27)" class="btn btn-ghost" style="flex:1">Reset to Default</button>';
+  h+='</div>';
+  h+='<div id="ec-msg" style="font-size:12px;margin-top:8px"></div>';
+  h+='</div></div>';
+  m.innerHTML=h;document.body.appendChild(m);
+  window._ecState={assumeLate:lateOn};
+}
+
+function ecToggleLate(el){
+  var nowOn=!window._ecState.assumeLate;
+  window._ecState.assumeLate=nowOn;
+  el.style.background=nowOn?'var(--amber)':'rgba(200,210,240,0.5)';
+  el.querySelector('div').style.left=nowOn?'21px':'3px';
+}
+
+async function saveEditCycle(eventId){
+  var msg=document.getElementById('ec-msg');
+  var date=document.getElementById('ec-date').value;
+  var amt=parseFloat(document.getElementById('ec-amt').value)||0;
+  var feeAmt=parseFloat(document.getElementById('ec-late-fee').value)||0;
+  var strat=document.getElementById('ec-strategy').value||null;
+  var notes=document.getElementById('ec-notes').value.trim()||null;
+  var assumeLate=!!window._ecState.assumeLate;
+  if(!date||!amt){msg.style.color='var(--red)';msg.textContent='Date and amount required.';return;}
+  msg.style.color='var(--muted)';msg.textContent='Saving...';
+  var event=EVENTS.find(function(ev){return ev.id===eventId;});
+  if(!event){msg.style.color='var(--red)';msg.textContent='Event not found.';return;}
+  // Snapshot for goal impact watcher
+  beginGoalImpactWatch('Edited cycle: '+event.cycle_label);
+  // When user customizes, mark source as user_created so future regenerates won't blow it away
+  var updates={
+    scheduled_date:date,
+    scheduled_amount:amt,
+    expected_late_fee:feeAmt,
+    assume_late:assumeLate,
+    payment_strategy:strat,
+    notes:notes,
+    source:event.source==='auto_generated'?'user_created':event.source,
+    updated_at:new Date().toISOString()
+  };
+  var r=await sb.from('bill_payment_events').update(updates).eq('id',eventId).select('*').single();
+  if(r.error){msg.style.color='var(--red)';msg.textContent='Error: '+r.error.message;return;}
+  var idx=EVENTS.findIndex(function(ev){return ev.id===eventId;});
+  if(idx>=0)EVENTS[idx]=r.data;
+  await logAct('event_overridden','Cycle override: '+(EX.find(function(e){return e.id===event.expense_id;})||{name:'?'}).name+' '+event.cycle_label+' → '+fmt(amt)+(assumeLate?' +'+fmt(feeAmt)+' late':'')+' on '+date,'event',eventId,updates);
+  document.getElementById('editCycleModal').remove();
+  renderLedger();renderHome();
+}
+
+async function resetCycleToTemplate(eventId){
+  if(!confirm('Reset this cycle to use the bill template defaults? Your override will be removed.'))return;
+  var event=EVENTS.find(function(ev){return ev.id===eventId;});
+  if(!event)return;
+  var template=EX.find(function(e){return e.id===event.expense_id;});
+  if(!template)return;
+  // Find the natural date for this cycle from the template
+  var dates=generateBillDates(template,addDays(today(),-30),addDays(today(),365));
+  var origDate=dates.find(function(d){
+    return new Date(d+'T12:00:00').getMonth()===new Date(event.scheduled_date+'T12:00:00').getMonth();
+  })||event.scheduled_date;
+  var updates={
+    scheduled_date:origDate,
+    scheduled_amount:template.amount,
+    expected_late_fee:null,
+    assume_late:null,
+    payment_strategy:null,
+    notes:null,
+    source:'auto_generated',
+    updated_at:new Date().toISOString()
+  };
+  beginGoalImpactWatch('Reset cycle to default: '+event.cycle_label);
+  var r=await sb.from('bill_payment_events').update(updates).eq('id',eventId).select('*').single();
+  if(r.error){alert('Error: '+r.error.message);return;}
+  var idx=EVENTS.findIndex(function(ev){return ev.id===eventId;});
+  if(idx>=0)EVENTS[idx]=r.data;
+  await logAct('event_reset','Cycle override removed for '+template.name+' '+event.cycle_label,'event',eventId,{});
+  document.getElementById('editCycleModal').remove();
+  renderLedger();renderHome();
+}
+// ===== END BILL PAYMENT EVENTS SYSTEM =====
 
 // ===== FORECASTED INCOME HELPERS =====
 // Certainty weights: confirmed = full value, likely = 80%, possible = 50%
@@ -1882,13 +2197,15 @@ async function loadApp(){
     sb.from('accounts').select('*').eq('household_id',HID).order('sort_order',{ascending:true}),
     sb.from('statement_imports').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(20),
     sb.from('budgets').select('*').eq('household_id',HID),
-    sb.from('action_plans').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(50)
+    sb.from('action_plans').select('*').eq('household_id',HID).order('created_at',{ascending:false}).limit(50),
+    sb.from('bill_payment_events').select('*').eq('household_id',HID).gte('scheduled_date',addDays(today(),-30)).order('scheduled_date',{ascending:true})
   ]);
   HM=res[0].data||[];EX=res[1].data||[];INC=res[2].data||[];ACT=res[3].data||[];
   TX=res[4].data||[];SET=res[5].data||{cash_on_hand:0};GOALS=res[6].data||[];
   BADGES=res[7].data||[];PAYLOG=res[8].data||[];NOTIFS=res[9].data||[];GC=res[10].data||[];
   PLAN=res[11].data||[];CHECKINS=res[12].data||[];ACKS=res[13].data||[];ACCOUNTS=res[14].data||[];IMPORTS=res[15].data||[];BUDGETS=res[16].data||[];
   PLANS=res[17].data||[];
+  EVENTS=res[18].data||[];
   document.getElementById('authScreen').style.display='none';
   document.getElementById('mainApp').style.display='block';
   var av=document.getElementById('userAv');av.textContent=UP.first_name.charAt(0).toUpperCase();av.style.background=UP.avatar_color||'#4361ee';
@@ -1901,6 +2218,11 @@ async function loadApp(){
   renderAll();
   checkEarmarkNotifications();
   checkProactiveClarityBanner();
+  // Backfill bill payment events for the next 12 months (idempotent; safe to call every load)
+  // Run async, don't block the UI — events render naturally as they show up
+  backfillBillEvents().then(function(count){
+    if(count>0){renderAll();}
+  }).catch(function(err){console.warn('Event backfill error:',err);});
   // Auto-launch walkthrough for first-time users
   if(!hasCompletedWalkthrough()){setTimeout(function(){startWalkthrough();},800);}
 }
@@ -3338,8 +3660,22 @@ async function markPaid(expId,isHalf,halfNum){
   var today_s=today();var payMonth=new Date().toISOString().slice(0,7);
   var payAcct=getPayFromAccount();
   var payAcctId=payAcct?payAcct.id:null;
+  // Find the next scheduled event for this bill (the one we're presumably paying)
+  var matchingEvent=getNextScheduledEvent(expId);
   // Log to expense_payments — full amount including late fee, with late_fee_amount tracked separately
-  await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:fullAmt,payment_date:today_s,payment_month:payMonth,is_partial:isHalf||isBiweekly,account_id:payAcctId,late_fee_amount:lateFeeApplied});
+  var payR=await sb.from('expense_payments').insert({expense_id:expId,household_id:HID,paid_by:CU.id,amount_paid:fullAmt,payment_date:today_s,payment_month:payMonth,is_partial:isHalf||isBiweekly,account_id:payAcctId,late_fee_amount:lateFeeApplied}).select('*').single();
+  // Mark the matching event paid + link expense_payment_id
+  if(matchingEvent&&!payR.error){
+    var eventStatus=isHalf||isBiweekly?'partial':(lateFeeApplied>0?'late_paid':'paid');
+    await markEventPaid(matchingEvent.id,{
+      status:eventStatus,
+      paid_date:today_s,
+      amount_paid:fullAmt,
+      late_fee_paid:lateFeeApplied,
+      paid_account_id:payAcctId,
+      expense_payment_id:payR.data?payR.data.id:null
+    });
+  }
   // Log to transactions — full amount for records
   var txLabel=exp.name+(isBiweekly?' (Occurrence '+(cycleNum)+')':isHalf?' (Half '+(halfNum||1)+')':'')+' — Bill Paid'+(lateFeeApplied>0?' (incl. '+fmt(lateFeeApplied)+' late fee)':'');
   var txR=await sb.from('transactions').insert({household_id:HID,logged_by:CU.id,decision_maker:'joint',name:txLabel,amount:fullAmt,category:exp.category,transaction_date:today_s,notes:'Bill payment'+(prealloc>0?' ('+fmt(prealloc)+' pre-allocated)':'')+(lateFeeApplied>0?' · late fee '+fmt(lateFeeApplied):''),account_id:payAcctId}).select('*').single();
@@ -4010,7 +4346,17 @@ function renderExpRow(exp){
     html+='<div style="font-size:11px;color:var(--muted)">/mo</div>';
   }
   html+='</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">';
   html+='<button onclick="openEditExp(\x27'+exp.id+'\x27)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Edit</button>';
+  // Next cycle event affordance
+  var nextEv=getNextScheduledEvent(exp.id);
+  if(nextEv){
+    var hyd=getEffectiveBillEvent(nextEv);
+    var isOverridden=nextEv.source!=='auto_generated'||nextEv.assume_late!=null||nextEv.expected_late_fee!=null||nextEv.payment_strategy!=null||(nextEv.scheduled_amount&&nextEv.scheduled_amount!==exp.amount);
+    var nextLabel=isOverridden?'Cycle: '+hyd.cycle_label+' (custom)':'Next: '+fmtD(nextEv.scheduled_date,true);
+    var nextColor=isOverridden?'var(--purple)':'var(--muted)';
+    html+='<button onclick="openEditCycle(\x27'+nextEv.id+'\x27)" style="background:transparent;border:1px solid '+(isOverridden?'rgba(124,58,237,0.3)':'var(--bl)')+';border-radius:8px;padding:4px 8px;color:'+nextColor+';font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap">'+nextLabel+'</button>';
+  }
   html+='</div>';
 
   // Past Due + Late Charge breakdown
@@ -4264,6 +4610,10 @@ async function saveExpEdit(id){
   }
   EX=EX.map(function(e){return e.id===id?Object.assign({},e,updates):e;});
   await logAct('expense_updated',updates.name+' updated','expense',id,updates);
+  // If template-level scheduling changed, regenerate auto events for this bill
+  if(origEx&&(origEx.amount!==updates.amount||origEx.due_day!==updates.due_day||origEx.due_day_2!==updates.due_day_2||origEx.pay_cycle!==updates.pay_cycle)){
+    await regenerateAutoEventsForBill(id);
+  }
   document.getElementById('editExpModal').remove();
   updateTopBar();renderLedger();
   checkProactiveClarityBanner();
@@ -4297,6 +4647,8 @@ async function addExp(){
   var r=await sb.from('expenses').insert({household_id:HID,name:name,amount:amt,due_day:due,category:cat,type:type,pay_cycle:cycle,is_recurring:true,consequence:'late_fee',partial_ok:false,minimum_partial:0,is_active:true,payment_strategy:'full'}).select('*').single();
   if(r.error){msg.style.color='var(--red)';msg.textContent='Error adding.';return;}
   EX.push(r.data);await logAct('expense_added',name+' added — '+fmt(amt)+'/mo','expense',r.data.id,{});
+  // Generate 12 months of auto events for the new bill
+  await generateEventsForBill(r.data,today(),addDays(today(),365));
   renderLedger();
 }
 
@@ -7719,23 +8071,23 @@ async function sendMsg(text,fromInput){
   var checksForWorksheet=allUpcomingChecks.slice(0,7); // 7 boundaries = 6 windows
   var worksheet=[];
   var runningBal=cash;
-  var bills60=[];
-  EX.forEach(function(e){
-    if(!e.due_day&&!e.due_day_2)return;
-    var cycle=e.pay_cycle||'monthly';
-    var dom=e.due_day;var dom2=e.due_day_2;
-    for(var di=0;di<90;di++){
-      var dStr=addDays(td_chat,di);
-      var dObj=new Date(dStr+'T12:00:00');
-      var dayOfMonth=dObj.getDate();
-      var dayOfWeek=dObj.getDay();
-      var hits=false;
-      if(cycle==='monthly'&&dayOfMonth===dom)hits=true;
-      else if(cycle==='biweekly'&&(dayOfMonth===dom||(dom2&&dayOfMonth===dom2)))hits=true;
-      else if(cycle==='weekly'&&dayOfWeek===dom)hits=true;
-      else if(!cycle&&dayOfMonth===dom)hits=true;
-      if(hits)bills60.push({date:dStr,name:e.name,amount:getEffectiveBillAmount(e),baseAmount:e.amount,lateFee:e.assume_late?(e.expected_late_fee||0):0,assumedLate:!!e.assume_late,category:e.category,past_due:!!e.is_past_due});
-    }
+  // Events are now the source of truth for bills hitting in any window.
+  // Pull all scheduled events for the next 90 days, hydrated with template data.
+  var eventsWindow=getEventsForWindow(td_chat,addDays(td_chat,90));
+  var bills60=eventsWindow.map(function(ev){
+    return {
+      date:ev.scheduled_date,
+      name:ev._name,
+      amount:ev.effective_amount,
+      baseAmount:ev.scheduled_amount,
+      lateFee:ev.effective_late_fee,
+      assumedLate:ev.effective_assume_late,
+      category:ev._category,
+      past_due:ev._is_past_due,
+      cycleLabel:ev.cycle_label,
+      eventId:ev.id,
+      isOverride:ev.source!=='auto_generated'
+    };
   });
   bills60.sort(function(a,b){return a.date<b.date?-1:1;});
   // Forecasted income drops in the 90-day window
@@ -7787,7 +8139,7 @@ async function sendMsg(text,fromInput){
     }
     if(w.billsInWin.length>0){
       s+='  - Bills due in this window ('+w.billsInWin.length+' bills, total '+fmt(w.billsTotal)+'):\n';
-      w.billsInWin.forEach(function(b){s+='      • '+fmtD(b.date,true)+' '+b.name+': '+fmt(b.amount)+(b.assumedLate?' (incl. '+fmt(b.lateFee)+' assumed late fee)':'')+(b.past_due?' (PAST DUE)':'')+'\n';});
+      w.billsInWin.forEach(function(b){s+='      • '+fmtD(b.date,true)+' '+b.name+': '+fmt(b.amount)+(b.assumedLate?' (incl. '+fmt(b.lateFee)+' assumed late fee)':'')+(b.isOverride?' [override: '+b.cycleLabel+']':'')+(b.past_due?' (PAST DUE)':'')+'\n';});
     } else {
       s+='  - No bills due in this window.\n';
     }
@@ -7849,8 +8201,15 @@ async function sendMsg(text,fromInput){
     // Paycheck if any falls in this window (typically at ptr if not the first iteration)
     var payInWin=allPayDates.filter(function(d){return d>=ptr&&d<=periodEnd;});
     var paycheckThisPeriod=payInWin.length*paycheck_amt;
-    // Bills in window (prorated)
-    var billsThisPeriod=billsPerPeriod * (payInWin.length||1);
+    // Bills in window — for first 12 periods use real events (accurate, includes overrides),
+    // for remainder fall back to prorated estimate (events don't exist that far out)
+    var billsThisPeriod;
+    if(lpi<12){
+      var realEvents=getEventsForWindow(ptr,periodEnd);
+      billsThisPeriod=realEvents.reduce(function(s,e){return s+e.effective_amount;},0);
+    } else {
+      billsThisPeriod=billsPerPeriod * (payInWin.length||1);
+    }
     // Plans in window
     var plansInWin=allPlans.filter(function(pp){return pp.target_date>=ptr&&pp.target_date<=periodEnd;});
     var plansTotal=plansInWin.reduce(function(s,p){return s+p.estimated_amount;},0);
